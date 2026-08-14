@@ -1,0 +1,54 @@
+# Agent mathematical capability expansion
+
+## Current objective
+
+Extend the existing four-tool Agent surface through the operation registry. The
+human calculator remains unchanged. The work is complete only when the current
+runtime can execute and validate all of these operation families:
+
+1. semantic expression equivalence with an explicit domain and definedness
+   check;
+2. candidate solution verification with per-constraint residuals and an honest
+   statement of untested solution coverage;
+3. arithmetic over unit-bearing expressions with dimensional validation;
+4. financial calculations with explicit nominal/effective rate, period,
+   cash-flow, root-bracket, and rounding conventions;
+5. bracketed numerical roots, adaptive numerical integration, and approximate
+   linear systems with tolerances, error estimates, residuals, condition
+   estimates, and stability warnings;
+6. common probability distributions and inferential statistics with methods,
+   sample constraints, and numeric provenance.
+
+## Shared model
+
+- The target user is an Agent that has already translated a human request into
+  a mathematical task and should normally finish in one `math.run` call.
+- Discovery, direct execution, ordered batch execution, and the packaged plugin
+  remain the related flows. No additional public MCP tool is introduced.
+- Every operation is one registry entry with a bounded, discriminated input
+  schema, a safe handler, a strict result schema, examples, and multilingual
+  discovery terms.
+- Symbolic expressions continue through the explicit AST translator. Unit
+  expressions use their own smaller AST whitelist. Model-generated Python is
+  never executed.
+- Exact values, decimal/binary approximations, error bounds, residuals, and
+  method-dependent conclusions remain distinct fields.
+
+## Sequencing and acceptance
+
+The verification and quantity layer lands first because later financial and
+statistical work depends on trustworthy comparison, provenance, and units. The
+numeric layer then adds explicit accuracy contracts before finance and
+statistics expose approximation-sensitive results.
+
+Acceptance is separated into:
+
+- development regression: schema validation, negative parser and domain cases,
+  numerical edge cases, full Python checks, Swift checks, and packaging checks;
+- Agent/runtime flow: direct calls plus isolated `math.run` and ordered batch
+  calls from the packaged four-tool surface;
+- human experience: the existing macOS calculator must build and launch without
+  showing Agent capability or changing its interaction model.
+
+No historical screenshot, report, or aggregate green result substitutes for a
+fresh execution of these lanes against the current source.

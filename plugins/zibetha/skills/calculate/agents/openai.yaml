@@ -1,0 +1,4 @@
+interface:
+  display_name: "Calculate Precisely"
+  short_description: "Use deterministic exact and scientific calculations."
+  default_prompt: "Use $calculate to compute this precisely instead of estimating it."

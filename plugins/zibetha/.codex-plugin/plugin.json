@@ -1,0 +1,33 @@
+{
+  "name": "zibetha",
+  "version": "0.1.0",
+  "description": "Safe exact, scientific, matrix, statistics, and unit calculations for Codex.",
+  "author": {
+    "name": "openAdam",
+    "url": "https://github.com/tetracoralla"
+  },
+  "license": "Apache-2.0",
+  "keywords": [
+    "calculator",
+    "mathematics",
+    "scientific-computing",
+    "units"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Zibetha",
+    "shortDescription": "Run exact and scientific calculations safely.",
+    "longDescription": "Give Codex a compact four-tool mathematical runtime with safe expression parsing, symbolic and numerical operations, matrices, statistics, units, structured errors, and explicit exact-versus-approximate results.",
+    "developerName": "openAdam",
+    "category": "Productivity",
+    "capabilities": [
+      "Read"
+    ],
+    "defaultPrompt": [
+      "Calculate sqrt(2) to 50 digits and keep the exact value.",
+      "Solve x^3 - 2*x - 5 = 0 over the reals.",
+      "Convert 72 watts to kilowatts."
+    ]
+  },
+  "mcpServers": "./.mcp.json"
+}

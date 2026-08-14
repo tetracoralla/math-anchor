@@ -1,0 +1,216 @@
+import pytest
+
+from zibetha.catalog import describe_operation, search_operations
+from zibetha.errors import CalculatorError
+from zibetha.runtime import execute_direct
+
+
+def test_catalog_discovery_is_compact_and_descriptions_are_precise() -> None:
+    searched = search_operations("numerically solve nonlinear equation")
+    assert searched["operations"][0]["id"] in {"numeric.root", "algebra.solve"}
+    assert all(set(item) == {"id", "category", "summary"} for item in searched["operations"])
+
+    described = describe_operation("calculus.integrate")
+    assert described["operation"]["inputSchema"]["required"] == ["expression", "variable"]
+
+
+@pytest.mark.parametrize(
+    ("query", "operation"),
+    [
+        ("帮我求导", "calculus.derivative"),
+        ("计算这个积分", "calculus.integrate"),
+        ("做单位换算", "units.convert"),
+        ("矩阵特征值", "matrix.eigenvalues"),
+    ],
+)
+def test_catalog_supports_common_chinese_task_language(query: str, operation: str) -> None:
+    searched = search_operations(query)
+    assert searched["operations"][0]["id"] == operation
+
+
+def test_expression_preserves_exact_and_approximate_results() -> None:
+    result = execute_direct("expression.evaluate", {"expression": "sqrt(2)", "precision": 50})
+    assert result["exact"] == "sqrt(2)"
+    assert result["approx"].startswith("1.4142135623730950488")
+    assert result["precision"] == 50
+
+
+@pytest.mark.parametrize("expression", ["1/0", "0/0", "log(0)"])
+def test_undefined_expression_is_a_domain_error(expression: str) -> None:
+    with pytest.raises(CalculatorError) as caught:
+        execute_direct("expression.evaluate", {"expression": expression})
+    assert caught.value.code == "E_DOMAIN"
+
+
+def test_symbolic_solve_and_calculus() -> None:
+    solved = execute_direct(
+        "algebra.solve",
+        {"equations": "x^2 = 2", "variables": ["x"], "domain": "real", "precision": 30},
+    )
+    assert {item["x"]["exact"] for item in solved["solutions"]} == {"-sqrt(2)", "sqrt(2)"}
+    assert solved["classification"] == "finite"
+    assert solved["complete"] is True
+
+    derivative = execute_direct(
+        "calculus.derivative",
+        {"expression": "sin(x) * exp(x)", "variable": "x"},
+    )
+    assert "sin(x)" in derivative["exact"]
+    assert "cos(x)" in derivative["exact"]
+
+    integral = execute_direct(
+        "calculus.integrate",
+        {"expression": "sin(x)", "variable": "x", "lower": 0, "upper": "pi"},
+    )
+    assert integral["exact"] == "2"
+
+
+def test_numeric_matrix_statistics_and_units() -> None:
+    root = execute_direct(
+        "numeric.root",
+        {"expression": "x^3 - 2*x - 5", "variable": "x", "bracket": [2, 3]},
+    )
+    assert root["exact"] is None
+    assert root["approx"].startswith("2.094")
+
+    inverse = execute_direct("matrix.inverse", {"matrix": [[1, 2], [3, 4]]})
+    assert inverse["exact"] == [["-2", "1"], ["3/2", "-1/2"]]
+
+    statistics = execute_direct("statistics.describe", {"values": [1, 2, 3, 4]})
+    assert statistics["mean"]["exact"] == "5/2"
+    assert statistics["median"]["exact"] == "5/2"
+    assert statistics["standardDeviation"]["exact"] == "sqrt(5)/2"
+    assert statistics["range"]["exact"] == "3"
+    assert statistics["quartiles"]["method"] == "linear"
+    assert statistics["quartiles"]["q1"]["exact"] == "7/4"
+
+    units = execute_direct(
+        "units.convert",
+        {"value": 1000, "fromUnit": "meter", "toUnit": "kilometer"},
+    )
+    assert units["exact"] == "1"
+    assert units["unit"] == "km"
+
+
+def test_numeric_provenance_is_explicit_for_statistics_and_units() -> None:
+    approximate_statistics = execute_direct("statistics.describe", {"values": [0.1, 0.2]})
+    assert approximate_statistics["mean"]["exact"] is None
+    assert approximate_statistics["mean"]["approx"].startswith("0.15")
+    assert approximate_statistics["warnings"]
+    assert approximate_statistics["precision"] <= 15
+
+    exact_statistics = execute_direct("statistics.describe", {"values": ["0.1", "0.2"]})
+    assert exact_statistics["mean"]["exact"] == "3/20"
+    assert exact_statistics["warnings"] == []
+
+    approximate_units = execute_direct(
+        "units.convert",
+        {"value": 0.1, "fromUnit": "meter", "toUnit": "centimeter"},
+    )
+    assert approximate_units["exact"] is None
+    assert approximate_units["warnings"]
+
+    exact_units = execute_direct(
+        "units.convert",
+        {"value": "0.1", "fromUnit": "meter", "toUnit": "centimeter"},
+    )
+    assert exact_units["exact"] == "10"
+    assert exact_units["warnings"] == []
+
+    exact_ratio = execute_direct(
+        "units.convert",
+        {"value": 1, "fromUnit": "meter", "toUnit": "inch"},
+    )
+    assert exact_ratio["exact"] == "5000/127"
+
+    exact_area = execute_direct(
+        "units.convert",
+        {"value": 1, "fromUnit": "meter ** 2", "toUnit": "kilometer ** 2"},
+    )
+    assert exact_area["exact"] == "1/1000000"
+    assert exact_area["unit"] == "km ** 2"
+
+    irrational_units = execute_direct(
+        "units.convert",
+        {"value": 1, "fromUnit": "radian", "toUnit": "degree"},
+    )
+    assert irrational_units["exact"] is None
+    assert irrational_units["warnings"]
+
+
+def test_symbolic_solve_classifies_infinite_none_and_general_sets() -> None:
+    periodic = execute_direct(
+        "algebra.solve",
+        {"equations": "sin(x)=0", "variables": ["x"], "domain": "real"},
+    )
+    assert periodic["classification"] == "infinite"
+    assert periodic["complete"] is True
+    assert "ImageSet" in periodic["solutionSet"]
+    assert periodic["solutions"] == []
+
+    identity = execute_direct(
+        "algebra.solve",
+        {"equations": "x=x", "variables": ["x"], "domain": "real"},
+    )
+    assert identity["classification"] == "infinite"
+    assert identity["solutionSet"] == "Reals"
+
+    contradiction = execute_direct(
+        "algebra.solve",
+        {"equations": "x=x+1", "variables": ["x"], "domain": "real"},
+    )
+    assert contradiction["classification"] == "none"
+    assert contradiction["solutionSet"] == "EmptySet"
+
+
+def test_exact_statistics_are_not_limited_by_binary64_range() -> None:
+    result = execute_direct("statistics.describe", {"values": ["1e400", "2e400"]})
+    exact_mean = result["mean"]["exact"]
+    assert exact_mean.startswith("15")
+    assert len(exact_mean) == 401
+    assert result["warnings"] == []
+
+
+def test_operation_schema_rejects_unknown_arguments() -> None:
+    with pytest.raises(CalculatorError) as caught:
+        execute_direct(
+            "expression.evaluate",
+            {"expression": "sqrt(2)", "precison": 50},
+        )
+    assert caught.value.code == "E_INPUT"
+    assert caught.value.details == {"path": [], "rule": "additionalProperties"}
+
+
+def test_numeric_root_honors_requested_high_precision() -> None:
+    root = execute_direct(
+        "numeric.root",
+        {
+            "expression": "x^3 - 2*x - 5",
+            "variable": "x",
+            "bracket": [2, 3],
+            "precision": 50,
+        },
+    )
+    assert root["exact"] is None
+    assert root["precision"] == 50
+    assert root["approx"].startswith("2.094551481542326591482386540579302963857306105628")
+
+
+def test_float_matrix_is_approximate_and_does_not_overclaim_precision() -> None:
+    inverse = execute_direct(
+        "matrix.inverse",
+        {"matrix": [[1.0, 2.0], [3.0, 4.0]], "precision": 50},
+    )
+    assert inverse["exact"] is None
+    assert inverse["precision"] <= 15
+    assert inverse["approx"][0][0].startswith("-2")
+
+
+def test_float_eigenvalues_do_not_overclaim_precision() -> None:
+    eigenvalues = execute_direct(
+        "matrix.eigenvalues",
+        {"matrix": [[1.0, 2.0], [3.0, 4.0]], "precision": 50},
+    )
+    assert eigenvalues["precision"] <= 15
+    assert all(value["exact"] is None for value in eigenvalues["values"])
+    assert any(value["approx"].startswith("-0.372281323269014") for value in eigenvalues["values"])
