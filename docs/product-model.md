@@ -12,7 +12,7 @@
 
 The human surface is a compact, enjoyable macOS calculator for people who need ordinary arithmetic, scientific functions, common physical-unit conversions, and reference currency conversion without learning a new workspace. Familiar keypad and keyboard entry remain the default experience. The calculator face stays focused on the entered value and result; history, errors, rate status, and optional details or copy choices appear only when requested or relevant.
 
-The Agent surface is a deterministic mathematical runtime for assistants that have translated a user request into a mathematical operation. An ordinary supported request should complete in one typed `math.run` call. Discovery is reserved for genuinely unfamiliar operations, and every execution receives mechanically validated arguments plus typed results that distinguish exact values from approximations.
+The Agent surface is a deterministic mathematical runtime for assistants that have translated a reliability-sensitive user request into a mathematical operation. Trivial, low-risk arithmetic that is immediately verifiable stays with the model; exactness, precision, units, diagnostics, reuse, nontrivial algorithms, or consequential downstream use justify the runtime. An ordinary supported runtime request should complete in one typed `math.run` call. Discovery is reserved for genuinely unfamiliar operations, and every execution receives mechanically validated arguments plus typed results that distinguish exact values from approximations.
 
 ## Related surfaces and flows
 
@@ -21,7 +21,7 @@ The Agent surface is a deterministic mathematical runtime for assistants that ha
 3. **Physical-unit conversion:** choose compatible source and target units, enter a number with the same keypad or hardware keyboard, receive a live offline conversion, swap direction, or copy the result.
 4. **Reference currency conversion:** choose from the current ECB reference-rate catalog, receive a live conversion with compact source, publication time, and current/expired/unavailable state, inspect full timing details, or explicitly refresh.
 5. **Local history:** review prior expressions and results, restore one into the display, or clear history. Conversion stays out of arithmetic history because it is a separate live-value flow.
-6. **Agent direct execution:** call `math.run` once for an ordinary supported operation; the tool schema carries the operation-specific contract.
+6. **Agent direct execution:** leave trivial, low-risk arithmetic with the model; otherwise call `math.run` once for an ordinary supported operation, with the tool schema carrying the operation-specific contract.
 7. **Agent discovery and batch:** use `math.search` and `math.describe` only for unfamiliar operations, or `math.batch` for independent work; receive structured success or a stable structured error.
 8. **Installation:** the repository contains a local Codex Plugin whose thin Skill explains when to use the four tools. Mathematical truth remains in the runtime.
 

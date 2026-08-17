@@ -46,6 +46,7 @@ def test_tool_discovery_keeps_the_full_input_contract_without_republishing_every
     listed_bytes = len(json.dumps(payloads, separators=(",", ":")).encode())
     run_tool = mcp._tool_manager.get_tool("math.run")
     assert run_tool is not None
+    assert "One successful ordinary call is sufficient" in run_tool.description
     output_bytes = len(
         json.dumps(run_tool.output_schema, separators=(",", ":")).encode()
     )

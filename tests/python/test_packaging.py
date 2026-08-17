@@ -43,6 +43,37 @@ def test_plugin_transport_stays_inside_the_plugin_bundle() -> None:
     assert executable.is_relative_to(PLUGIN.resolve())
 
 
+def test_local_codex_marketplace_exposes_the_packaged_plugin() -> None:
+    marketplace = json.loads(
+        (ROOT / ".agents" / "plugins" / "marketplace.json").read_text()
+    )
+    assert marketplace["name"] == "openadam"
+    assert marketplace["plugins"] == [
+        {
+            "name": "math-anchor",
+            "source": {"source": "local", "path": "./plugins/math-anchor"},
+            "policy": {
+                "installation": "AVAILABLE",
+                "authentication": "ON_INSTALL",
+            },
+            "category": "Productivity",
+        }
+    ]
+
+
+def test_calculation_skill_keeps_cost_and_trust_boundaries() -> None:
+    skill = (PLUGIN / "skills" / "calculate" / "SKILL.md").read_text()
+    assert "Do not load it for trivial, low-risk arithmetic" in skill
+    assert "A successful tool response proves that the declared operation ran" in skill
+    assert "Stop after the first successful call for an ordinary calculation" in skill
+    assert "`precision` is not a top-level `math.run` field" in skill
+    assert "at least two guard digits in the first call" in skill
+    agent_metadata = (
+        PLUGIN / "skills" / "calculate" / "agents" / "openai.yaml"
+    ).read_text()
+    assert 'value: "math-anchor"' in agent_metadata
+
+
 def test_app_packaging_copies_the_standalone_runtime() -> None:
     script = (ROOT / "script" / "build_and_run.sh").read_text()
     assert 'APP_RESOURCES="$APP_CONTENTS/Resources"' in script
@@ -53,6 +84,13 @@ def test_runtime_rebuild_check_ignores_generated_python_bytecode() -> None:
     script = (ROOT / "script" / "package_runtime.sh").read_text()
     assert "! -path '*/__pycache__/*'" in script
     assert "! -name '*.pyc'" in script
+
+
+def test_runtime_packaging_materializes_pyinstaller_loader_for_codex_copy() -> None:
+    script = (ROOT / "script" / "package_runtime.sh").read_text()
+    assert 'PYTHON_RUNTIME_LOADER="$PLUGIN_RUNTIME_BUNDLE/_internal/Python"' in script
+    assert 'cp -pL "$PYTHON_RUNTIME_LOADER"' in script
+    assert '[[ -L "$PYTHON_RUNTIME_LOADER" ]]' in script
 
 
 def test_generated_runtime_is_ignored_by_the_source_repository() -> None:
@@ -558,6 +596,9 @@ def test_packaged_runtime_has_matching_manifest_notices_and_sbom() -> None:
     notice_path = bundle / "THIRD_PARTY_NOTICES.txt"
     sbom_path = bundle / "sbom.spdx.json"
     assert runtime.is_file()
+    loader = bundle / "_internal" / "Python"
+    assert loader.is_file()
+    assert not loader.is_symlink()
     assert notice_path.stat().st_size > 10_000
     manifest = json.loads(manifest_path.read_text())
     assert manifest["buildArchitecture"] == platform.machine()

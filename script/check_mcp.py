@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import asyncio
 import json
 import tempfile
@@ -36,9 +37,10 @@ def persistent_worker_cpu_seconds() -> dict[int, float]:
     return snapshot
 
 
-async def main() -> None:
+async def main(plugin_root: Path | None = None) -> None:
     root = Path(__file__).resolve().parent.parent
-    parameters = plugin_server_parameters(root / "plugins/math-anchor")
+    selected_plugin = plugin_root or root / "plugins/math-anchor"
+    parameters = plugin_server_parameters(selected_plugin)
     server_errors = tempfile.TemporaryFile(mode="w+", encoding="utf-8")
     async with stdio_client(parameters, errlog=server_errors) as (read_stream, write_stream):
         async with ClientSession(read_stream, write_stream) as session:
@@ -426,4 +428,11 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    parser = argparse.ArgumentParser(description="Exercise a packaged Math Anchor Plugin")
+    parser.add_argument(
+        "--plugin-root",
+        type=Path,
+        help="installed or source Plugin directory (defaults to plugins/math-anchor)",
+    )
+    arguments = parser.parse_args()
+    asyncio.run(main(arguments.plugin_root))

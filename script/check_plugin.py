@@ -7,6 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 PLUGIN = ROOT / "plugins" / "math-anchor"
+MARKETPLACE = ROOT / ".agents" / "plugins" / "marketplace.json"
 
 
 def fail(message: str) -> None:
@@ -52,8 +53,43 @@ def main() -> None:
         fail("at least one product Skill is required")
     frontmatter = re.compile(r"^---\nname:\s*\S+\ndescription:\s*.+?\n---\n", re.DOTALL)
     for skill_file in skill_files:
-        if not frontmatter.match(skill_file.read_text()):
+        skill_text = skill_file.read_text()
+        if not frontmatter.match(skill_text):
             fail(f"invalid Skill frontmatter: {skill_file.relative_to(ROOT)}")
+
+    calculate_skill = PLUGIN / "skills" / "calculate" / "SKILL.md"
+    calculate_text = calculate_skill.read_text()
+    if "Do not load it for trivial, low-risk arithmetic" not in calculate_text:
+        fail("calculate Skill must preserve the trivial-arithmetic routing boundary")
+    if "A successful tool response proves that the declared operation ran" not in calculate_text:
+        fail("calculate Skill must distinguish execution success from correct problem translation")
+    if "Stop after the first successful call for an ordinary calculation" not in calculate_text:
+        fail("calculate Skill must reject duplicate calls as fake validation")
+    if "`precision` is not a top-level `math.run` field" not in calculate_text:
+        fail("calculate Skill must place precision inside operation arguments")
+    if "at least two guard digits in the first call" not in calculate_text:
+        fail("calculate Skill must avoid a second call for decimal-place rounding")
+    agent_metadata = calculate_skill.parent / "agents" / "openai.yaml"
+    if not agent_metadata.is_file():
+        fail("calculate Skill must declare its Math Anchor MCP dependency")
+    metadata_text = agent_metadata.read_text()
+    if 'value: "math-anchor"' not in metadata_text:
+        fail("calculate Skill MCP dependency must name math-anchor")
+
+    if not MARKETPLACE.is_file():
+        fail("local Codex marketplace manifest is required")
+    marketplace = json.loads(MARKETPLACE.read_text())
+    if marketplace.get("name") != "openadam":
+        fail("local marketplace name must remain openadam")
+    entries = marketplace.get("plugins")
+    if not isinstance(entries, list) or len(entries) != 1:
+        fail("local marketplace must expose exactly one plugin")
+    entry = entries[0]
+    if entry.get("name") != "math-anchor":
+        fail("local marketplace plugin name must remain math-anchor")
+    source = entry.get("source")
+    if source != {"source": "local", "path": "./plugins/math-anchor"}:
+        fail("local marketplace must point to the bundled math-anchor plugin")
 
     print(f"Plugin validation passed: {PLUGIN}")
 

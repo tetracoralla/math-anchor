@@ -41,8 +41,9 @@ fastmcp_server.Settings.model_rebuild(
 mcp = FastMCP(
     "Math Anchor",
     instructions=(
-        "Use this runtime instead of mentally simulating arithmetic or scientific algorithms. "
+        "Use this runtime for reliability-sensitive mathematics, not trivial low-risk arithmetic. "
         "For ordinary supported requests, call math.run directly using its operation-specific typed schema. "
+        "Stop after the first successful ordinary call; repeating identical inputs is not independent validation. "
         "Use search and describe only when the operation is genuinely unfamiliar or ambiguous. "
         "Preserve the distinction between exact and approximate results."
     ),
@@ -89,7 +90,7 @@ def math_describe(
 @mcp.tool(
     name="math.run",
     title="Run a mathematical operation",
-    description="Calculate, solve, differentiate, integrate, convert units, or run another supported mathematical operation in one typed call. Each operation validates its own arguments and returns exact and approximate values separately.",
+    description="Calculate, solve, differentiate, integrate, convert units, or run another supported mathematical operation in one typed call. Each operation validates its own arguments and returns exact and approximate values separately. One successful ordinary call is sufficient; do not replay identical inputs as validation.",
     annotations=_READ_ONLY,
     structured_output=True,
 )

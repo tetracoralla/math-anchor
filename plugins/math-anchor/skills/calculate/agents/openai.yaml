@@ -1,4 +1,9 @@
 interface:
-  display_name: "Calculate Precisely"
-  short_description: "Use deterministic exact and scientific calculations."
-  default_prompt: "Use $calculate to compute this precisely instead of estimating it."
+  display_name: "Math Anchor"
+  short_description: "Run reliability-sensitive mathematics with exactness and diagnostics."
+  default_prompt: "Use $calculate when this calculation needs deterministic precision, units, exactness, or verification."
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "math-anchor"
+      description: "Math Anchor's bounded deterministic mathematical runtime"

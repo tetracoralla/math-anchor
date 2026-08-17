@@ -48,9 +48,16 @@ The installable Codex Plugin source is in `plugins/math-anchor/`.
 
 Generated runtimes are deliberately excluded from Git. Before installing the
 local Plugin, run `./script/bootstrap.sh`, `./script/package_runtime.sh`, and
-`./script/check_all.sh`, then select `plugins/math-anchor/` in Codex's local Plugin
-installation flow and start a fresh task. The four MCP tools and the calculation
-Skill must become visible together.
+`./script/check_all.sh`. Then install this checkout as a local Codex marketplace:
+
+```bash
+codex plugin marketplace add .
+codex plugin add math-anchor@openadam
+```
+
+Start a fresh Codex task after installation. The four MCP tools and the
+calculation Skill must become visible together. The desktop app's local Plugin
+installation flow may also select `plugins/math-anchor/` directly.
 
 Bootstrap accepts any available Python 3.11 or newer interpreter. Set `MATH_ANCHOR_PYTHON` only when selecting a specific interpreter. The Swift scripts select an installed SDK compatible with the active compiler; `MATH_ANCHOR_SDKROOT` is available as an explicit override.
 

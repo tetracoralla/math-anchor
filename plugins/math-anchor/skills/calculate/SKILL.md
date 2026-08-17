@@ -1,11 +1,18 @@
 ---
 name: calculate
-description: Use Math Anchor's deterministic mathematical tools for arithmetic, exact or high-precision evaluation, equivalence and solution verification, algebra, calculus, number theory, combinatorics, exact or stability-aware linear algebra, financial math, probability, statistics, and physical quantities. Trigger when a user asks for a computed result whose correctness or precision matters, when an Agent would otherwise simulate a standard algorithm, or when exact and approximate values must remain distinct.
+description: Use Math Anchor for reliability-sensitive mathematics: exact or high-precision evaluation, verification, algebra, calculus, number theory, combinatorics, linear algebra, financial math, probability, statistics, and physical quantities. Do not load it for trivial, low-risk arithmetic the model can immediately verify; trigger when precision, exactness, units, diagnostics, reuse, or consequences justify a deterministic calculation.
 ---
 
 # Calculate
 
-Use the mathematical runtime for the calculation. Let reasoning translate the user's request into mathematics; do not spend model reasoning simulating arithmetic or a standard scientific algorithm.
+Let reasoning translate the user's request into mathematics, then use the runtime when a deterministic calculation materially improves reliability.
+
+## Decide whether to call
+
+- Answer trivial, low-risk arithmetic directly when it is immediately verifiable, needs no units or special convention, and is not feeding a consequential decision. Examples include a single small addition or multiplication.
+- Call Math Anchor when the user asks for exact or high-precision output, symbolic work, units, matrices, statistics, probability, financial math, verification, repeated calculations, or a result whose correctness affects a consequential next step.
+- Call Math Anchor when the alternative would be mentally simulating a multi-step calculation or a standard scientific algorithm.
+- If a missing assumption changes the mathematical problem, ask for it before calling. Do not use a tool call to hide ambiguity.
 
 ## Select the operation
 
@@ -18,7 +25,8 @@ Use the mathematical runtime for the calculation. Let reasoning translate the us
 - Call `math.run` for one calculation.
 - Call `math.batch` for 2 to 32 independent calculations when they can run without consuming one another's output. Preserve input order when matching results back to the request.
 - For large matrices or other bulky results, prefer `resultMode: "exact"` or `resultMode: "approx"` when only one representation is needed. Increase `maxOutputBytes` only when the additional content is genuinely useful. `math.batch` keeps a compact generic item contract; use `math.describe` only if an item's operation schema is unfamiliar.
-- Control output digits with the `precision` argument (2-200 significant decimal digits, default 16). Exact values are exact regardless of precision; only the approximate field follows it. Do not request extreme precision reflexively: high precision slows evaluation and bloats results, and most inputs only carry a few trustworthy digits.
+- Control output digits with the selected operation's `arguments.precision` field (2-200 significant decimal digits, default 16); `precision` is not a top-level `math.run` field. Exact values are exact regardless of precision; only the approximate field follows it. Do not request extreme precision reflexively: high precision slows evaluation and bloats results, and most inputs only carry a few trustworthy digits.
+- `arguments.precision` counts significant digits, not decimal places. When the user requests decimal places, include the expected integer digits plus at least two guard digits in the first call, then round once for presentation; do not make a preliminary lower-precision call.
 - Use `function.sample` to evaluate one expression at many points in a single call (explicit point list or an even grid) instead of issuing repeated single-point evaluations.
 
 - Supply all business assumptions explicitly as expressions, variables, bounds, units, or data. Do not invent a missing unit, equation, time period, statistical convention, root bracket, or variable meaning when it changes the answer.
@@ -44,3 +52,13 @@ Use the mathematical runtime for the calculation. Let reasoning translate the us
 - Preserve distribution support, inferential assumptions, sample size, and approximate provenance for probability and statistics results.
 - Explain the mathematical setup briefly when it helps the user verify that the right problem was computed; keep engine names, worker limits, schemas, and protocol fields out of the ordinary answer.
 - For a conceptual explanation that needs no calculation, answer normally without calling the tools.
+
+## Check the result
+
+- A successful tool response proves that the declared operation ran; it does not prove that the Agent translated the user's problem correctly.
+- Stop after the first successful call for an ordinary calculation. A rejected malformed call may be corrected once, but do not repeat an identical successful call as validation; it exercises the same implementation with the same inputs and is not independent evidence.
+- Before presenting a consequential result, check the cheapest relevant invariant: units and dimensions, sign and plausible magnitude, probability support, matrix residual or condition, root residual and omission risk, statistical method and sample size, or financial period and timing convention.
+- Prefer diagnostics already returned by that call. Make an additional call only when a consequential result needs a materially different operation or independent invariant that the first response does not provide.
+- Preserve `status: uncertain`, warnings, residuals, error bounds, and stability diagnostics. Do not turn them into an unqualified answer.
+- If the result conflicts with an invariant, do not rationalize it. Correct the declared inputs or operation and call again; if the conflict remains, report that the calculation could not be validated.
+- For high-consequence decisions, treat Math Anchor as calculation support rather than the sole authority and use an independent review or domain source appropriate to the decision.

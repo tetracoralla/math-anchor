@@ -82,10 +82,26 @@ Prepare the self-contained Plugin directory first:
 ```
 
 Then select `plugins/math-anchor/` in Codex's local Plugin installation flow and
-start a fresh Codex task. The installed Plugin is healthy only when its loaded
+start a fresh Codex task. For a repeatable CLI installation from this checkout,
+use:
+
+```bash
+codex plugin marketplace add .
+codex plugin add math-anchor@openadam
+```
+
+The installed Plugin is healthy only when its loaded
 Skill and all four tools (`math.search`, `math.describe`, `math.run`, and
 `math.batch`) are visible together. A source checkout without the generated
 runtime is intentionally not an installable Plugin artifact.
+
+To exercise the independent installed copy rather than the source directory,
+pass its path from `codex plugin add` back to the transport check:
+
+```bash
+.venv/bin/python script/check_mcp.py \
+  --plugin-root ~/.codex/plugins/cache/openadam/math-anchor/0.1.0
+```
 
 ## Signed macOS artifacts
 
