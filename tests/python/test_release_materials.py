@@ -88,3 +88,28 @@ def test_native_inventory_rejects_an_unmapped_library(tmp_path: Path) -> None:
 
     with pytest.raises(SystemExit, match="no owned license mapping"):
         release_materials.native_components(tmp_path, ROOT)
+
+
+def test_python_license_falls_back_to_the_stdlib_directory(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    version = f"python{sys.version_info.major}.{sys.version_info.minor}"
+    stdlib_license = tmp_path / "lib" / version / "LICENSE.txt"
+    stdlib_license.parent.mkdir(parents=True)
+    stdlib_license.write_text("Python license text", encoding="utf-8")
+    monkeypatch.setattr(sys, "executable", str(tmp_path / "bin" / "python"))
+    monkeypatch.setattr(sys, "prefix", str(tmp_path))
+    monkeypatch.setattr(sys, "base_prefix", str(tmp_path))
+
+    assert release_materials.python_license() == stdlib_license
+
+
+def test_python_license_without_any_candidate_fails_cleanly(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(sys, "executable", str(tmp_path / "bin" / "python"))
+    monkeypatch.setattr(sys, "prefix", str(tmp_path))
+    monkeypatch.setattr(sys, "base_prefix", str(tmp_path))
+
+    with pytest.raises(SystemExit, match="could not locate the license"):
+        release_materials.python_license()

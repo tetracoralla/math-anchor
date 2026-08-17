@@ -244,6 +244,14 @@ def python_license() -> Path:
         for candidate in (parent / "LICENSE", parent / "LICENSE.txt"):
             if candidate.is_file():
                 return candidate
+    # CPython's `make install` places the license in the stdlib directory
+    # instead of the prefix root, so hosted runner Pythons (GitHub's
+    # toolcache builds) carry it only under lib/pythonX.Y.
+    version = f"python{sys.version_info.major}.{sys.version_info.minor}"
+    for root in (Path(sys.prefix), Path(getattr(sys, "base_prefix", sys.prefix))):
+        for candidate in (root / "lib" / version / "LICENSE.txt", root / "lib" / version / "LICENSE"):
+            if candidate.is_file():
+                return candidate
     raise SystemExit("could not locate the license for the Python runtime")
 
 
