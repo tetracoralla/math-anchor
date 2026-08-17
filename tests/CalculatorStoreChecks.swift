@@ -324,9 +324,12 @@ struct CalculatorStoreChecks {
         staleStore.evaluate()
         staleStore.replaceExpression("2+2")
         staleStore.evaluate()
-        try? await Task.sleep(nanoseconds: 40_000_000)
+        await waitForEvaluation(staleStore)
         check(staleStore.display == "4", "new evaluation wins")
-        try? await Task.sleep(nanoseconds: 120_000_000)
+        // The abandoned 1+1 evaluation lands later; shared CI runners add
+        // tens of milliseconds of async scheduling, so the window for the
+        // stale result to arrive and be rejected stays generous and bounded.
+        try? await Task.sleep(for: .milliseconds(400))
         check(staleStore.expression == "2+2", "stale result does not restore old expression")
         check(staleStore.display == "4", "stale result does not overwrite new result")
 
@@ -335,7 +338,9 @@ struct CalculatorStoreChecks {
         staleClearStore.evaluate()
         staleClearStore.clear()
         staleClearStore.append("9")
-        try? await Task.sleep(nanoseconds: 140_000_000)
+        // Clear already invalidated the evaluation, so completion is not
+        // observable; wait out the delayed runtime's full window instead.
+        try? await Task.sleep(for: .milliseconds(400))
         check(staleClearStore.expression == "9", "clear invalidates pending evaluation")
         check(staleClearStore.display == "9", "pending result does not overwrite input after clear")
 
@@ -395,7 +400,10 @@ struct CalculatorStoreChecks {
         staleConversionStore.appendDigit("2")
         staleConversionStore.backspace()
         staleConversionStore.appendDigit("3")
-        try? await Task.sleep(for: .milliseconds(260))
+        await waitForConversion(staleConversionStore)
+        // Generous bounded window for the abandoned conversions to land
+        // and be rejected on a loaded shared runner.
+        try? await Task.sleep(for: .milliseconds(400))
         check(staleConversionStore.input == "13", "conversion keeps numeric keypad editing deterministic")
         check(staleConversionStore.output == "13", "stale conversion cannot overwrite the newest input")
 

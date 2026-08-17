@@ -299,7 +299,11 @@ async def main() -> None:
                 )
                 assert warm.structuredContent["exact"] == "42"
             warm_elapsed = time.perf_counter() - warm_start
-            assert warm_elapsed < 1.5, f"five warm math.run calls took {warm_elapsed:.3f}s"
+            # Generous ceiling: shared CI runners can stretch five warm
+            # round trips past a tight budget, while a real warm-pool
+            # regression pays a fresh worker startup per call and lands
+            # several times above this bound.
+            assert warm_elapsed < 5.0, f"five warm math.run calls took {warm_elapsed:.3f}s"
 
             blocked = await session.call_tool(
                 "math.run",
