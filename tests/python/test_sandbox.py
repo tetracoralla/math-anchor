@@ -1,4 +1,5 @@
 import json
+from concurrent.futures import Future
 import threading
 import time
 
@@ -153,6 +154,44 @@ def test_large_worker_output_is_drained_while_process_runs() -> None:
     assert both["error"]["code"] == "E_OUTPUT_LIMIT"
 
 
+def test_invalid_input_error_is_concise_and_obeys_the_complete_output_budget() -> None:
+    reflected_input = "x" * 200_000
+    result = run_operation(
+        "expression.evaluate",
+        {"expression": reflected_input},
+        max_output_bytes=1_024,
+    )
+    encoded = json.dumps(result, ensure_ascii=False, separators=(",", ":")).encode()
+
+    assert result["status"] == "error"
+    assert result["error"]["code"] == "E_LIMIT"
+    assert len(encoded) <= 1_024
+    assert reflected_input[:1_000] not in encoded.decode()
+
+
+def test_non_validation_errors_cannot_bypass_the_output_budget(monkeypatch) -> None:
+    oversized_error = {
+        "status": "error",
+        "error": {"code": "E_RUNTIME", "message": "failure" * 10_000},
+    }
+
+    monkeypatch.setattr(
+        sandbox,
+        "_execute_worker",
+        lambda *args, **kwargs: (oversized_error, True),
+    )
+    result = run_operation(
+        "expression.evaluate",
+        {"expression": "1+1"},
+        max_output_bytes=1_024,
+    )
+    encoded = json.dumps(result, ensure_ascii=False, separators=(",", ":")).encode()
+
+    assert result["status"] == "error"
+    assert result["error"]["code"] == "E_OUTPUT_LIMIT"
+    assert len(encoded) <= 1_024
+
+
 def test_batch_invalid_resource_limit_is_an_indexed_partial_error() -> None:
     result = run_batch(
         [
@@ -176,6 +215,51 @@ def test_batch_invalid_resource_limit_is_an_indexed_partial_error() -> None:
     assert result["results"][1]["error"]["code"] == "E_LIMIT"
     assert result["results"][2]["index"] == 2
     assert result["results"][2]["exact"] == "6"
+
+
+def test_batch_runtime_rejects_missing_arguments_and_unknown_item_fields() -> None:
+    result = run_batch(
+        [
+            {"operation": "expression.evaluate"},
+            {
+                "operation": "expression.evaluate",
+                "arguments": {"expression": "2+2"},
+                "unexpected": True,
+            },
+        ]
+    )
+
+    assert result["status"] == "partial"
+    assert [item["error"]["code"] for item in result["results"]] == [
+        "E_INPUT",
+        "E_INPUT",
+    ]
+
+
+def test_batch_timeout_is_cumulative_across_queued_items(monkeypatch) -> None:
+    started: list[str] = []
+
+    def slow_run(operation, arguments, *, timeout_ms, **_limits):
+        started.append(arguments["value"])
+        time.sleep(timeout_ms / 1000)
+        return {"status": "ok", "operation": operation, "kind": "scalar", "exact": arguments["value"]}
+
+    monkeypatch.setattr(sandbox, "run_operation", slow_run)
+    monkeypatch.setattr(sandbox, "_batch_worker_count", lambda _items: 1)
+    result = run_batch(
+        [
+            {"operation": "test.echo", "arguments": {"value": str(index)}}
+            for index in range(3)
+        ],
+        timeout_ms=250,
+    )
+
+    assert started == ["0"]
+    assert result["status"] == "partial"
+    assert [item["error"]["code"] for item in result["results"][1:]] == [
+        "E_TIMEOUT",
+        "E_TIMEOUT",
+    ]
 
 
 def test_batch_uses_bounded_parallel_workers_and_preserves_order(monkeypatch) -> None:
@@ -218,3 +302,43 @@ def test_worker_reader_failure_returns_a_structured_error(monkeypatch) -> None:
     assert result["status"] == "error"
     assert result["error"]["code"] == "E_RUNTIME"
     assert "reader failed" in result["error"]["message"]
+
+
+def test_cancellation_terminates_the_active_worker_and_the_pool_recovers() -> None:
+    cancel_event = threading.Event()
+    outcome: list[dict] = []
+
+    request = threading.Thread(
+        target=lambda: outcome.append(
+            run_operation(
+                "expression.evaluate",
+                {"expression": "floor(gamma(exp(7)))", "precision": 16},
+                timeout_ms=30_000,
+                cancel_event=cancel_event,
+            )
+        )
+    )
+    request.start()
+    time.sleep(0.1)
+    cancel_event.set()
+    request.join(timeout=3)
+
+    assert not request.is_alive()
+    assert outcome[0]["status"] == "error"
+    assert outcome[0]["error"]["code"] == "E_CANCELLED"
+    recovered = run_operation("expression.evaluate", {"expression": "6*7"})
+    assert recovered["status"] == "ok"
+    assert recovered["exact"] == "42"
+
+
+def test_completed_worker_output_does_not_wait_out_the_supervision_cadence(
+    monkeypatch,
+) -> None:
+    completed: Future[None] = Future()
+    completed.set_result(None)
+    monkeypatch.setattr(sandbox, "WORKER_POLL_SECONDS", 1.0)
+
+    started = time.monotonic()
+    sandbox._wait_for_worker_progress(completed)
+
+    assert time.monotonic() - started < 0.1

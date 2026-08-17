@@ -28,11 +28,9 @@ struct CalculatorHeaderView: View {
         .frame(height: CalculatorLayout.headerHeight, alignment: .center)
     }
 
-    private func headerControl(
-        systemName: String,
-        iconSize: CGFloat,
-        yOffset: CGFloat = 0,
-        isActive: Bool = false
+    private func controlSurface<Content: View>(
+        isActive: Bool,
+        @ViewBuilder content: () -> Content
     ) -> some View {
         ZStack {
             RoundedRectangle(cornerRadius: 9, style: .continuous)
@@ -42,6 +40,19 @@ struct CalculatorHeaderView: View {
                     isActive ? CalculatorPalette.strongBorder : CalculatorPalette.border,
                     lineWidth: 0.75
                 )
+            content()
+        }
+        .frame(width: 32, height: 28)
+        .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+    }
+
+    private func headerControl(
+        systemName: String,
+        iconSize: CGFloat,
+        yOffset: CGFloat = 0,
+        isActive: Bool = false
+    ) -> some View {
+        controlSurface(isActive: isActive) {
             Image(systemName: systemName)
                 .font(.system(size: iconSize, weight: .semibold))
                 .symbolRenderingMode(.monochrome)
@@ -49,28 +60,32 @@ struct CalculatorHeaderView: View {
                 .frame(width: 18, height: 18)
                 .offset(y: yOffset)
         }
-        .frame(width: 32, height: 28)
-        .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
     }
 
     private var modeMenu: some View {
         Button {
             store.isModePopoverPresented.toggle()
         } label: {
-            headerControl(
-                systemName: store.mode.systemImage,
-                iconSize: store.mode == .scientific ? 16.5 : 14.5,
-                yOffset: store.mode == .scientific ? 0.25 : 0,
-                isActive: store.isModePopoverPresented
-            )
+            modeHeaderControl
         }
         .buttonStyle(.plain)
-        .frame(width: 32, height: 28)
-        .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
         .help("Calculator mode")
         .accessibilityLabel("Calculator mode")
         .popover(isPresented: $store.isModePopoverPresented, arrowEdge: .top) {
             modePopover
+        }
+    }
+
+    private var modeHeaderControl: some View {
+        controlSurface(isActive: store.isModePopoverPresented) {
+            CalculatorModeIcon(
+                mode: store.mode,
+                size: store.mode == .scientific ? 16.5 : 14.5
+            )
+            .foregroundStyle(
+                store.isModePopoverPresented ? CalculatorPalette.accent : CalculatorPalette.primaryText
+            )
+            .offset(y: store.mode == .scientific ? 0.25 : 0)
         }
     }
 
@@ -81,8 +96,7 @@ struct CalculatorHeaderView: View {
                     store.selectMode(mode)
                 } label: {
                     HStack(spacing: 10) {
-                        Image(systemName: mode.systemImage)
-                            .font(.system(size: 12, weight: .semibold))
+                        CalculatorModeIcon(mode: mode, size: 12)
                             .frame(width: 16)
                         Text(mode.title)
                         Spacer()

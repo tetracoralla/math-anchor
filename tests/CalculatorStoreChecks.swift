@@ -177,6 +177,22 @@ struct CalculatorStoreChecks {
         let history = HistoryStore(defaults: defaults)
         let clipboard = RecordingClipboard()
 
+        check(
+            MathRuntimeError.fromRuntime(code: "E_SYNTAX").errorDescription
+                == "Check the expression and complete any open parentheses.",
+            "runtime parser diagnostics are translated into human-facing recovery copy"
+        )
+        check(
+            MathRuntimeError.fromRuntime(code: "E_NAME").errorDescription
+                == "Check the spelling of function and symbol names.",
+            "unknown-name diagnostics point at spelling rather than parentheses"
+        )
+        check(
+            MathRuntimeError.fromRuntime(code: "E_RUNTIME").errorDescription
+                == "Calculation failed.",
+            "runtime internals are not exposed in the calculator display"
+        )
+
         let editableTextView = NSTextView()
         editableTextView.isEditable = true
         check(

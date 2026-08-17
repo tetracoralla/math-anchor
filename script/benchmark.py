@@ -16,6 +16,7 @@ good or bad numbers, and is not wired into any check. Receipts are written to
 
 from __future__ import annotations
 
+import asyncio
 import argparse
 from datetime import datetime, timezone
 import json
@@ -25,8 +26,14 @@ import platform
 import statistics
 import subprocess
 import sys
+import tempfile
 import time
 from typing import Any
+
+from mcp import ClientSession
+from mcp.client.stdio import stdio_client
+
+from plugin_server import plugin_server_parameters, tools_listing_bytes
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
@@ -100,6 +107,7 @@ def benchmark_cold(samples: int) -> dict[str, Any]:
         "print(time.perf_counter() - start)"
     )
     timings: list[float] = []
+    inner_timings: list[float] = []
     for _ in range(samples):
         started = time.perf_counter()
         completed = subprocess.run(
@@ -108,10 +116,9 @@ def benchmark_cold(samples: int) -> dict[str, Any]:
         wall = (time.perf_counter() - started) * 1000.0
         inner_ms = float(completed.stdout.strip()) * 1000.0
         timings.append(wall)
+        inner_timings.append(inner_ms)
     summary = _summarize(timings)
-    summary["inner_import_and_evaluate_ms"] = round(statistics.fmean([
-        inner_ms
-    ]), 3) if samples else None
+    summary["inner_import_and_evaluate"] = _summarize(inner_timings)
     return summary
 
 
@@ -170,6 +177,81 @@ def benchmark_packaged(runs: int) -> dict[str, Any]:
     }
 
 
+async def benchmark_packaged_mcp(runs: int, warm_calls: int) -> dict[str, Any]:
+    if not PACKAGED_RUNTIME.is_file():
+        return {"available": False, "path": str(PACKAGED_RUNTIME)}
+
+    initialized_timings: list[float] = []
+    listing_timings: list[float] = []
+    first_result_timings: list[float] = []
+    total_first_result_timings: list[float] = []
+    warm_timings: list[float] = []
+    listed_sizes: list[int] = []
+    parameters = plugin_server_parameters(ROOT / "plugins" / "math-anchor")
+
+    for _ in range(runs):
+        server_errors = tempfile.TemporaryFile(mode="w+", encoding="utf-8")
+        started = time.perf_counter()
+        try:
+            async with stdio_client(parameters, errlog=server_errors) as (read_stream, write_stream):
+                async with ClientSession(read_stream, write_stream) as session:
+                    await session.initialize()
+                    initialized_timings.append((time.perf_counter() - started) * 1000.0)
+
+                    listing_started = time.perf_counter()
+                    listed = await session.list_tools()
+                    listing_timings.append((time.perf_counter() - listing_started) * 1000.0)
+                    listed_sizes.append(tools_listing_bytes(listed.tools))
+
+                    first_started = time.perf_counter()
+                    first = await session.call_tool(
+                        "math.run",
+                        {
+                            "operation": "expression.evaluate",
+                            "arguments": {"expression": FIRST_EXPRESSION},
+                        },
+                    )
+                    first_result_timings.append((time.perf_counter() - first_started) * 1000.0)
+                    total_first_result_timings.append((time.perf_counter() - started) * 1000.0)
+                    assert first.structuredContent["exact"] == "42"
+
+                    for _ in range(warm_calls):
+                        warm_started = time.perf_counter()
+                        warm = await session.call_tool(
+                            "math.run",
+                            {
+                                "operation": "expression.evaluate",
+                                "arguments": {"expression": FIRST_EXPRESSION},
+                            },
+                        )
+                        warm_timings.append((time.perf_counter() - warm_started) * 1000.0)
+                        assert warm.structuredContent["exact"] == "42"
+        except BaseException as error:
+            # A failing packaged server must not take its stderr with it;
+            # cold-start failures are exactly where it explains the cause.
+            server_errors.seek(0)
+            diagnostics = server_errors.read().strip()
+            server_errors.close()
+            raise RuntimeError(
+                f"packaged MCP benchmark failed ({error!r}); server stderr:\n{diagnostics}"
+            ) from error
+        server_errors.close()
+
+    return {
+        "available": True,
+        "path": str(PACKAGED_RUNTIME),
+        "spawn_to_initialized_ms": _summarize(initialized_timings),
+        "list_tools_ms": _summarize(listing_timings),
+        "first_result_ms": _summarize(first_result_timings),
+        "spawn_to_first_result_ms": _summarize(total_first_result_timings),
+        "warm_roundtrip_ms": _summarize(warm_timings),
+        "list_tools_bytes": {
+            "min": min(listed_sizes),
+            "max": max(listed_sizes),
+        },
+    }
+
+
 def human_table(warm: dict[str, Any]) -> str:
     header = f"{'operation':28} {'p50':>10} {'p95':>10} {'p99':>10} {'mean':>10} {'n':>5}"
     lines = [header, "-" * len(header)]
@@ -187,8 +269,20 @@ def main() -> int:
     parser.add_argument("--warm-samples", type=int, default=25)
     parser.add_argument("--cold-samples", type=int, default=5)
     parser.add_argument("--packaged-runs", type=int, default=5)
+    parser.add_argument("--mcp-runs", type=int, default=3)
+    parser.add_argument("--mcp-warm-calls", type=int, default=5)
     parser.add_argument("--output-dir", default=str(ROOT / "build" / "benchmarks"))
     arguments = parser.parse_args()
+    counts = {
+        "--warm-samples": arguments.warm_samples,
+        "--cold-samples": arguments.cold_samples,
+        "--packaged-runs": arguments.packaged_runs,
+        "--mcp-runs": arguments.mcp_runs,
+        "--mcp-warm-calls": arguments.mcp_warm_calls,
+    }
+    below_one = [flag for flag, count in counts.items() if count < 1]
+    if below_one:
+        parser.error(f"sample and run counts must be at least 1: {', '.join(below_one)}")
 
     selected = (
         sorted(OPERATIONS) if arguments.ops == "all" else arguments.ops.split(",")
@@ -206,6 +300,9 @@ def main() -> int:
         "warm": benchmark_warm(corpus, arguments.warm_samples),
         "cold_interpreter": benchmark_cold(arguments.cold_samples),
         "packaged_runtime": benchmark_packaged(arguments.packaged_runs),
+        "packaged_mcp": asyncio.run(
+            benchmark_packaged_mcp(arguments.mcp_runs, arguments.mcp_warm_calls)
+        ),
     }
 
     output_dir = Path(arguments.output_dir)
@@ -219,7 +316,7 @@ def main() -> int:
     print(human_table(report["warm"]))
     cold = report["cold_interpreter"]
     print(f"\ncold interpreter (spawn+import+evaluate): p50 {cold['p50_ms']:.1f} ms "
-          f"(inner import+evaluate {cold['inner_import_and_evaluate_ms']:.1f} ms)")
+          f"(inner import+evaluate p50 {cold['inner_import_and_evaluate']['p50_ms']:.1f} ms)")
     packaged = report["packaged_runtime"]
     if packaged.get("available"):
         total = packaged["cold_start_total_ms"]
@@ -228,6 +325,21 @@ def main() -> int:
               f"(spawn->ready p50 {packaged['spawn_to_ready_ms']['p50_ms']:.1f} ms)")
     else:
         print(f"packaged binary not present, skipped: {packaged['path']}")
+    packaged_mcp = report["packaged_mcp"]
+    if packaged_mcp.get("available"):
+        first = packaged_mcp["spawn_to_first_result_ms"]
+        warm = packaged_mcp["warm_roundtrip_ms"]
+        sizes = packaged_mcp["list_tools_bytes"]
+        print(
+            f"packaged MCP first result: p50 {first['p50_ms']:.1f} ms; "
+            f"warm round trip p50 {warm['p50_ms']:.1f} ms; "
+            f"tool listing {sizes['max']} bytes"
+        )
+    else:
+        print(
+            f"packaged MCP skipped ({packaged_mcp.get('reason', 'packaged runtime not present')}): "
+            f"{packaged_mcp['path']}"
+        )
     print(f"receipt: {receipt}")
     return 0
 

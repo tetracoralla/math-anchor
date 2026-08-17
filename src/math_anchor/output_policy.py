@@ -6,7 +6,8 @@ from typing import Any
 
 
 DEFAULT_RESULT_MODE = "auto"
-DEFAULT_MAX_OUTPUT_BYTES = 128 * 1024
+DEFAULT_MAX_OUTPUT_BYTES = 64 * 1024
+DEFAULT_BATCH_MAX_OUTPUT_BYTES = 128 * 1024
 MIN_OUTPUT_BYTES = 1_024
 MAX_OUTPUT_BYTES = 1_048_576
 RESULT_MODES = ("auto", "exact", "approx", "both")
@@ -18,17 +19,19 @@ def apply_output_policy(
     result_mode: str,
     max_output_bytes: int,
 ) -> dict[str, Any]:
-    if result.get("status") not in {"ok", "uncertain"}:
-        return result
-
     selected = deepcopy(result)
-    if result_mode == "exact":
-        _drop_redundant(selected, field="approx", counterpart="exact")
-    elif result_mode == "approx":
-        _drop_all(selected, field="exact")
+    if result.get("status") in {"ok", "uncertain"}:
+        if result_mode == "exact":
+            _drop_redundant(selected, field="approx", counterpart="exact")
+        elif result_mode == "approx":
+            _drop_all(selected, field="exact")
 
     size = _encoded_size(selected)
-    if result_mode == "auto" and size > max_output_bytes:
+    if (
+        result.get("status") in {"ok", "uncertain"}
+        and result_mode == "auto"
+        and size > max_output_bytes
+    ):
         _drop_redundant(selected, field="approx", counterpart="exact")
         size = _encoded_size(selected)
 

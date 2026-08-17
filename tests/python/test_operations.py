@@ -1,6 +1,12 @@
 import pytest
 
-from math_anchor.catalog import describe_operation, search_operations
+from math_anchor.catalog import (
+    MAX_CATEGORY_LENGTH,
+    MAX_OPERATION_ID_LENGTH,
+    MAX_SEARCH_QUERY_LENGTH,
+    describe_operation,
+    search_operations,
+)
 from math_anchor.errors import CalculatorError
 from math_anchor.runtime import execute_direct
 
@@ -12,6 +18,24 @@ def test_catalog_discovery_is_compact_and_descriptions_are_precise() -> None:
 
     described = describe_operation("calculus.integrate")
     assert described["operation"]["inputSchema"]["required"] == ["expression", "variable"]
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        lambda: search_operations("x" * (MAX_SEARCH_QUERY_LENGTH + 1)),
+        lambda: search_operations("", "x" * (MAX_CATEGORY_LENGTH + 1)),
+        lambda: describe_operation("x" * (MAX_OPERATION_ID_LENGTH + 1)),
+    ],
+)
+def test_catalog_discovery_rejects_oversized_coordinates_without_reflecting_them(
+    call,
+) -> None:
+    with pytest.raises(CalculatorError) as caught:
+        call()
+
+    assert caught.value.code == "E_LIMIT"
+    assert len(caught.value.message) < 128
 
 
 @pytest.mark.parametrize(

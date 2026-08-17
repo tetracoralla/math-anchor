@@ -81,7 +81,9 @@ distribution fails packaging.
 
 Current local `.app` bundles are development artifacts, not downloadable
 releases. Developer ID signing and Apple notarization are mandatory gates in
-`script/release_macos.sh`. See [docs/releasing.md](docs/releasing.md) for the
+`script/release_macos.sh`; tagged releases build both macOS architectures and
+publish detached checksums plus SPDX SBOMs through the pinned GitHub workflow.
+See [docs/releasing.md](docs/releasing.md) for the
 source, Plugin, CI, per-architecture, and signed binary workflow.
 
 ## Contributing and security

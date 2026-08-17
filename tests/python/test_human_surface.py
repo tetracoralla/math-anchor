@@ -66,6 +66,7 @@ def test_mode_menu_uses_the_visible_rounded_rectangle_as_its_trigger() -> None:
 
 def test_conversion_is_a_lightweight_numeric_mode() -> None:
     mode = (ROOT / "Sources/MathAnchor/Models/CalculatorMode.swift").read_text()
+    icon = (ROOT / "Sources/MathAnchor/Views/CalculatorModeIcon.swift").read_text()
     content = (ROOT / "Sources/MathAnchor/Views/ContentView.swift").read_text()
     display = (ROOT / "Sources/MathAnchor/Views/ConversionDisplayView.swift").read_text()
     keypad = (ROOT / "Sources/MathAnchor/Views/ConversionKeypadView.swift").read_text()
@@ -79,8 +80,8 @@ def test_conversion_is_a_lightweight_numeric_mode() -> None:
     assert ".background(CalculatorPalette.historySurface)" in picker
     assert "store.appendDigit" in keypad
     assert 'accessibilityLabel: "Swap units"' in keypad
-    assert 'case .conversion: "ruler"' in mode
-    assert 'case .conversion: "arrow.left.arrow.right"' not in mode
+    assert "case .conversion:\n                simplifiedRuler" in icon
+    assert "arrow.left.arrow.right" not in icon
     assert 'systemImage: "equal"' not in keypad
     assert "private func valueRow" in display
     assert 'Image(systemName: "arrow.down")' in display

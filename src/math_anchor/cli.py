@@ -7,6 +7,7 @@ from typing import Any
 
 from .catalog import describe_operation, search_operations
 from .errors import CalculatorError
+from .output_policy import DEFAULT_MAX_OUTPUT_BYTES
 from .sandbox import run_batch, run_operation
 
 
@@ -42,7 +43,7 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--timeout-ms", type=int, default=10_000)
     run.add_argument("--memory-mb", type=int, default=2048)
     run.add_argument("--result-mode", choices=("auto", "exact", "approx", "both"), default="auto")
-    run.add_argument("--max-output-bytes", type=int, default=131_072)
+    run.add_argument("--max-output-bytes", type=int, default=DEFAULT_MAX_OUTPUT_BYTES)
 
     batch = subparsers.add_parser("batch", help="Run an array of isolated operations")
     batch.add_argument("items", help="JSON array or - to read JSON from stdin")

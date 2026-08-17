@@ -463,6 +463,38 @@ def test_github_ci_covers_both_supported_macos_architectures() -> None:
     assert "actions/setup-python@v" not in workflow
 
 
+def test_github_release_requires_signed_notarized_assets_from_both_architectures() -> None:
+    workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "runner: macos-15\n            architecture: arm64" in workflow
+    assert "runner: macos-15-intel\n            architecture: x86_64" in workflow
+    assert "persist-credentials: false" in workflow
+    assert "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02" in workflow
+    assert "actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093" in workflow
+    assert "APPLE_DEVELOPER_ID_P12_BASE64" in workflow
+    assert "APPLE_NOTARY_PRIVATE_KEY_BASE64" in workflow
+    assert 'export MATH_ANCHOR_NOTARY_KEYCHAIN="$keychain_path"' in workflow
+    assert "./script/release_macos.sh" in workflow
+    assert "sha256sum --check" in workflow
+    assert "gh release create" in workflow
+    assert "--clobber" not in workflow
+    assert "Refusing to replace assets on existing release" in workflow
+
+
+def test_signed_release_refreshes_embedded_materials_after_nested_signing() -> None:
+    script = (ROOT / "script" / "release_macos.sh").read_text(encoding="utf-8")
+    nested_signing = script.index('done < <(find "$APP_BUNDLE/Contents" -type f -print0)')
+    regenerate_sbom = script.index('"$ROOT_DIR/script/generate_third_party_materials.py"', nested_signing)
+    rewrite_manifest = script.index('"$ROOT_DIR/script/runtime_manifest.py" write', regenerate_sbom)
+    outer_signing = script.index('codesign --force --timestamp --options runtime --sign "$SIGNING_IDENTITY" "$APP_BUNDLE"')
+
+    assert nested_signing < regenerate_sbom < rewrite_manifest < outer_signing
+    assert 'cp "$APP_RUNTIME_BUNDLE/sbom.spdx.json" "$SBOM"' in script
+    assert 'shasum -a 256 "${ARCHIVE##*/}"' in script
+
+
 def test_release_scripts_require_versioned_signed_notarized_artifacts() -> None:
     local_build = (ROOT / "script" / "build_and_run.sh").read_text()
     release = (ROOT / "script" / "release_macos.sh").read_text()
@@ -472,6 +504,8 @@ def test_release_scripts_require_versioned_signed_notarized_artifacts() -> None:
     assert 'APP_EXECUTABLE="MathAnchor"' in local_build
     assert "--options runtime" in release
     assert "notarytool submit" in release
+    assert 'NOTARY_KEYCHAIN="${MATH_ANCHOR_NOTARY_KEYCHAIN:-}"' in release
+    assert 'NOTARY_ARGUMENTS+=(--keychain "$NOTARY_KEYCHAIN")' in release
     assert "stapler validate" in release
     assert "spctl --assess" in release
     assert "check_release_source.sh" in release
