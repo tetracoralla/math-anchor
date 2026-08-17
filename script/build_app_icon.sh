@@ -10,7 +10,7 @@ if [[ ! -f "$SOURCE_SVG" ]]; then
   exit 1
 fi
 
-ICON_WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/exactcalculator-icon.XXXXXX")"
+ICON_WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/math-anchor-icon.XXXXXX")"
 if [[ -z "$ICON_WORK_DIR" || ! -d "$ICON_WORK_DIR" || -L "$ICON_WORK_DIR" ]]; then
   echo "Unable to create a safe icon work directory." >&2
   exit 1

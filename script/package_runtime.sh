@@ -46,6 +46,9 @@ validate_write_paths
 if [[ ! -x "$VENV_PYTHON" ]] || ! "$VENV_PYTHON" -c 'import PyInstaller' >/dev/null 2>&1; then
   "$ROOT_DIR/script/bootstrap.sh"
 fi
+PROJECT_VERSION="$(
+  "$VENV_PYTHON" "$ROOT_DIR/script/release_metadata.py" version --root "$ROOT_DIR"
+)"
 
 needs_build=0
 if [[ ! -x "$PLUGIN_RUNTIME" ]]; then
@@ -54,11 +57,13 @@ elif ! "$VENV_PYTHON" "$ROOT_DIR/script/runtime_manifest.py" verify \
   --bundle "$PLUGIN_RUNTIME_BUNDLE" \
   --runtime "$PLUGIN_RUNTIME" \
   --lock "$RUNTIME_LOCK" \
-  --source-root "$ROOT_DIR" >/dev/null 2>&1; then
+  --source-root "$ROOT_DIR" \
+  --version "$PROJECT_VERSION" >/dev/null 2>&1; then
   needs_build=1
 elif find "$ROOT_DIR/src/math_anchor" "$ROOT_DIR/legal" "$ROOT_DIR/LICENSE" \
   "$ROOT_DIR/pyproject.toml" "$ROOT_DIR/script/package_runtime.sh" \
-  "$ROOT_DIR/script/generate_third_party_materials.py" "$ROOT_DIR/script/runtime_manifest.py" \
+  "$ROOT_DIR/script/generate_third_party_materials.py" "$ROOT_DIR/script/release_metadata.py" \
+  "$ROOT_DIR/script/runtime_manifest.py" \
   "$RUNTIME_LOCK" \
   -type f \
   ! -path '*/__pycache__/*' \
@@ -114,9 +119,10 @@ chmod +x "$PLUGIN_RUNTIME"
   --runtime "$PLUGIN_RUNTIME" \
   --lock "$RUNTIME_LOCK" \
   --source-root "$ROOT_DIR" \
-  --version "0.1.0"
+  --version "$PROJECT_VERSION"
 "$VENV_PYTHON" "$ROOT_DIR/script/runtime_manifest.py" verify \
   --bundle "$PLUGIN_RUNTIME_BUNDLE" \
   --runtime "$PLUGIN_RUNTIME" \
   --lock "$RUNTIME_LOCK" \
-  --source-root "$ROOT_DIR"
+  --source-root "$ROOT_DIR" \
+  --version "$PROJECT_VERSION"

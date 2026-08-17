@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 MODE="${1:-run}"
 APP_DISPLAY_NAME="Math Anchor"
 APP_EXECUTABLE="MathAnchor"
 BUNDLE_ID="com.openadam.mathanchor"
 MIN_SYSTEM_VERSION="14.0"
-APP_VERSION="${MATH_ANCHOR_APP_VERSION:-0.1.0}"
+APP_VERSION_OVERRIDE="${MATH_ANCHOR_APP_VERSION:-}"
 BUILD_NUMBER="${MATH_ANCHOR_BUILD_NUMBER:-1}"
 BUILD_CONFIGURATION="${MATH_ANCHOR_BUILD_CONFIGURATION:-debug}"
 
@@ -14,16 +15,11 @@ if [[ "$BUILD_CONFIGURATION" != "debug" && "$BUILD_CONFIGURATION" != "release" ]
   echo "MATH_ANCHOR_BUILD_CONFIGURATION must be debug or release." >&2
   exit 2
 fi
-if [[ ! "$APP_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][A-Za-z0-9]+)*$ ]]; then
-  echo "MATH_ANCHOR_APP_VERSION must be a semantic version." >&2
-  exit 2
-fi
 if [[ ! "$BUILD_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
   echo "MATH_ANCHOR_BUILD_NUMBER must be a positive integer." >&2
   exit 2
 fi
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 DIST_DIR="$ROOT_DIR/dist"
 APP_BUNDLE="$DIST_DIR/$APP_DISPLAY_NAME.app"
 EXPECTED_BUNDLE="$ROOT_DIR/dist/Math Anchor.app"
@@ -54,6 +50,15 @@ PATH_VALIDATION_PYTHON="$RESOLVED_MATH_ANCHOR_PYTHON"
   "$APP_RUNTIME_DIR" \
   "$APP_RUNTIME_BUNDLE" \
   "$APP_RUNTIME"
+CANONICAL_VERSION="$(
+  "$PATH_VALIDATION_PYTHON" "$ROOT_DIR/script/release_metadata.py" version \
+    --root "$ROOT_DIR"
+)"
+APP_VERSION="${APP_VERSION_OVERRIDE:-$CANONICAL_VERSION}"
+if [[ "$APP_VERSION" != "$CANONICAL_VERSION" ]]; then
+  echo "MATH_ANCHOR_APP_VERSION $APP_VERSION does not match canonical project version $CANONICAL_VERSION." >&2
+  exit 2
+fi
 
 source "$ROOT_DIR/script/swift_env.sh"
 configure_swift_environment "$ROOT_DIR"

@@ -2,8 +2,16 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
-GENERATED_RUNTIME_RELATIVE="plugins/math-anchor/runtime/"
-GENERATED_RUNTIME_DIR="$ROOT_DIR/${GENERATED_RUNTIME_RELATIVE%/}"
+GENERATED_OUTPUT_RELATIVES=(
+  "plugins/math-anchor/runtime/"
+  ".build/"
+  "dist/"
+)
+GENERATED_OUTPUT_DIRS=(
+  "$ROOT_DIR/plugins/math-anchor/runtime"
+  "$ROOT_DIR/.build"
+  "$ROOT_DIR/dist"
+)
 GITIGNORE="$ROOT_DIR/.gitignore"
 PATH_VALIDATOR="$ROOT_DIR/script/validate_repo_paths.py"
 
@@ -26,38 +34,43 @@ if ! resolve_math_anchor_python "to validate source paths"; then
 fi
 PATH_VALIDATION_PYTHON="$RESOLVED_MATH_ANCHOR_PYTHON"
 
-"$PATH_VALIDATION_PYTHON" "$PATH_VALIDATOR" --root "$ROOT_DIR" "$GENERATED_RUNTIME_DIR"
+"$PATH_VALIDATION_PYTHON" "$PATH_VALIDATOR" --root "$ROOT_DIR" \
+  "${GENERATED_OUTPUT_DIRS[@]}"
 
 if [[ -e "$ROOT_DIR/.git" ]]; then
-  if [[ -n "$(git -C "$ROOT_DIR" ls-files -- "${GENERATED_RUNTIME_RELATIVE}**")" ]]; then
-    echo "Generated plugin runtime must not be tracked by git." >&2
-    exit 1
-  fi
-  if ! git -C "$ROOT_DIR" check-ignore -q "$GENERATED_RUNTIME_RELATIVE"; then
-    echo "Generated plugin runtime must be ignored by git: $GENERATED_RUNTIME_RELATIVE" >&2
-    exit 1
-  fi
+  for relative in "${GENERATED_OUTPUT_RELATIVES[@]}"; do
+    if [[ -n "$(git -C "$ROOT_DIR" ls-files -- "${relative%/}")" ]]; then
+      echo "Generated output must not be tracked by git: $relative" >&2
+      exit 1
+    fi
+    if ! git -C "$ROOT_DIR" check-ignore -q "$relative"; then
+      echo "Generated output must be ignored by git: $relative" >&2
+      exit 1
+    fi
+  done
   echo "Source layout passed for the Git checkout."
   exit 0
 fi
 
-if [[ ! -f "$GITIGNORE" ]] || ! grep -Fqx "$GENERATED_RUNTIME_RELATIVE" "$GITIGNORE"; then
-  echo "Source archive must retain the generated-runtime exclusion in .gitignore." >&2
-  exit 1
-fi
-
-if [[ -e "$GENERATED_RUNTIME_DIR" && ! -d "$GENERATED_RUNTIME_DIR" ]]; then
-  echo "Generated plugin runtime path must be a directory: $GENERATED_RUNTIME_DIR" >&2
-  exit 1
-fi
-
-if [[ "$MODE" == "--archive-clean" && -d "$GENERATED_RUNTIME_DIR" ]]; then
-  FIRST_ARCHIVED_ENTRY="$(find "$GENERATED_RUNTIME_DIR" -mindepth 1 -maxdepth 1 -print -quit)"
-  if [[ -n "$FIRST_ARCHIVED_ENTRY" ]]; then
-    echo "Source archive must not contain a generated plugin runtime: $FIRST_ARCHIVED_ENTRY" >&2
+for index in "${!GENERATED_OUTPUT_RELATIVES[@]}"; do
+  relative="${GENERATED_OUTPUT_RELATIVES[$index]}"
+  output_dir="${GENERATED_OUTPUT_DIRS[$index]}"
+  if [[ ! -f "$GITIGNORE" ]] || ! grep -Fqx "$relative" "$GITIGNORE"; then
+    echo "Source archive must retain the generated-output exclusion in .gitignore: $relative" >&2
     exit 1
   fi
-fi
+  if [[ -e "$output_dir" && ! -d "$output_dir" ]]; then
+    echo "Generated output path must be a directory: $output_dir" >&2
+    exit 1
+  fi
+  if [[ "$MODE" == "--archive-clean" && -d "$output_dir" ]]; then
+    FIRST_ARCHIVED_ENTRY="$(find "$output_dir" -mindepth 1 -maxdepth 1 -print -quit)"
+    if [[ -n "$FIRST_ARCHIVED_ENTRY" ]]; then
+      echo "Source archive must not contain generated output: $FIRST_ARCHIVED_ENTRY" >&2
+      exit 1
+    fi
+  fi
+done
 
 if [[ "$MODE" == "--archive-clean" ]]; then
   echo "Original metadata-free source archive is clean."

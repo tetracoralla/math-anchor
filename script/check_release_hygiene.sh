@@ -22,11 +22,27 @@ for required in \
   fi
 done
 
+PROJECT_VERSION="$(
+  "$ROOT_DIR/.venv/bin/python" "$ROOT_DIR/script/release_metadata.py" version \
+    --root "$ROOT_DIR"
+)"
+METADATA_ARGUMENTS=(
+  check
+  --root "$ROOT_DIR"
+  --runtime-bundle "$PLUGIN_RUNTIME_BUNDLE"
+)
+if [[ -n "${MATH_ANCHOR_APP_VERSION:-}" ]]; then
+  METADATA_ARGUMENTS+=(--expected-version "$MATH_ANCHOR_APP_VERSION")
+fi
+"$ROOT_DIR/.venv/bin/python" "$ROOT_DIR/script/release_metadata.py" \
+  "${METADATA_ARGUMENTS[@]}"
+
 "$ROOT_DIR/.venv/bin/python" "$ROOT_DIR/script/runtime_manifest.py" verify \
   --bundle "$PLUGIN_RUNTIME_BUNDLE" \
   --runtime "$PLUGIN_RUNTIME" \
   --lock "$ROOT_DIR/requirements-runtime.lock" \
-  --source-root "$ROOT_DIR"
+  --source-root "$ROOT_DIR" \
+  --version "$PROJECT_VERSION"
 
 "$ROOT_DIR/.venv/bin/python" "$ROOT_DIR/script/generate_third_party_materials.py" \
   --lock "$ROOT_DIR/requirements-runtime.lock" \
@@ -57,14 +73,27 @@ if [[ "${MATH_ANCHOR_VERIFY_APP_BUNDLE:-0}" == "1" ]]; then
     echo "Packaged app does not contain expected architecture $EXPECTED_ARCH." >&2
     exit 1
   fi
-  /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP_BUNDLE/Contents/Info.plist" >/dev/null
-  /usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$APP_BUNDLE/Contents/Info.plist" >/dev/null
   APP_RUNTIME_BUNDLE="$APP_BUNDLE/Contents/Resources/Runtime/math-anchor-runtime"
+  APP_METADATA_ARGUMENTS=(
+    check
+    --root "$ROOT_DIR"
+    --runtime-bundle "$PLUGIN_RUNTIME_BUNDLE"
+    --app-bundle "$APP_BUNDLE"
+  )
+  if [[ -n "${MATH_ANCHOR_APP_VERSION:-}" ]]; then
+    APP_METADATA_ARGUMENTS+=(--expected-version "$MATH_ANCHOR_APP_VERSION")
+  fi
+  if [[ -n "${MATH_ANCHOR_BUILD_NUMBER:-}" ]]; then
+    APP_METADATA_ARGUMENTS+=(--expected-build "$MATH_ANCHOR_BUILD_NUMBER")
+  fi
+  "$ROOT_DIR/.venv/bin/python" "$ROOT_DIR/script/release_metadata.py" \
+    "${APP_METADATA_ARGUMENTS[@]}"
   "$ROOT_DIR/.venv/bin/python" "$ROOT_DIR/script/runtime_manifest.py" verify \
     --bundle "$APP_RUNTIME_BUNDLE" \
     --runtime "$APP_RUNTIME_BUNDLE/math-anchor-runtime" \
     --lock "$ROOT_DIR/requirements-runtime.lock" \
-    --source-root "$ROOT_DIR"
+    --source-root "$ROOT_DIR" \
+    --version "$PROJECT_VERSION"
   "$ROOT_DIR/.venv/bin/python" "$ROOT_DIR/script/generate_third_party_materials.py" \
     --lock "$ROOT_DIR/requirements-runtime.lock" \
     --project "$ROOT_DIR/pyproject.toml" \

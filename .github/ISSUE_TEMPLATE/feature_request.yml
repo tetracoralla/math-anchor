@@ -1,0 +1,36 @@
+name: Feature request
+description: Propose a concrete human or Agent calculation task.
+title: "[Feature]: "
+labels: [enhancement]
+body:
+  - type: dropdown
+    id: audience
+    attributes:
+      label: Primary user
+      options:
+        - Human macOS calculator user
+        - Agent using the mathematical runtime
+        - Contributor or release maintainer
+    validations:
+      required: true
+  - type: textarea
+    id: task
+    attributes:
+      label: User task
+      description: Describe the concrete job, inputs, and result the user needs.
+    validations:
+      required: true
+  - type: textarea
+    id: gap
+    attributes:
+      label: Current gap
+      description: Explain why existing modes, operations, or output fields do not cover it.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance example
+      description: Give one representative input and the expected behavior.
+    validations:
+      required: true

@@ -43,6 +43,13 @@ Settings > Security > Advanced Security so the route documented in
 `SECURITY.md` actually exists. Codex internal refs, ignored build outputs, and
 local Git object history are not publication inputs.
 
+Keep `main` protected after publication: changes arrive through pull requests,
+both macOS matrix jobs are required and up to date, and administrators follow
+the same rule. Keep secret scanning with push protection, Dependabot alerts and
+security updates, and CodeQL default setup enabled. Repository Actions are
+limited to GitHub-owned actions; every workflow reference is pinned to an
+immutable commit SHA.
+
 ## Dependency lock updates
 
 Regenerate the development lock against the CI Python patch version and verify
@@ -86,6 +93,14 @@ Never upload `dist/Math Anchor.app` from `build_and_run.sh`; it is a local
 development artifact. Distribution requires a Developer ID Application
 identity and a configured `notarytool` keychain profile:
 
+1. Update the canonical version in `pyproject.toml` and mirror it in
+   `plugins/math-anchor/.codex-plugin/plugin.json`.
+2. Merge the release commit through the protected `main` branch and wait for
+   both architecture jobs to pass.
+3. From a clean checkout of that commit, create an annotated tag such as
+   `git tag -a v0.1.0 -m "Math Anchor 0.1.0"`.
+4. Run the release command below on the matching architecture.
+
 ```bash
 export MATH_ANCHOR_APP_VERSION=0.1.0
 export MATH_ANCHOR_BUILD_NUMBER=1
@@ -96,11 +111,12 @@ export MATH_ANCHOR_EXPECTED_ARCH="$(uname -m)"
 ```
 
 The release script builds with Swift's release configuration, validates the
-runtime manifest and target architecture, signs nested Mach-O files with the
-hardened runtime, verifies the bundle, submits it for notarization, staples and
-validates the ticket, runs Gatekeeper assessment, and only then creates the
-final architecture-labelled zip. Build arm64 and x86_64 artifacts on matching
-hosts; do not relabel one architecture as another.
+clean annotated source tag, canonical App/Plugin/Python/runtime version, build
+number, runtime manifest, and target architecture. It signs nested Mach-O files
+with the hardened runtime, verifies the bundle, submits it for notarization,
+staples and validates the ticket, runs Gatekeeper assessment, and only then
+creates the final architecture-labelled zip. Build arm64 and x86_64 artifacts
+on matching hosts; do not relabel one architecture as another.
 
 Signing identities and notarization credentials are owner-controlled secrets.
 Their absence is an honest binary-release blocker, not something the source

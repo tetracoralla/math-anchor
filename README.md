@@ -9,6 +9,16 @@ Both surfaces use the same Python calculation core. The Agent catalog currently 
 
 Currency conversion is an online, human-app feature calculated from the European Central Bank's daily euro reference rates. The interface shows the source, publication time, and current or expired state; cached rates remain explicitly marked when a refresh cannot complete. These rates are informational and are not transaction quotes. Currency conversion remains an app-internal request and does not add another public MCP tool or Agent operation.
 
+## Requirements
+
+- macOS 14 or newer;
+- Xcode Command Line Tools with Swift 6;
+- Python 3.11 or newer.
+
+The repository publishes source. Downloadable macOS applications are supported
+only when attached to a versioned GitHub Release with a matching source tag,
+Developer ID signature, and Apple notarization record.
+
 ## Run the macOS app
 
 ```bash
@@ -73,3 +83,10 @@ Current local `.app` bundles are development artifacts, not downloadable
 releases. Developer ID signing and Apple notarization are mandatory gates in
 `script/release_macos.sh`. See [docs/releasing.md](docs/releasing.md) for the
 source, Plugin, CI, per-architecture, and signed binary workflow.
+
+## Contributing and security
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, change boundaries, and pull
+request expectations, and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for community
+standards. Report vulnerabilities through GitHub private vulnerability
+reporting as described in [SECURITY.md](SECURITY.md), never in a public issue.

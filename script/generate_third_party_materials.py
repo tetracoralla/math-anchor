@@ -38,6 +38,7 @@ VALID_LICENSE_EXPRESSIONS = {
     "MPL-2.0",
     "NOASSERTION",
     "PSF-2.0",
+    "X11",
 }
 LEGACY_LICENSE_NORMALIZATION = {
     "Apache License 2.0": "Apache-2.0",
@@ -45,6 +46,15 @@ LEGACY_LICENSE_NORMALIZATION = {
     "BSD License": "NOASSERTION",
     "BSD": "NOASSERTION",
     "MIT License": "MIT",
+}
+DECLARED_LICENSE_OVERRIDES = {
+    # These releases publish the ambiguous legacy metadata value "BSD", but
+    # their bundled license files contain the three-clause BSD text. Keep the
+    # override version-specific so a dependency update must be re-reviewed.
+    ("flexcache", "0.3"): "BSD-3-Clause",
+    ("mpmath", "1.3.0"): "BSD-3-Clause",
+    ("pint", "0.25.3"): "BSD-3-Clause",
+    ("sympy", "1.14.0"): "BSD-3-Clause",
 }
 
 
@@ -276,6 +286,13 @@ def spdx_id(name: str) -> str:
 
 
 def declared_license(installed: Any) -> str:
+    package_key = (
+        canonicalize_name(installed.metadata.get("Name", "")),
+        installed.version,
+    )
+    override = DECLARED_LICENSE_OVERRIDES.get(package_key)
+    if override is not None:
+        return override
     expression = installed.metadata.get("License-Expression")
     legacy = installed.metadata.get("License")
     candidate = expression or LEGACY_LICENSE_NORMALIZATION.get(legacy, legacy)
@@ -517,6 +534,16 @@ def build_components(
     )
     components.append(pyinstaller_component(runtime))
     components.extend(native_components(bundle, project_path.parent))
+    unresolved = sorted(
+        f"{component.name}=={component.version}"
+        for component in components
+        if component.license_declared == "NOASSERTION"
+    )
+    if unresolved:
+        raise SystemExit(
+            "bundled components require an explicit reviewed SPDX license: "
+            f"{unresolved}"
+        )
     return project_name, project_version, components
 
 
