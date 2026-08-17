@@ -18,9 +18,9 @@ def schema_is_closed(schema: dict) -> bool:
 
 async def main() -> None:
     root = Path(__file__).resolve().parent.parent
-    plugin_root = root / "plugins/zibetha"
+    plugin_root = root / "plugins/math-anchor"
     plugin_config = json.loads((plugin_root / ".mcp.json").read_text())
-    server_config = plugin_config["mcpServers"]["zibetha"]
+    server_config = plugin_config["mcpServers"]["math-anchor"]
     server_cwd = (plugin_root / server_config["cwd"]).resolve()
     server_command = Path(server_config["command"])
     if not server_command.is_absolute():
@@ -40,7 +40,7 @@ async def main() -> None:
             assert all(tool.annotations and tool.annotations.readOnlyHint for tool in listed.tools)
             run_tool = next(tool for tool in listed.tools if tool.name == "math.run")
             batch_tool = next(tool for tool in listed.tools if tool.name == "math.batch")
-            assert len(run_tool.inputSchema["oneOf"]) == 29
+            assert len(run_tool.inputSchema["oneOf"]) == 31
             run_schema_bytes = len(
                 json.dumps(run_tool.inputSchema, ensure_ascii=False, separators=(",", ":")).encode()
             )
@@ -59,7 +59,7 @@ async def main() -> None:
             )
             assert "oneOf" not in batch_tool.inputSchema["properties"]["items"]["items"]
             assert batch_schema_bytes < 2_000
-            assert listed_bytes < 60_000
+            assert listed_bytes < 64_000
             assert run_tool.inputSchema["additionalProperties"] is False
             assert all(
                 schema_is_closed(variant["properties"]["arguments"])
@@ -320,7 +320,7 @@ async def main() -> None:
         "linear solving, numerical integration, probability, inferential statistics, standard algebra, exact/high-precision results, "
         "schema rejection, domain errors, precision provenance, large integer output, ordered partial batch, "
         "and unsafe-input rejection. "
-        f"math.run advertises 29 input variants in {run_schema_bytes} bytes; "
+        f"math.run advertises 31 input variants in {run_schema_bytes} bytes; "
         f"its result contract is {run_output_schema_bytes} bytes; "
         f"compact math.batch input is {batch_schema_bytes} bytes and all four listed tools total {listed_bytes} bytes; "
         f"five warm expression calls completed in {warm_elapsed:.3f}s."

@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parent.parent
-PLUGIN = ROOT / "plugins" / "zibetha"
+PLUGIN = ROOT / "plugins" / "math-anchor"
 
 
 def fail(message: str) -> None:
@@ -23,15 +23,15 @@ def main() -> None:
     for key in ("name", "version", "description", "license", "skills", "mcpServers"):
         if not manifest.get(key):
             fail(f"manifest field {key!r} is required")
-    if manifest["name"] != "zibetha":
-        fail("manifest name must remain zibetha")
+    if manifest["name"] != "math-anchor":
+        fail("manifest name must remain math-anchor")
     if manifest["mcpServers"] != "./.mcp.json":
         fail("manifest must point to the repository MCP transport")
 
     transport = json.loads(transport_path.read_text())
-    server = transport.get("mcpServers", {}).get("zibetha")
+    server = transport.get("mcpServers", {}).get("math-anchor")
     if not isinstance(server, dict):
-        fail("zibetha MCP server is required")
+        fail("math-anchor MCP server is required")
     cwd = (PLUGIN / server.get("cwd", "")).resolve()
     command = Path(server.get("command", ""))
     executable = command if command.is_absolute() else cwd / command

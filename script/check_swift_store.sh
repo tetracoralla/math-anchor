@@ -11,28 +11,28 @@ mkdir -p "$OUTPUT_DIR"
 
 swiftc \
   -sdk "$SDKROOT" \
-  -target "$ZIBETHA_SWIFT_TARGET" \
+  -target "$MATH_ANCHOR_SWIFT_TARGET" \
   -module-cache-path "$ROOT_DIR/.build/ModuleCache" \
   -parse-as-library \
-  "$ROOT_DIR/Sources/Zibetha/Models/CalculatorMode.swift" \
-  "$ROOT_DIR/Sources/Zibetha/Models/HistoryEntry.swift" \
-  "$ROOT_DIR/Sources/Zibetha/Models/EvaluationResult.swift" \
-  "$ROOT_DIR/Sources/Zibetha/Models/UnitDefinition.swift" \
-  "$ROOT_DIR/Sources/Zibetha/Models/UnitConversionResult.swift" \
-  "$ROOT_DIR/Sources/Zibetha/Models/CurrencyConversionResult.swift" \
-  "$ROOT_DIR/Sources/Zibetha/Services/MathEvaluating.swift" \
-  "$ROOT_DIR/Sources/Zibetha/Services/UnitConverting.swift" \
-  "$ROOT_DIR/Sources/Zibetha/Services/CurrencyConverting.swift" \
-  "$ROOT_DIR/Sources/Zibetha/Services/ClipboardWriting.swift" \
-  "$ROOT_DIR/Sources/Zibetha/Services/MathRuntimeService.swift" \
-  "$ROOT_DIR/Sources/Zibetha/Support/ExpressionEditing.swift" \
-  "$ROOT_DIR/Sources/Zibetha/Support/ConversionDisplayFormatting.swift" \
-  "$ROOT_DIR/Sources/Zibetha/Support/MathDisplayFormatting.swift" \
-  "$ROOT_DIR/Sources/Zibetha/Support/CalculatorKeyboardMonitor.swift" \
-  "$ROOT_DIR/Sources/Zibetha/Stores/HistoryStore.swift" \
-  "$ROOT_DIR/Sources/Zibetha/Stores/CalculatorStore.swift" \
-  "$ROOT_DIR/Sources/Zibetha/Stores/UnitConversionStore.swift" \
-  "$ROOT_DIR/Tests/CalculatorStoreChecks.swift" \
+  "$ROOT_DIR/Sources/MathAnchor/Models/CalculatorMode.swift" \
+  "$ROOT_DIR/Sources/MathAnchor/Models/HistoryEntry.swift" \
+  "$ROOT_DIR/Sources/MathAnchor/Models/EvaluationResult.swift" \
+  "$ROOT_DIR/Sources/MathAnchor/Models/UnitDefinition.swift" \
+  "$ROOT_DIR/Sources/MathAnchor/Models/UnitConversionResult.swift" \
+  "$ROOT_DIR/Sources/MathAnchor/Models/CurrencyConversionResult.swift" \
+  "$ROOT_DIR/Sources/MathAnchor/Services/MathEvaluating.swift" \
+  "$ROOT_DIR/Sources/MathAnchor/Services/UnitConverting.swift" \
+  "$ROOT_DIR/Sources/MathAnchor/Services/CurrencyConverting.swift" \
+  "$ROOT_DIR/Sources/MathAnchor/Services/ClipboardWriting.swift" \
+  "$ROOT_DIR/Sources/MathAnchor/Services/MathRuntimeService.swift" \
+  "$ROOT_DIR/Sources/MathAnchor/Support/ExpressionEditing.swift" \
+  "$ROOT_DIR/Sources/MathAnchor/Support/ConversionDisplayFormatting.swift" \
+  "$ROOT_DIR/Sources/MathAnchor/Support/MathDisplayFormatting.swift" \
+  "$ROOT_DIR/Sources/MathAnchor/Support/CalculatorKeyboardMonitor.swift" \
+  "$ROOT_DIR/Sources/MathAnchor/Stores/HistoryStore.swift" \
+  "$ROOT_DIR/Sources/MathAnchor/Stores/CalculatorStore.swift" \
+  "$ROOT_DIR/Sources/MathAnchor/Stores/UnitConversionStore.swift" \
+  "$ROOT_DIR/tests/CalculatorStoreChecks.swift" \
   -o "$OUTPUT"
 
 "$OUTPUT"

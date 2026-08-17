@@ -5,7 +5,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parent.parent
-RUNTIME = ROOT / "src" / "zibetha"
+RUNTIME = ROOT / "src" / "math_anchor"
 
 FORBIDDEN_CALL = re.compile(r"(?<![A-Za-z0-9_])(?:eval|exec|sympify|parse_expr)\s*\(")
 TOOL_NAME = re.compile(r'name="([^"]+)"')

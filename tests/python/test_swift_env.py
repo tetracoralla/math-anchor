@@ -29,7 +29,7 @@ def test_explicit_sdk_override_is_selected_before_discovery(tmp_path: Path) -> N
 
     environment = os.environ.copy()
     environment["PATH"] = f"{fake_bin}:{environment['PATH']}"
-    environment["ZIBETHA_SDKROOT"] = str(explicit_sdk)
+    environment["MATH_ANCHOR_SDKROOT"] = str(explicit_sdk)
     completed = subprocess.run(
         [
             "/bin/bash",
@@ -54,7 +54,7 @@ def test_invalid_explicit_sdk_does_not_fall_back_to_discovery(tmp_path: Path) ->
 
     environment = os.environ.copy()
     environment["PATH"] = f"{fake_bin}:{environment['PATH']}"
-    environment["ZIBETHA_SDKROOT"] = str(tmp_path / "missing.sdk")
+    environment["MATH_ANCHOR_SDKROOT"] = str(tmp_path / "missing.sdk")
     completed = subprocess.run(
         [
             "/bin/bash",

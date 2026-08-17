@@ -456,7 +456,7 @@ def build_components(
 
 def build_notice(components: list[BundledComponent]) -> str:
     sections = [
-        "Zibetha third-party notices",
+        "Math Anchor third-party notices",
         "Generated from the final bundled artifact and its exact dependency lock.",
     ]
     for component in components:
@@ -523,13 +523,13 @@ def build_sbom(
         "spdxVersion": "SPDX-2.3",
         "dataLicense": "CC0-1.0",
         "SPDXID": "SPDXRef-DOCUMENT",
-        "name": "Zibetha bundled runtime",
-        "documentNamespace": f"https://spdx.org/spdxdocs/zibetha-{namespace_hash}",
+        "name": "Math Anchor bundled runtime",
+        "documentNamespace": f"https://spdx.org/spdxdocs/math-anchor-{namespace_hash}",
         "creationInfo": {
             "created": datetime.now(timezone.utc)
             .isoformat(timespec="seconds")
             .replace("+00:00", "Z"),
-            "creators": ["Tool: Zibetha-generate-third-party-materials"],
+            "creators": ["Tool: MathAnchor-generate-third-party-materials"],
         },
         "packages": packages,
         "relationships": relationships,

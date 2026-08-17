@@ -2,15 +2,15 @@
 import PackageDescription
 
 let package = Package(
-    name: "Zibetha",
+    name: "MathAnchor",
     platforms: [.macOS(.v14)],
     products: [
-        .executable(name: "Zibetha", targets: ["Zibetha"]),
+        .executable(name: "MathAnchor", targets: ["MathAnchor"]),
     ],
     targets: [
         .executableTarget(
-            name: "Zibetha",
-            path: "Sources/Zibetha"
+            name: "MathAnchor",
+            path: "Sources/MathAnchor"
         ),
     ]
 )

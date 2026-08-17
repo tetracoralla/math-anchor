@@ -6,8 +6,8 @@ import threading
 
 import pytest
 
-from zibetha.currency import ECBRateService
-from zibetha.errors import CalculatorError
+from math_anchor.currency import ECBRateService
+from math_anchor.errors import CalculatorError
 
 
 NOW = datetime(2026, 8, 13, 11, 15, tzinfo=timezone.utc)

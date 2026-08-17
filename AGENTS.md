@@ -1,4 +1,4 @@
-# Zibetha repository contract
+# Math Anchor repository contract
 
 Read `docs/product-model.md` before changing the product surface.
 
@@ -10,4 +10,3 @@ Read `docs/product-model.md` before changing the product surface.
 - Add a negative regression test for parser, validation, timeout, and error-path fixes.
 - Report development regression, MCP/runtime user flow, and human experience acceptance separately.
 - Do not commit or push unless the owner explicitly asks.
-

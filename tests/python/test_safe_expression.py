@@ -1,8 +1,8 @@
 import pytest
 import sympy as sp
 
-from zibetha.errors import CalculatorError
-from zibetha.safe_expression import make_symbols, parse_expression
+from math_anchor.errors import CalculatorError
+from math_anchor.safe_expression import make_symbols, parse_expression
 
 
 def test_exact_arithmetic_and_registered_functions() -> None:
@@ -53,3 +53,36 @@ def test_allows_bounded_complex_exponents() -> None:
     assert parse_expression("2^i") == sp.Pow(2, sp.I)
     with pytest.raises(CalculatorError, match="exponent"):
         parse_expression("2^(10001*i)")
+
+
+def test_special_functions_are_registered_and_accurate() -> None:
+    import mpmath as mp
+
+    from math_anchor.runtime import execute_direct
+
+    exact = execute_direct("expression.evaluate", {"expression": "atan2(1, 1)", "precision": 30})
+    assert exact["exact"] == "pi/4"
+    zeta_two = execute_direct("expression.evaluate", {"expression": "zeta(2)", "precision": 30})
+    assert zeta_two["exact"] == "pi**2/6"
+    lambert = execute_direct("expression.evaluate", {"expression": "lambertw(e)", "precision": 30})
+    assert lambert["exact"] == "1"
+    log_ten = execute_direct("expression.evaluate", {"expression": "log10(100)", "precision": 30})
+    assert log_ten["exact"] == "2"
+
+    for expression, truth in {
+        "erf(1)": lambda: mp.erf(1),
+        "besselj(0, 1)": lambda: mp.besselj(0, 1),
+        "zeta(3)": lambda: mp.zeta(3),
+        "log2(8)": lambda: mp.mpf(3),
+    }.items():
+        result = execute_direct("expression.evaluate", {"expression": expression, "precision": 45})
+        with mp.workdps(50):
+            # mpf(string) rounds to the current working precision, so the
+            # comparison must run at guard precision.
+            assert abs(mp.mpf(result["approx"]) - truth()) < mp.mpf("1e-42"), (expression, result["approx"])
+
+    with pytest.raises(CalculatorError) as reserved:
+        from math_anchor.safe_expression import make_symbols
+
+        make_symbols(["erf"])
+    assert reserved.value.code == "E_INPUT"

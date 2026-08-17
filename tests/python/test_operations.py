@@ -1,8 +1,8 @@
 import pytest
 
-from zibetha.catalog import describe_operation, search_operations
-from zibetha.errors import CalculatorError
-from zibetha.runtime import execute_direct
+from math_anchor.catalog import describe_operation, search_operations
+from math_anchor.errors import CalculatorError
+from math_anchor.runtime import execute_direct
 
 
 def test_catalog_discovery_is_compact_and_descriptions_are_precise() -> None:
@@ -214,3 +214,47 @@ def test_float_eigenvalues_do_not_overclaim_precision() -> None:
     assert eigenvalues["precision"] <= 15
     assert all(value["exact"] is None for value in eigenvalues["values"])
     assert any(value["approx"].startswith("-0.372281323269014") for value in eigenvalues["values"])
+
+
+def test_function_sample_builds_exact_function_tables() -> None:
+    from decimal import Decimal
+
+    grid = execute_direct(
+        "function.sample",
+        {"expression": "x^2", "variable": "x", "lower": "0", "upper": "1", "count": 5},
+    )
+    assert grid["kind"] == "function_table"
+    assert grid["count"] == 5
+    # Grid labels are decimal text, which deliberately takes the approximate
+    # provenance lane; explicit rational point texts stay exact.
+    assert grid["points"][1]["exact"] is None
+    assert Decimal(grid["points"][1]["approx"]) == Decimal("0.0625")
+    assert Decimal(grid["points"][2]["approx"]) == Decimal("0.25")
+
+    poles = execute_direct(
+        "function.sample",
+        {"expression": "1/x", "variable": "x", "points": ["-1", "0", "2"]},
+    )
+    assert poles["points"][0]["exact"] == "-1"
+    assert poles["points"][1]["undefined"] is True
+    assert poles["points"][1]["exact"] is None
+    assert any("undefined" in warning for warning in poles["warnings"])
+
+    # sin(x)/x at zero is a removable discontinuity; the table keeps the
+    # strict definedness rule instead of silently healing it.
+    removable = execute_direct(
+        "function.sample",
+        {"expression": "sin(x)/x", "variable": "x", "lower": "-2", "upper": "2", "count": 5},
+    )
+    assert removable["points"][2]["undefined"] is True
+
+    with pytest.raises(CalculatorError) as both_modes:
+        execute_direct(
+            "function.sample",
+            {"expression": "x", "variable": "x", "points": ["1"], "count": 5},
+        )
+    assert both_modes.value.code == "E_INPUT"
+
+    with pytest.raises(CalculatorError) as neither_mode:
+        execute_direct("function.sample", {"expression": "x", "variable": "x"})
+    assert neither_mode.value.code == "E_INPUT"

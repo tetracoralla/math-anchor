@@ -171,7 +171,7 @@ private final class RecordingClipboard: ClipboardWriting {
 struct CalculatorStoreChecks {
     @MainActor
     static func main() async {
-        let suiteName = "ZibethaChecks.\(UUID().uuidString)"
+        let suiteName = "MathAnchorChecks.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let history = HistoryStore(defaults: defaults)

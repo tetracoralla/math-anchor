@@ -4,8 +4,8 @@ from decimal import Decimal
 
 import pytest
 
-from zibetha.errors import CalculatorError
-from zibetha.runtime import execute_direct
+from math_anchor.errors import CalculatorError
+from math_anchor.runtime import execute_direct
 
 
 def test_expression_equivalence_proves_identity_and_preserves_definedness() -> None:
@@ -205,7 +205,7 @@ def test_numerical_root_carries_error_bound_and_rejects_discontinuities() -> Non
         },
     )
     assert root["kind"] == "numerical_root"
-    assert root["method"] == "bisection"
+    assert root["method"] == "brent"
     assert Decimal(root["errorBound"]) <= Decimal("1e-30")
     assert Decimal(root["residual"]) < Decimal("1e-25")
 
@@ -244,7 +244,7 @@ def test_numerical_integration_exposes_an_honest_estimated_interval() -> None:
     assert integral["converged"] is False
     assert integral["localErrorToleranceMet"] is True
     assert integral["coverageStatus"] == "unverified"
-    assert integral["method"] == "stratified_adaptive_simpson"
+    assert integral["method"] == "stratified_adaptive_clenshaw_curtis"
     assert Decimal(integral["resultInterval"][0]) < Decimal("2") < Decimal(integral["resultInterval"][1])
     assert 10 <= integral["estimatedDigitsFromLocalError"] < integral["precision"]
     assert integral["probeSegments"] == 256
@@ -541,3 +541,358 @@ def test_inferential_statistics_report_methods_and_sample_constraints() -> None:
             {"action": "linear_regression", "x": ["1", "2", "3"], "y": ["1", "2", "3", "4"]},
         )
     assert mismatched.value.code == "E_INPUT"
+
+
+def test_clenshaw_curtis_quadrature_is_self_verified() -> None:
+    import mpmath as mp
+
+    from math_anchor.operations.numerical import _clenshaw_curtis
+
+    with mp.workdps(40):
+        for degree in (8, 16):
+            nodes, weights = _clenshaw_curtis(degree, 30)
+            assert abs(mp.fsum(weights) - 2) < mp.mpf("1e-25")
+            for power in range(degree + 1):
+                observed = mp.fsum(w * x**power for x, w in zip(nodes, weights))
+                expected = mp.mpf(2) / (power + 1) if power % 2 == 0 else mp.mpf(0)
+                assert abs(observed - expected) < mp.mpf("1e-25")
+            assert nodes[0] == 1 and nodes[-1] == -1
+        fine_nodes, _ = _clenshaw_curtis(16, 30)
+        coarse_nodes, _ = _clenshaw_curtis(8, 30)
+        for index in range(9):
+            assert abs(fine_nodes[2 * index] - coarse_nodes[index]) < mp.mpf("1e-25")
+
+
+def test_integration_refinement_keeps_features_that_live_on_a_breakpoint() -> None:
+    # Negative regression for the refinement rule: an open-node rule such as
+    # Gauss-Legendre is blind to a spike exactly at a caller-supplied
+    # breakpoint (both embedded estimates miss the mass and report zero
+    # local error), so refinement must use endpoint-including nodes.
+    located = execute_direct(
+        "numeric.integrate",
+        {
+            "expression": "exp(-1000000000000*(x-0.123456789)^2)",
+            "variable": "x",
+            "lower": "0",
+            "upper": "1",
+            "breakpoints": ["0.123456789"],
+            "absoluteTolerance": "1e-20",
+        },
+    )
+    expected = Decimal("0.000001772453850905516")
+    observed = Decimal(located["approx"])
+    assert abs(observed - expected) / expected < Decimal("1e-8")
+
+
+def test_numeric_root_brent_keeps_the_rigorous_bound_and_beats_bisection() -> None:
+    from math_anchor.operations.calculus import _bracketed_root
+    from math_anchor.safe_expression import make_symbols, parse_expression
+    import mpmath as mp
+    import sympy as sp
+
+    cases = (
+        ("x^3 - 2*x - 5", "2", "3", 30, None),
+        ("x^5 - x - 1", "1", "2", 45, None),
+        ("cos(x) - x", "0", "1", 40, None),
+    )
+    with mp.workdps(55):
+        for expression_text, lower, upper, precision, known in cases:
+            symbols = make_symbols(["x"])
+            expression = parse_expression(expression_text, symbols=symbols)
+            function = sp.lambdify(symbols["x"], expression, modules="mpmath")
+
+            def evaluate(point):
+                return function(point)
+
+            if known is not None:
+                truth = mp.mpf(str(known))
+            else:
+                # mpmath's default findroot tolerance is far looser than the
+                # solver under test; compute the oracle at guard precision.
+                with mp.workdps(90):
+                    truth = mp.mpf(mp.findroot(function, ((mp.mpf(lower) + mp.mpf(upper)) / 2, mp.mpf(upper))))
+            with mp.workdps(precision + 10):
+                result, residual, error_bound, bracket, iterations, _ = _bracketed_root(
+                    evaluate, mp.mpf(lower), mp.mpf(upper), mp.mpf(10) ** (-precision), 2000, precision
+                )
+            assert abs(result - truth) <= error_bound, (expression_text, result, truth, error_bound)
+            assert min(bracket) <= truth <= max(bracket)
+            # An exact working-precision zero exits with the current honest
+            # bracket; every width-converged exit must meet the tolerance.
+            if residual != 0:
+                assert error_bound <= mp.mpf(10) ** (-precision)
+
+    # The safeguarded interpolation must actually fire: bisection needs
+    # ~100 iterations here, a regression to pure bisection exceeds this pin.
+    root = execute_direct(
+        "numeric.root",
+        {
+            "expression": "x^3 - 2*x - 5",
+            "variable": "x",
+            "bracket": ["2", "3"],
+            "tolerance": "1e-30",
+            "precision": 30,
+        },
+    )
+    assert root["method"] == "brent"
+    assert root["iterations"] < 60
+    assert Decimal(root["errorBound"]) <= Decimal("1e-30")
+
+
+def test_numeric_root_find_all_enumerates_sign_changes_honestly() -> None:
+    import mpmath as mp
+
+    all_roots = execute_direct(
+        "numeric.root",
+        {
+            "expression": "sin(x)",
+            "variable": "x",
+            "bracket": ["-10", "10"],
+            "findAll": True,
+            "resolution": 256,
+            "tolerance": "1e-25",
+            "precision": 25,
+        },
+    )
+    assert all_roots["findAll"] is True
+    assert all_roots["count"] == 7
+    assert all_roots["method"] == "brent"
+    for entry, multiple in zip(all_roots["roots"], (n for n in range(-3, 4))):
+        assert abs(mp.mpf(entry["approx"]) - multiple * mp.pi) < mp.mpf("1e-24")
+        assert Decimal(entry["errorBound"]) <= Decimal("1e-25")
+
+    # Even multiplicity has no sign change: it is only found when a grid
+    # point lands exactly on the root, never between grid points.
+    between_grid = execute_direct(
+        "numeric.root",
+        {
+            "expression": "(x-1)^2",
+            "variable": "x",
+            "bracket": ["0", "3"],
+            "findAll": True,
+            "resolution": 64,
+        },
+    )
+    assert between_grid["count"] == 0
+    assert between_grid["approx"] is None
+    assert any("sign change" in warning for warning in between_grid["warnings"])
+
+    on_grid = execute_direct(
+        "numeric.root",
+        {
+            "expression": "(x-1)^2",
+            "variable": "x",
+            "bracket": ["0", "2"],
+            "findAll": True,
+            "resolution": 64,
+        },
+    )
+    assert on_grid["count"] == 1
+    assert Decimal(on_grid["roots"][0]["approx"]) == Decimal(1)
+
+    grid_point = execute_direct(
+        "numeric.root",
+        {
+            "expression": "x",
+            "variable": "x",
+            "bracket": ["-1", "1"],
+            "findAll": True,
+            "resolution": 64,
+        },
+    )
+    assert grid_point["count"] == 1
+    assert Decimal(grid_point["roots"][0]["approx"]) == Decimal(0)
+
+    with pytest.raises(CalculatorError) as jump:
+        execute_direct(
+            "numeric.root",
+            {
+                "expression": "1/(x-0.5)",
+                "variable": "x",
+                "bracket": ["0", "1"],
+                "findAll": True,
+            },
+        )
+    assert jump.value.code == "E_DOMAIN"
+
+
+def test_numeric_minimize_certifies_global_extrema() -> None:
+    import mpmath as mp
+
+    parabola = execute_direct(
+        "numeric.minimize", {"expression": "x^2 - 2", "variable": "x", "bracket": ["-2", "2"]}
+    )
+    assert parabola["certified"] is True
+    assert parabola["kind"] == "global_extremum"
+    assert parabola["method"] == "interval_branch_and_bound"
+    low, high = (mp.mpf(parabola["valueEnclosure"][0]), mp.mpf(parabola["valueEnclosure"][1]))
+    assert low <= -2 <= high and high - low < mp.mpf("1e-11")
+
+    twin_minima = execute_direct(
+        "numeric.minimize",
+        {"expression": "(x^2 - 2)^2", "variable": "x", "bracket": ["-3", "3"]},
+    )
+    covered = [(mp.mpf(a), mp.mpf(b)) for a, b in twin_minima["extremumIntervals"]]
+    assert any(a <= -mp.sqrt(2) <= b for a, b in covered)
+    assert any(a <= mp.sqrt(2) <= b for a, b in covered)
+    low, high = (mp.mpf(twin_minima["valueEnclosure"][0]), mp.mpf(twin_minima["valueEnclosure"][1]))
+    assert low <= 0 <= high
+
+    maximum = execute_direct(
+        "numeric.minimize",
+        {"expression": "-x^2", "variable": "x", "bracket": ["-1", "1"], "objective": "maximum"},
+    )
+    assert maximum["certified"] is True
+    low, high = (mp.mpf(maximum["valueEnclosure"][0]), mp.mpf(maximum["valueEnclosure"][1]))
+    assert low <= 0 <= high
+    assert mp.mpf(maximum["extremumIntervals"][0][0]) <= 0 <= mp.mpf(maximum["extremumIntervals"][0][1])
+
+    # The value of x^2 certifies instantly, so budget exhaustion must
+    # degrade only the argmin refinement: status stays ok, intervals widen,
+    # and the cover still contains the minimizer.
+    coarse_argmin = execute_direct(
+        "numeric.minimize",
+        {
+            "expression": "x^2",
+            "variable": "x",
+            "bracket": ["-2", "2"],
+            "maxEvaluations": 60,
+            "tolerance": "1e-30",
+        },
+    )
+    assert coarse_argmin["certified"] is True
+    low, high = (mp.mpf(coarse_argmin["valueEnclosure"][0]), mp.mpf(coarse_argmin["valueEnclosure"][1]))
+    assert low <= 0 <= high
+    covered = [(mp.mpf(a), mp.mpf(b)) for a, b in coarse_argmin["extremumIntervals"]]
+    assert any(a <= 0 <= b for a, b in covered)
+
+    # A value the budget cannot certify degrades the whole result honestly.
+    exhausted = execute_direct(
+        "numeric.minimize",
+        {
+            "expression": "x*sin(x)",
+            "variable": "x",
+            "bracket": ["0", "10"],
+            "maxEvaluations": 48,
+            "tolerance": "1e-30",
+        },
+    )
+    assert exhausted["status"] == "uncertain"
+    assert exhausted["certified"] is False
+    # The global minimum of x*sin(x) on [0, 10] sits at the right endpoint,
+    # below every interior stationary point; the best-known enclosure must
+    # still cover it.
+    endpoint_minimum = mp.mpf(10) * mp.sin(10)
+    low, high = (mp.mpf(exhausted["valueEnclosure"][0]), mp.mpf(exhausted["valueEnclosure"][1]))
+    assert low <= endpoint_minimum <= high
+
+    cases = (
+        ("sqrt(x)", ["-1", "1"]),
+        ("1/x", ["-1", "1"]),
+        ("log(x)", ["-1", "1"]),
+        ("tan(x)", ["1", "2"]),
+    )
+    for expression_text, bracket in cases:
+        with pytest.raises(CalculatorError) as undefined:
+            execute_direct(
+                "numeric.minimize",
+                {"expression": expression_text, "variable": "x", "bracket": bracket},
+            )
+        assert undefined.value.code == "E_DOMAIN"
+
+
+def test_equivalence_probe_skips_negligible_numeric_differences() -> None:
+    # A true-but-negligible difference must not mint a counterexample from
+    # rounding noise: the probe threshold keeps tiny deltas at "unknown".
+    result = execute_direct(
+        "expression.equivalent",
+        {"left": "x", "right": "x + 1e-40", "variables": ["x"], "precision": 30},
+    )
+    assert result["equivalence"] == "unknown"
+    assert result["counterexample"] is None
+
+    reproducible = execute_direct(
+        "expression.equivalent",
+        {"left": "x^2", "right": "x", "variables": ["x"]},
+    )
+    assert reproducible["equivalence"] == "not_equivalent"
+    assert reproducible["counterexample"]["left"] != reproducible["counterexample"]["right"]
+
+
+def test_numeric_fuzz_root_minimize_and_integrate_never_escape() -> None:
+    # Bounded deterministic fuzz over the three numerically reworked
+    # operations: every grammatical input returns a structured result or a
+    # typed CalculatorError; raw exceptions and E_RUNTIME are failures.
+    import random
+
+    generator = random.Random(20260817)
+    builders = (
+        lambda: f"{generator.randint(-9, 9)}*x^2 + {generator.randint(-9, 9)}*x + {generator.randint(-9, 9)}",
+        lambda: f"x^3 - {generator.randint(1, 9)}*x - {generator.randint(1, 9)}",
+        lambda: f"sin({generator.randint(1, 5)}*x) + {generator.randint(-3, 3)}",
+        lambda: f"exp(-x^2/{generator.randint(1, 4)}) - {generator.randint(0, 3)}/10",
+        lambda: f"cos(x)*x + {generator.randint(-5, 5)}",
+        lambda: f"(x - {generator.randint(-3, 3)})^2 - {generator.randint(0, 4)}",
+    )
+    tolerated = {
+        "E_INPUT",
+        "E_DOMAIN",
+        "E_LIMIT",
+        "E_SYNTAX",
+        "E_CONVERGENCE",
+        "E_TIMEOUT",
+    }
+    for _ in range(40):
+        expression = generator.choice(builders)()
+        lower = generator.randint(-8, 4)
+        upper = lower + generator.randint(1, 12)
+        bracket = [str(lower), str(upper)]
+        for operation, arguments in (
+            (
+                "numeric.root",
+                {
+                    "expression": expression,
+                    "variable": "x",
+                    "bracket": bracket,
+                    "findAll": generator.random() < 0.5,
+                    "resolution": 64,
+                    "precision": 20,
+                    "maxIterations": 256,
+                },
+            ),
+            (
+                "numeric.minimize",
+                {
+                    "expression": expression,
+                    "variable": "x",
+                    "bracket": bracket,
+                    "maxEvaluations": 400,
+                    "precision": 20,
+                },
+            ),
+            (
+                "numeric.integrate",
+                {
+                    "expression": expression,
+                    "variable": "x",
+                    "lower": bracket[0],
+                    "upper": bracket[1],
+                    "maxEvaluations": 2000,
+                    "precision": 20,
+                },
+            ),
+        ):
+            try:
+                result = execute_direct(operation, arguments)
+            except CalculatorError as error:
+                assert error.code in tolerated, (operation, expression, error.code, error.message)
+                continue
+            if operation == "numeric.root" and result.get("findAll"):
+                assert result["count"] == len(result["roots"])
+            if operation == "numeric.minimize":
+                assert result["status"] in {"ok", "uncertain"}
+            if operation == "numeric.integrate":
+                assert result["evaluations"] <= arguments["maxEvaluations"]
+                if result["approx"] is not None:
+                    assert Decimal(result["resultInterval"][0]) <= Decimal(result["approx"])
+                    assert Decimal(result["approx"]) <= Decimal(result["resultInterval"][1])

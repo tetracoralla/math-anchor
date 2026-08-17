@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "math-anchor": {
+      "command": "runtime/math-anchor-runtime/math-anchor-runtime",
+      "args": ["mcp"],
+      "cwd": "."
+    }
+  }
+}

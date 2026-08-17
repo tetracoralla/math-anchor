@@ -1,18 +1,47 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 VENV_PYTHON="$ROOT_DIR/.venv/bin/python"
-PLUGIN_RUNTIME_DIR="$ROOT_DIR/plugins/zibetha/runtime"
-PLUGIN_RUNTIME_BUNDLE="$PLUGIN_RUNTIME_DIR/zibetha-runtime"
-PLUGIN_RUNTIME="$PLUGIN_RUNTIME_BUNDLE/zibetha-runtime"
+PLUGIN_RUNTIME_DIR="$ROOT_DIR/plugins/math-anchor/runtime"
+PLUGIN_RUNTIME_BUNDLE="$PLUGIN_RUNTIME_DIR/math-anchor-runtime"
+PLUGIN_RUNTIME="$PLUGIN_RUNTIME_BUNDLE/math-anchor-runtime"
 RUNTIME_LOCK="$ROOT_DIR/requirements-runtime.lock"
 BUILD_DIR="$ROOT_DIR/.build/runtime-package"
 DIST_DIR="$BUILD_DIR/dist"
 WORK_DIR="$BUILD_DIR/work"
 SPEC_DIR="$BUILD_DIR/spec"
 PYINSTALLER_CONFIG_DIR="$BUILD_DIR/cache"
+DIST_RUNTIME_BUNDLE="$DIST_DIR/math-anchor-runtime"
+WORK_RUNTIME_DIR="$WORK_DIR/math-anchor-runtime"
+SPEC_FILE="$SPEC_DIR/math-anchor-runtime.spec"
+PATH_VALIDATOR="$ROOT_DIR/script/validate_repo_paths.py"
 export PYINSTALLER_CONFIG_DIR
+
+source "$ROOT_DIR/script/python_env.sh"
+if ! resolve_math_anchor_python "to validate packaging paths"; then
+  exit 1
+fi
+PATH_VALIDATION_PYTHON="$RESOLVED_MATH_ANCHOR_PYTHON"
+
+validate_write_paths() {
+  "$PATH_VALIDATION_PYTHON" "$PATH_VALIDATOR" --root "$ROOT_DIR" \
+    "$ROOT_DIR/.venv" \
+    "$BUILD_DIR" \
+    "$DIST_DIR" \
+    "$WORK_DIR" \
+    "$SPEC_DIR" \
+    "$PYINSTALLER_CONFIG_DIR" \
+    "$DIST_RUNTIME_BUNDLE" \
+    "$WORK_RUNTIME_DIR" \
+    "$SPEC_FILE" \
+    "$PLUGIN_RUNTIME_DIR" \
+    "$PLUGIN_RUNTIME_BUNDLE" \
+    "$PLUGIN_RUNTIME"
+}
+
+# This must run before bootstrap, directory creation, or any generated-path read.
+validate_write_paths
 
 if [[ ! -x "$VENV_PYTHON" ]] || ! "$VENV_PYTHON" -c 'import PyInstaller' >/dev/null 2>&1; then
   "$ROOT_DIR/script/bootstrap.sh"
@@ -27,7 +56,7 @@ elif ! "$VENV_PYTHON" "$ROOT_DIR/script/runtime_manifest.py" verify \
   --lock "$RUNTIME_LOCK" \
   --source-root "$ROOT_DIR" >/dev/null 2>&1; then
   needs_build=1
-elif find "$ROOT_DIR/src/zibetha" "$ROOT_DIR/legal" "$ROOT_DIR/LICENSE" \
+elif find "$ROOT_DIR/src/math_anchor" "$ROOT_DIR/legal" "$ROOT_DIR/LICENSE" \
   "$ROOT_DIR/pyproject.toml" "$ROOT_DIR/script/package_runtime.sh" \
   "$ROOT_DIR/script/generate_third_party_materials.py" "$ROOT_DIR/script/runtime_manifest.py" \
   "$RUNTIME_LOCK" \
@@ -43,17 +72,17 @@ if [[ "$needs_build" -eq 0 ]]; then
   exit 0
 fi
 
-mkdir -p "$PLUGIN_RUNTIME_DIR" "$DIST_DIR" "$WORK_DIR" "$SPEC_DIR" "$PYINSTALLER_CONFIG_DIR"
+mkdir -p "$DIST_DIR" "$WORK_DIR" "$SPEC_DIR" "$PYINSTALLER_CONFIG_DIR"
 "$VENV_PYTHON" -m PyInstaller \
   --noconfirm \
   --clean \
   --onedir \
-  --name zibetha-runtime \
+  --name math-anchor-runtime \
   --distpath "$DIST_DIR" \
   --workpath "$WORK_DIR" \
   --specpath "$SPEC_DIR" \
   --collect-data pint \
-  --collect-submodules zibetha \
+  --collect-submodules math_anchor \
   --exclude-module coverage \
   --exclude-module _pytest \
   --exclude-module iniconfig \
@@ -66,18 +95,13 @@ mkdir -p "$PLUGIN_RUNTIME_DIR" "$DIST_DIR" "$WORK_DIR" "$SPEC_DIR" "$PYINSTALLER
   --exclude-module scipy \
   --exclude-module setuptools \
   --exclude-module sympy.testing \
-  "$ROOT_DIR/src/zibetha/bundled_runtime.py"
+  "$ROOT_DIR/src/math_anchor/bundled_runtime.py"
 
-if [[ "$PLUGIN_RUNTIME_BUNDLE" != "$ROOT_DIR/plugins/zibetha/runtime/zibetha-runtime" ]]; then
-  echo "Refusing to replace an unexpected plugin runtime: $PLUGIN_RUNTIME_BUNDLE" >&2
-  exit 1
-fi
-if [[ -L "$PLUGIN_RUNTIME_BUNDLE" ]]; then
-  echo "Refusing to replace a symbolic-link plugin runtime: $PLUGIN_RUNTIME_BUNDLE" >&2
-  exit 1
-fi
+validate_write_paths
+mkdir -p "$PLUGIN_RUNTIME_DIR"
+validate_write_paths
 rm -rf "$PLUGIN_RUNTIME_BUNDLE"
-ditto "$DIST_DIR/zibetha-runtime" "$PLUGIN_RUNTIME_BUNDLE"
+ditto "$DIST_RUNTIME_BUNDLE" "$PLUGIN_RUNTIME_BUNDLE"
 chmod +x "$PLUGIN_RUNTIME"
 "$VENV_PYTHON" "$ROOT_DIR/script/generate_third_party_materials.py" \
   --lock "$RUNTIME_LOCK" \

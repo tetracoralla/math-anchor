@@ -2,25 +2,25 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-VERSION="${ZIBETHA_APP_VERSION:?Set ZIBETHA_APP_VERSION to the release version.}"
-BUILD_NUMBER="${ZIBETHA_BUILD_NUMBER:?Set ZIBETHA_BUILD_NUMBER to a positive release build number.}"
-SIGNING_IDENTITY="${ZIBETHA_CODESIGN_IDENTITY:?Set ZIBETHA_CODESIGN_IDENTITY to a Developer ID Application identity.}"
-NOTARY_PROFILE="${ZIBETHA_NOTARY_PROFILE:?Set ZIBETHA_NOTARY_PROFILE to a configured notarytool keychain profile.}"
-EXPECTED_ARCH="${ZIBETHA_EXPECTED_ARCH:-$(uname -m)}"
-APP_BUNDLE="$ROOT_DIR/dist/Zibetha.app"
-ARCHIVE="$ROOT_DIR/dist/Zibetha-$VERSION-$EXPECTED_ARCH.zip"
-NOTARY_ARCHIVE="$ROOT_DIR/dist/.Zibetha-$VERSION-$EXPECTED_ARCH-notary.zip"
+VERSION="${MATH_ANCHOR_APP_VERSION:?Set MATH_ANCHOR_APP_VERSION to the release version.}"
+BUILD_NUMBER="${MATH_ANCHOR_BUILD_NUMBER:?Set MATH_ANCHOR_BUILD_NUMBER to a positive release build number.}"
+SIGNING_IDENTITY="${MATH_ANCHOR_CODESIGN_IDENTITY:?Set MATH_ANCHOR_CODESIGN_IDENTITY to a Developer ID Application identity.}"
+NOTARY_PROFILE="${MATH_ANCHOR_NOTARY_PROFILE:?Set MATH_ANCHOR_NOTARY_PROFILE to a configured notarytool keychain profile.}"
+EXPECTED_ARCH="${MATH_ANCHOR_EXPECTED_ARCH:-$(uname -m)}"
+APP_BUNDLE="$ROOT_DIR/dist/Math Anchor.app"
+ARCHIVE="$ROOT_DIR/dist/Math-Anchor-$VERSION-$EXPECTED_ARCH.zip"
+NOTARY_ARCHIVE="$ROOT_DIR/dist/.Math-Anchor-$VERSION-$EXPECTED_ARCH-notary.zip"
 
 if [[ "$EXPECTED_ARCH" != "$(uname -m)" ]]; then
   echo "Release host architecture $(uname -m) does not match expected $EXPECTED_ARCH." >&2
   exit 1
 fi
 
-ZIBETHA_BUILD_CONFIGURATION=release \
-ZIBETHA_APP_VERSION="$VERSION" \
-ZIBETHA_BUILD_NUMBER="$BUILD_NUMBER" \
+MATH_ANCHOR_BUILD_CONFIGURATION=release \
+MATH_ANCHOR_APP_VERSION="$VERSION" \
+MATH_ANCHOR_BUILD_NUMBER="$BUILD_NUMBER" \
   "$ROOT_DIR/script/build_and_run.sh" package
-ZIBETHA_EXPECTED_ARCH="$EXPECTED_ARCH" ZIBETHA_VERIFY_APP_BUNDLE=1 \
+MATH_ANCHOR_EXPECTED_ARCH="$EXPECTED_ARCH" MATH_ANCHOR_VERIFY_APP_BUNDLE=1 \
   "$ROOT_DIR/script/check_release_hygiene.sh"
 
 while IFS= read -r -d '' candidate; do

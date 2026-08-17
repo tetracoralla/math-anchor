@@ -1,4 +1,12 @@
-# Zibetha product model
+# Math Anchor product model
+
+## Product identity
+
+- Public product and macOS app name: **Math Anchor**.
+- Repository, Python distribution, CLI, Plugin, and packaged runtime slugs use `math-anchor`.
+- Python imports use `math_anchor`; the Swift module and executable use `MathAnchor`.
+- `openAdam` remains creator and publisher metadata, not a prefix in the product name.
+- The stable Agent protocol remains `math.search`, `math.describe`, `math.run`, and `math.batch`; a brand change does not rename those capability identifiers.
 
 ## Users and tasks
 
@@ -62,9 +70,9 @@ The earlier time-zone utility supplied the reusable product pattern—shared det
 - `math.run`: one isolated operation through an operation-specific advertised schema and the same mechanically enforced runtime schema.
 - `math.batch`: up to 32 independent isolated operations with bounded concurrency, preserving input order.
 
-`math.run` keeps the operation-specific input catalog for one-call routing. `math.batch` intentionally advertises one compact generic item shape rather than repeating all twenty-nine operation schemas; items are still validated against the same registry during execution. Both tools apply explicit result selection and strict output byte budgets, with automatic omission of redundant approximate matrix data when exact entries already satisfy the request.
+`math.run` keeps the operation-specific input catalog for one-call routing. `math.batch` intentionally advertises one compact generic item shape rather than repeating all thirty-one operation schemas; items are still validated against the same registry during execution. Both tools apply explicit result selection and strict output byte budgets, with automatic omission of redundant approximate matrix data when exact entries already satisfy the request.
 
-The catalog covers expression evaluation, simplification, and semantic equivalence; explicit algebraic transforms; symbolic equation solving and candidate verification; single- and multivariable calculus; bracketed numerical roots with error bounds; adaptive numerical integration whose interval is non-certified and whose overall status remains `uncertain` unless the caller supplies a complete feature-point or minimum-feature-scale assumption; integer number theory and combinatorics; exact matrix structure plus tolerance-aware approximate linear solving; financial calculations; common probability distributions; descriptive and inferential statistics; unit conversion; and unit-bearing expressions. Its twenty-nine current operations remain inside the generated `math.run` schema so ordinary supported work can complete in one call. Further growth still requires a fresh measurement of schema size, cold-session selection, retries, and generic fallbacks before changing the four-tool boundary.
+The catalog covers expression evaluation, simplification, and semantic equivalence; explicit algebraic transforms; symbolic equation solving and candidate verification; single- and multivariable calculus; bracketed numerical roots with error bounds, including all-sign-changing-roots search at a caller-chosen resolution; interval-arithmetic branch and bound that certifiably encloses the global minimum or maximum over a bracket and covers every minimizer; adaptive numerical integration whose interval is non-certified and whose overall status remains `uncertain` unless the caller supplies a complete feature-point or minimum-feature-scale assumption; integer number theory and combinatorics; exact matrix structure plus tolerance-aware approximate linear solving; financial calculations; common probability distributions; descriptive and inferential statistics; unit conversion; and unit-bearing expressions. Its thirty-one current operations remain inside the generated `math.run` schema so ordinary supported work can complete in one call. Further growth still requires a fresh measurement of schema size, cold-session selection, retries, and generic fallbacks before changing the four-tool boundary.
 
 ## Safety and correctness boundaries
 
@@ -75,7 +83,7 @@ The catalog covers expression evaluation, simplification, and semantic equivalen
 - Currency conversion uses the ECB daily euro reference-rate feed through one fixed HTTPS endpoint. Responses and cache files are size-bounded and validated; network work is time-bounded; cache writes are atomic and private; provider errors are reduced to stable human-safe states.
 - Each successful currency result carries the ECB source URL, rate date, publication time when supplied, local check and expiry times, cache state, and refresh outcome. Cross-rates are calculated with `Decimal`; floating approximations are never presented as exact values.
 - `currency.convert` is an internal app-runtime request, not an Agent operation or a fifth public MCP tool. The four-tool Agent boundary remains unchanged.
-- Agent `timeoutMs` is one cumulative deadline across worker-queue wait, cold worker readiness, and operation execution. Pool saturation therefore returns `E_TIMEOUT` instead of waiting behind earlier work without a bound. Agent pool workers and the human warm worker are terminated and rebuilt after cancellation, timeout, memory breach, or protocol failure so one expensive or damaged execution cannot block subsequent work.
+- Agent `timeoutMs` is one cumulative deadline across worker-queue wait, cold worker readiness, and operation execution. Pool saturation therefore returns `E_TIMEOUT` instead of waiting behind earlier work without a bound. Agent pool workers and the human warm worker are terminated and rebuilt after cancellation, a supervisor-enforced timeout or memory breach, or protocol failure so one expensive or damaged execution cannot block subsequent work. The one exception is a worker-side in-process evaluation timeout caught cleanly inside the worker: runtime state is restored, the structured `E_TIMEOUT` is returned, and that pool worker stays reusable.
 - Symbolic algorithms come from SymPy, numerical roots from mpmath, large approximate statistics from NumPy, arbitrary precision from mpmath/SymPy, and units from Pint. Statistics and quantities must state exact/approximate provenance and any method choice that can change interpretation. This project owns the interface and safety boundary, not replacement mathematics.
 - Structural matrix operations (`matrix.solve` and `matrix.reduce`) accept only exact integers or rational-expression text. Approximate floating matrices require a separately specified tolerance policy and are rejected rather than assigned a potentially unstable rank or solution classification.
 - `matrix.solve_approximate` is the separate decimal-text-to-binary64 lane for square systems that have an explicit tolerance policy. It returns condition, residual, backward-error, and forward-error-bound diagnostics instead of exact structural claims.

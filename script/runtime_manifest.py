@@ -10,7 +10,7 @@ import sys
 from typing import Any
 
 
-MANIFEST_NAME = ".zibetha-build-manifest.json"
+MANIFEST_NAME = ".math-anchor-build-manifest.json"
 
 
 def sha256(path: Path) -> str:
@@ -34,7 +34,7 @@ def inventory(bundle: Path) -> list[dict[str, Any]]:
 
 
 def source_digest(source_root: Path) -> str:
-    source_files = sorted((source_root / "src" / "zibetha").rglob("*.py"))
+    source_files = sorted((source_root / "src" / "math_anchor").rglob("*.py"))
     source_files.extend(sorted((source_root / "legal").rglob("*")))
     source_files.extend(
         source_root / relative

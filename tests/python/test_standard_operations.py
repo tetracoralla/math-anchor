@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import pytest
 
-from zibetha.catalog import OPERATIONS, search_operations
-from zibetha.errors import CalculatorError
-from zibetha.runtime import execute_direct
+from math_anchor.catalog import OPERATIONS, search_operations
+from math_anchor.errors import CalculatorError
+from math_anchor.runtime import execute_direct
 
 
 def test_catalog_contains_the_explicit_standard_operation_set() -> None:
-    assert len(OPERATIONS) == 29
+    assert len(OPERATIONS) == 31
     assert {
         "expression.equivalent",
         "solution.verify",
@@ -18,6 +18,8 @@ def test_catalog_contains_the_explicit_standard_operation_set() -> None:
         "probability.distribution",
         "statistics.infer",
         "numeric.integrate",
+        "numeric.minimize",
+        "function.sample",
     } <= set(OPERATIONS)
     assert search_operations("因式分解")["operations"][0]["id"] == "algebra.transform"
     assert search_operations("质因数分解")["operations"][0]["id"] == "integer.factorization"

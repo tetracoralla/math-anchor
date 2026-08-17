@@ -1,9 +1,0 @@
-{
-  "mcpServers": {
-    "zibetha": {
-      "command": "runtime/zibetha-runtime/zibetha-runtime",
-      "args": ["mcp"],
-      "cwd": "."
-    }
-  }
-}

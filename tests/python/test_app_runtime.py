@@ -1,4 +1,4 @@
-from zibetha import app_runtime
+from math_anchor import app_runtime
 
 
 def test_expression_request_remains_backward_compatible() -> None:

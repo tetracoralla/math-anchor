@@ -32,13 +32,13 @@ jobs:
       - name: Run complete development and packaged-runtime checks
         run: ./script/check_all.sh
         env:
-          ZIBETHA_EXPECTED_ARCH: ${{ matrix.architecture }}
+          MATH_ANCHOR_EXPECTED_ARCH: ${{ matrix.architecture }}
       - name: Build release-configuration app without distribution signing
         run: ./script/build_and_run.sh package
         env:
-          ZIBETHA_BUILD_CONFIGURATION: release
+          MATH_ANCHOR_BUILD_CONFIGURATION: release
       - name: Verify release inputs and architecture
         run: ./script/check_release_hygiene.sh
         env:
-          ZIBETHA_EXPECTED_ARCH: ${{ matrix.architecture }}
-          ZIBETHA_VERIFY_APP_BUNDLE: "1"
+          MATH_ANCHOR_EXPECTED_ARCH: ${{ matrix.architecture }}
+          MATH_ANCHOR_VERIFY_APP_BUNDLE: "1"

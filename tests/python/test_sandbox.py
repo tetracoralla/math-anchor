@@ -2,8 +2,8 @@ import json
 import threading
 import time
 
-import zibetha.sandbox as sandbox
-from zibetha.sandbox import run_batch, run_operation
+import math_anchor.sandbox as sandbox
+from math_anchor.sandbox import run_batch, run_operation
 
 
 def test_isolated_execution_and_structured_error() -> None:
@@ -203,3 +203,18 @@ def test_batch_uses_bounded_parallel_workers_and_preserves_order(monkeypatch) ->
 
     assert maximum_active == 4
     assert [item["exact"] for item in result["results"]] == [str(index) for index in range(6)]
+
+
+def test_worker_reader_failure_returns_a_structured_error(monkeypatch) -> None:
+    # Negative regression: a reader-thread exception must surface as an
+    # E_RUNTIME error object, never propagate out of run_operation.
+    from math_anchor import sandbox
+
+    def broken_reader(process):
+        raise ValueError("simulated reader failure")
+
+    monkeypatch.setattr(sandbox, "_read_response_line", broken_reader)
+    result = sandbox.run_operation("expression.evaluate", {"expression": "1+1"})
+    assert result["status"] == "error"
+    assert result["error"]["code"] == "E_RUNTIME"
+    assert "reader failed" in result["error"]["message"]

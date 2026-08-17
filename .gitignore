@@ -1,4 +1,5 @@
 .build/
+build/
 .swiftpm/
 .venv/
 .pytest_cache/
@@ -6,5 +7,5 @@ __pycache__/
 *.pyc
 *.egg-info/
 dist/
-plugins/zibetha/runtime/
+plugins/math-anchor/runtime/
 .DS_Store

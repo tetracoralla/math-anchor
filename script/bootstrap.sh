@@ -5,7 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VENV_DIR="$ROOT_DIR/.venv"
 
 PYTHON=""
-for candidate in "${ZIBETHA_PYTHON:-}" python3 python3.13 python3.12 python3.11; do
+for candidate in "${MATH_ANCHOR_PYTHON:-}" python3 python3.13 python3.12 python3.11; do
   [[ -n "$candidate" ]] || continue
   if [[ -x "$candidate" ]]; then
     candidate_path="$candidate"
@@ -22,6 +22,11 @@ done
 
 if [[ -z "$PYTHON" ]]; then
   echo "Python 3.11 or newer is required." >&2
+  exit 1
+fi
+
+if [[ -L "$VENV_DIR" && -d "$VENV_DIR" ]]; then
+  echo "The repository virtualenv must not be a symbolic link to an existing environment: $VENV_DIR" >&2
   exit 1
 fi
 

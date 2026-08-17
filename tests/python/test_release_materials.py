@@ -10,7 +10,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 SPEC = importlib.util.spec_from_file_location(
-    "zibetha_release_materials",
+    "math_anchor_release_materials",
     ROOT / "script" / "generate_third_party_materials.py",
 )
 assert SPEC is not None and SPEC.loader is not None

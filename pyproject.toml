@@ -1,14 +1,15 @@
 [build-system]
-requires = ["setuptools==82.0.0"]
+requires = ["setuptools==84.0.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "zibetha"
+name = "math-anchor"
 version = "0.1.0"
 description = "A safe scientific calculation runtime for humans and Agents"
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "Apache-2.0" }
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
 authors = [{ name = "openAdam" }]
 dependencies = [
   "mcp>=1.13,<2",
@@ -21,11 +22,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8,<9", "pytest-cov>=5,<7", "pyinstaller>=6,<7"]
+dev = ["pytest>=9.0.3,<10", "pytest-cov>=5,<7", "pyinstaller>=6,<7"]
 
 [project.scripts]
-zibetha = "zibetha.cli:main"
-zibetha-mcp = "zibetha.mcp_server:main"
+math-anchor = "math_anchor.cli:main"
+math-anchor-mcp = "math_anchor.mcp_server:main"
 
 [tool.setuptools]
 package-dir = { "" = "src" }

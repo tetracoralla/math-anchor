@@ -2,49 +2,69 @@
 set -euo pipefail
 
 MODE="${1:-run}"
-APP_NAME="Zibetha"
-BUNDLE_ID="com.openadam.zibetha"
+APP_DISPLAY_NAME="Math Anchor"
+APP_EXECUTABLE="MathAnchor"
+BUNDLE_ID="com.openadam.mathanchor"
 MIN_SYSTEM_VERSION="14.0"
-APP_VERSION="${ZIBETHA_APP_VERSION:-0.1.0}"
-BUILD_NUMBER="${ZIBETHA_BUILD_NUMBER:-1}"
-BUILD_CONFIGURATION="${ZIBETHA_BUILD_CONFIGURATION:-debug}"
+APP_VERSION="${MATH_ANCHOR_APP_VERSION:-0.1.0}"
+BUILD_NUMBER="${MATH_ANCHOR_BUILD_NUMBER:-1}"
+BUILD_CONFIGURATION="${MATH_ANCHOR_BUILD_CONFIGURATION:-debug}"
 
 if [[ "$BUILD_CONFIGURATION" != "debug" && "$BUILD_CONFIGURATION" != "release" ]]; then
-  echo "ZIBETHA_BUILD_CONFIGURATION must be debug or release." >&2
+  echo "MATH_ANCHOR_BUILD_CONFIGURATION must be debug or release." >&2
   exit 2
 fi
 if [[ ! "$APP_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][A-Za-z0-9]+)*$ ]]; then
-  echo "ZIBETHA_APP_VERSION must be a semantic version." >&2
+  echo "MATH_ANCHOR_APP_VERSION must be a semantic version." >&2
   exit 2
 fi
 if [[ ! "$BUILD_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
-  echo "ZIBETHA_BUILD_NUMBER must be a positive integer." >&2
+  echo "MATH_ANCHOR_BUILD_NUMBER must be a positive integer." >&2
   exit 2
 fi
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-source "$ROOT_DIR/script/swift_env.sh"
-configure_swift_environment "$ROOT_DIR"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 DIST_DIR="$ROOT_DIR/dist"
-APP_BUNDLE="$DIST_DIR/$APP_NAME.app"
-EXPECTED_BUNDLE="$ROOT_DIR/dist/Zibetha.app"
+APP_BUNDLE="$DIST_DIR/$APP_DISPLAY_NAME.app"
+EXPECTED_BUNDLE="$ROOT_DIR/dist/Math Anchor.app"
 APP_CONTENTS="$APP_BUNDLE/Contents"
 APP_MACOS="$APP_CONTENTS/MacOS"
-APP_BINARY="$APP_MACOS/$APP_NAME"
+APP_BINARY="$APP_MACOS/$APP_EXECUTABLE"
 INFO_PLIST="$APP_CONTENTS/Info.plist"
 APP_RESOURCES="$APP_CONTENTS/Resources"
 APP_RUNTIME_DIR="$APP_RESOURCES/Runtime"
-APP_RUNTIME_BUNDLE="$APP_RUNTIME_DIR/zibetha-runtime"
-APP_RUNTIME="$APP_RUNTIME_BUNDLE/zibetha-runtime"
+APP_RUNTIME_BUNDLE="$APP_RUNTIME_DIR/math-anchor-runtime"
+APP_RUNTIME="$APP_RUNTIME_BUNDLE/math-anchor-runtime"
 APP_ICON="$APP_RESOURCES/AppIcon.icns"
+PATH_VALIDATOR="$ROOT_DIR/script/validate_repo_paths.py"
 
-if [[ ! -x "$ROOT_DIR/.venv/bin/zibetha" ]]; then
+# This must run before the Swift module-cache creation, bootstrap, or any
+# rm -rf / mkdir -p / ditto on the app bundle subtree.
+source "$ROOT_DIR/script/python_env.sh"
+if ! resolve_math_anchor_python "to validate app bundle paths"; then
+  exit 1
+fi
+PATH_VALIDATION_PYTHON="$RESOLVED_MATH_ANCHOR_PYTHON"
+"$PATH_VALIDATION_PYTHON" "$PATH_VALIDATOR" --root "$ROOT_DIR" \
+  "$DIST_DIR" \
+  "$APP_BUNDLE" \
+  "$APP_CONTENTS" \
+  "$APP_MACOS" \
+  "$APP_RESOURCES" \
+  "$APP_RUNTIME_DIR" \
+  "$APP_RUNTIME_BUNDLE" \
+  "$APP_RUNTIME"
+
+source "$ROOT_DIR/script/swift_env.sh"
+configure_swift_environment "$ROOT_DIR"
+
+if [[ ! -x "$ROOT_DIR/.venv/bin/math-anchor" ]]; then
   "$ROOT_DIR/script/bootstrap.sh"
 fi
 "$ROOT_DIR/script/package_runtime.sh"
 
 swift build --package-path "$ROOT_DIR" --configuration "$BUILD_CONFIGURATION"
-BUILD_BINARY="$(swift build --package-path "$ROOT_DIR" --configuration "$BUILD_CONFIGURATION" --show-bin-path)/$APP_NAME"
+BUILD_BINARY="$(swift build --package-path "$ROOT_DIR" --configuration "$BUILD_CONFIGURATION" --show-bin-path)/$APP_EXECUTABLE"
 
 if [[ "$APP_BUNDLE" != "$EXPECTED_BUNDLE" || -z "$APP_BUNDLE" ]]; then
   echo "Refusing to replace unexpected app bundle: $APP_BUNDLE" >&2
@@ -55,7 +75,7 @@ rm -rf "$APP_BUNDLE"
 mkdir -p "$APP_MACOS" "$APP_RUNTIME_DIR"
 cp "$BUILD_BINARY" "$APP_BINARY"
 chmod +x "$APP_BINARY"
-ditto "$ROOT_DIR/plugins/zibetha/runtime/zibetha-runtime" "$APP_RUNTIME_BUNDLE"
+ditto "$ROOT_DIR/plugins/math-anchor/runtime/math-anchor-runtime" "$APP_RUNTIME_BUNDLE"
 chmod +x "$APP_RUNTIME"
 bash "$ROOT_DIR/script/build_app_icon.sh" "$APP_ICON"
 
@@ -64,10 +84,10 @@ cat >"$INFO_PLIST" <<PLIST
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>CFBundleExecutable</key><string>$APP_NAME</string>
+  <key>CFBundleExecutable</key><string>$APP_EXECUTABLE</string>
   <key>CFBundleIdentifier</key><string>$BUNDLE_ID</string>
-  <key>CFBundleName</key><string>Zibetha</string>
-  <key>CFBundleDisplayName</key><string>Zibetha</string>
+  <key>CFBundleName</key><string>$APP_DISPLAY_NAME</string>
+  <key>CFBundleDisplayName</key><string>$APP_DISPLAY_NAME</string>
   <key>CFBundleShortVersionString</key><string>$APP_VERSION</string>
   <key>CFBundleVersion</key><string>$BUILD_NUMBER</string>
   <key>CFBundlePackageType</key><string>APPL</string>
@@ -80,7 +100,7 @@ cat >"$INFO_PLIST" <<PLIST
 PLIST
 
 open_app() {
-  pkill -x "$APP_NAME" >/dev/null 2>&1 || true
+  pkill -x "$APP_EXECUTABLE" >/dev/null 2>&1 || true
   /usr/bin/open -n "$APP_BUNDLE"
 }
 
@@ -89,12 +109,12 @@ case "$MODE" in
     open_app
     ;;
   --debug|debug)
-    pkill -x "$APP_NAME" >/dev/null 2>&1 || true
+    pkill -x "$APP_EXECUTABLE" >/dev/null 2>&1 || true
     lldb -- "$APP_BINARY"
     ;;
   --logs|logs)
     open_app
-    /usr/bin/log stream --info --style compact --predicate "process == \"$APP_NAME\""
+    /usr/bin/log stream --info --style compact --predicate "process == \"$APP_EXECUTABLE\""
     ;;
   --telemetry|telemetry)
     open_app
@@ -103,7 +123,7 @@ case "$MODE" in
   --verify|verify)
     open_app
     sleep 1
-    pgrep -x "$APP_NAME" >/dev/null
+    pgrep -x "$APP_EXECUTABLE" >/dev/null
     ;;
   --package|package)
     ;;
