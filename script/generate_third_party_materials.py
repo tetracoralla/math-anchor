@@ -93,6 +93,18 @@ NATIVE_DEFINITIONS = (
         download_location="https://www.bytereef.org/mpdecimal/",
         license_paths=("legal/native/mpdecimal-BSD-2-Clause.txt",),
     ),
+    NativeDefinition(
+        # GitHub-hosted CPython links the system editline, which pulls in
+        # ncurses; PyInstaller then bundles it into the runtime. The version
+        # is the ABI major embedded in the dylib's install name, the only
+        # stable identifier across the build origins that ship this library.
+        name="ncurses",
+        file_patterns=("libncurses*.dylib",),
+        version_pattern=rb"libncursesw?\.([0-9]+)\.dylib",
+        license_declared="X11",
+        download_location="https://invisible-island.net/ncurses/",
+        license_paths=("legal/native/ncurses-X11.txt",),
+    ),
 )
 
 

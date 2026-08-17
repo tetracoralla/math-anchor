@@ -70,6 +70,7 @@ def test_native_inventory_maps_every_standalone_library(tmp_path: Path) -> None:
     (internal / "libssl.3.dylib").write_bytes(b"OpenSSL 3.6.3 9 Jun 2026")
     (internal / "liblzma.5.dylib").write_bytes(b"liblzma 5.8.3")
     (internal / "libmpdec.4.dylib").write_bytes(b"mpdecimal 4.0.1")
+    (internal / "libncursesw.5.dylib").write_bytes(b"/usr/lib/libncursesw.5.dylib")
 
     components = release_materials.native_components(tmp_path, ROOT)
 
@@ -80,6 +81,7 @@ def test_native_inventory_maps_every_standalone_library(tmp_path: Path) -> None:
         ("OpenSSL", "3.6.3", "Apache-2.0"),
         ("XZ Utils liblzma", "5.8.3", "0BSD"),
         ("mpdecimal", "4.0.1", "BSD-2-Clause"),
+        ("ncurses", "5", "X11"),
     }
 
 
