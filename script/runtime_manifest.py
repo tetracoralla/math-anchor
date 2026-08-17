@@ -44,6 +44,7 @@ def source_digest(source_root: Path) -> str:
             "requirements-runtime.lock",
             "script/package_runtime.sh",
             "script/generate_third_party_materials.py",
+            "script/release_metadata.py",
             "script/runtime_manifest.py",
         )
     )
@@ -90,7 +91,13 @@ def write_manifest(bundle: Path, runtime: Path, lock: Path, source_root: Path, v
     )
 
 
-def verify_manifest(bundle: Path, runtime: Path, lock: Path, source_root: Path) -> None:
+def verify_manifest(
+    bundle: Path,
+    runtime: Path,
+    lock: Path,
+    source_root: Path,
+    version: str,
+) -> None:
     manifest_path = bundle / MANIFEST_NAME
     try:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -99,6 +106,7 @@ def verify_manifest(bundle: Path, runtime: Path, lock: Path, source_root: Path) 
     expected_architecture = platform.machine()
     checks = {
         "schemaVersion": 1,
+        "productVersion": version,
         "platform": sys.platform,
         "buildArchitecture": expected_architecture,
         "pythonTag": sys.implementation.cache_tag,
@@ -126,7 +134,7 @@ def main() -> None:
     parser.add_argument("--runtime", type=Path, required=True)
     parser.add_argument("--lock", type=Path, required=True)
     parser.add_argument("--source-root", type=Path, required=True)
-    parser.add_argument("--version", default="0.1.0")
+    parser.add_argument("--version", required=True)
     arguments = parser.parse_args()
     bundle = arguments.bundle.resolve()
     runtime = arguments.runtime.resolve()
@@ -135,7 +143,7 @@ def main() -> None:
     if arguments.mode == "write":
         write_manifest(bundle, runtime, lock, source_root, arguments.version)
     else:
-        verify_manifest(bundle, runtime, lock, source_root)
+        verify_manifest(bundle, runtime, lock, source_root, arguments.version)
 
 
 if __name__ == "__main__":

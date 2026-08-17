@@ -66,8 +66,16 @@ def test_generated_runtime_is_ignored_by_the_source_repository() -> None:
     assert checked.returncode == 0, checked.stderr
 
 
-def test_source_layout_reports_tracked_or_unignored_runtime(
-    tmp_path: Path,
+@pytest.mark.parametrize(
+    ("ignored_relative", "generated_relative"),
+    [
+        ("plugins/math-anchor/runtime/", "plugins/math-anchor/runtime/binary"),
+        (".build/", ".build/generated"),
+        ("dist/", "dist/generated"),
+    ],
+)
+def test_source_layout_reports_each_tracked_or_unignored_generated_output(
+    tmp_path: Path, ignored_relative: str, generated_relative: str
 ) -> None:
     archive = tmp_path / "math-anchor-source"
     script_dir = archive / "script"
@@ -90,21 +98,22 @@ def test_source_layout_reports_tracked_or_unignored_runtime(
         capture_output=True,
         check=True,
     )
+    ignored_outputs = ["plugins/math-anchor/runtime/", ".build/", "dist/"]
     (archive / ".gitignore").write_text(
-        "plugins/math-anchor/runtime/\n", encoding="utf-8"
+        "\n".join(ignored_outputs) + "\n", encoding="utf-8"
     )
-    runtime = archive / "plugins" / "math-anchor" / "runtime"
-    runtime.mkdir(parents=True)
-    (runtime / "binary").write_bytes(b"generated")
+    generated = archive / generated_relative
+    generated.parent.mkdir(parents=True, exist_ok=True)
+    generated.write_bytes(b"generated")
     subprocess.run(
-        ["git", "-C", str(archive), "add", "-f", "plugins/math-anchor/runtime/binary"],
+        ["git", "-C", str(archive), "add", "-f", generated_relative],
         capture_output=True,
         check=True,
     )
 
     tracked = layout()
     assert tracked.returncode != 0
-    assert "must not be tracked by git" in tracked.stderr
+    assert "Generated output must not be tracked by git" in tracked.stderr
     assert tracked.stderr.strip() != ""
 
     subprocess.run(
@@ -115,17 +124,20 @@ def test_source_layout_reports_tracked_or_unignored_runtime(
             "rm",
             "-q",
             "--cached",
-            "plugins/math-anchor/runtime/binary",
+            generated_relative,
         ],
         capture_output=True,
         check=True,
     )
     assert layout().returncode == 0, layout().stderr
 
-    (archive / ".gitignore").write_text("dist/\n", encoding="utf-8")
+    (archive / ".gitignore").write_text(
+        "\n".join(item for item in ignored_outputs if item != ignored_relative) + "\n",
+        encoding="utf-8",
+    )
     unignored = layout()
     assert unignored.returncode != 0
-    assert "must be ignored by git" in unignored.stderr
+    assert f"Generated output must be ignored by git: {ignored_relative}" in unignored.stderr
 
 
 def test_source_archive_without_git_metadata_has_an_equivalent_layout_check(
@@ -138,7 +150,7 @@ def test_source_archive_without_git_metadata_has_an_equivalent_layout_check(
     shutil.copy2(ROOT / "script" / "validate_repo_paths.py", script_dir)
     shutil.copy2(ROOT / "script" / "python_env.sh", script_dir)
     (archive / ".gitignore").write_text(
-        "plugins/math-anchor/runtime/\n", encoding="utf-8"
+        "plugins/math-anchor/runtime/\n.build/\ndist/\n", encoding="utf-8"
     )
 
     clean = subprocess.run(
@@ -175,7 +187,7 @@ def test_source_archive_without_git_metadata_has_an_equivalent_layout_check(
         check=False,
     )
     assert contaminated.returncode != 0
-    assert "must not contain a generated plugin runtime" in contaminated.stderr
+    assert "must not contain generated output" in contaminated.stderr
 
     check_all = (ROOT / "script" / "check_all.sh").read_text(encoding="utf-8")
     assert '"$ROOT_DIR/script/check_source_layout.sh" --development' in check_all
@@ -192,7 +204,7 @@ def test_source_layout_rejects_every_runtime_symlink_ancestor(
     shutil.copy2(ROOT / "script" / "validate_repo_paths.py", script_dir)
     shutil.copy2(ROOT / "script" / "python_env.sh", script_dir)
     (archive / ".gitignore").write_text(
-        "plugins/math-anchor/runtime/\n", encoding="utf-8"
+        "plugins/math-anchor/runtime/\n.build/\ndist/\n", encoding="utf-8"
     )
 
     external = tmp_path / f"external-{linked_component}"
@@ -359,7 +371,7 @@ def test_release_hygiene_reports_force_tracked_runtime(tmp_path: Path) -> None:
         check=True,
     )
     (archive / ".gitignore").write_text(
-        "plugins/math-anchor/runtime/\n", encoding="utf-8"
+        "plugins/math-anchor/runtime/\n.build/\ndist/\n", encoding="utf-8"
     )
     runtime = archive / "plugins" / "math-anchor" / "runtime"
     runtime.mkdir(parents=True)
@@ -378,7 +390,7 @@ def test_release_hygiene_reports_force_tracked_runtime(tmp_path: Path) -> None:
         check=False,
     )
     assert checked.returncode != 0
-    assert "must not be tracked by git" in checked.stderr
+    assert "Generated output must not be tracked by git" in checked.stderr
 
 
 def test_build_and_test_requirements_exclude_the_reviewed_vulnerable_versions() -> None:
@@ -442,6 +454,13 @@ def test_github_ci_covers_both_supported_macos_architectures() -> None:
     )
     assert "runner: macos-15\n            architecture: arm64" in workflow
     assert "runner: macos-15-intel\n            architecture: x86_64" in workflow
+    assert "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1" in workflow
+    assert "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97" in workflow
+    assert "persist-credentials: false" in workflow
+    assert "timeout-minutes: 30" in workflow
+    assert "cancel-in-progress: true" in workflow
+    assert "actions/checkout@v" not in workflow
+    assert "actions/setup-python@v" not in workflow
 
 
 def test_release_scripts_require_versioned_signed_notarized_artifacts() -> None:
@@ -455,6 +474,25 @@ def test_release_scripts_require_versioned_signed_notarized_artifacts() -> None:
     assert "notarytool submit" in release
     assert "stapler validate" in release
     assert "spctl --assess" in release
+    assert "check_release_source.sh" in release
+    assert 'MATH_ANCHOR_APP_VERSION="$VERSION"' in release
+    assert 'MATH_ANCHOR_BUILD_NUMBER="$BUILD_NUMBER"' in release
+
+
+def test_public_repository_has_contribution_and_report_routes() -> None:
+    required = [
+        ROOT / "CONTRIBUTING.md",
+        ROOT / "CODE_OF_CONDUCT.md",
+        ROOT / ".github" / "ISSUE_TEMPLATE" / "bug_report.yml",
+        ROOT / ".github" / "ISSUE_TEMPLATE" / "feature_request.yml",
+        ROOT / ".github" / "ISSUE_TEMPLATE" / "config.yml",
+        ROOT / ".github" / "pull_request_template.md",
+    ]
+    assert all(path.is_file() and path.stat().st_size > 0 for path in required)
+    bug_report = required[2].read_text(encoding="utf-8")
+    issue_config = required[4].read_text(encoding="utf-8")
+    assert "private vulnerability" in bug_report.lower()
+    assert "security/advisories/new" in issue_config
 
 
 def test_standalone_runtime_smoke_when_packaged_binary_exists() -> None:
@@ -504,6 +542,12 @@ def test_packaged_runtime_has_matching_manifest_notices_and_sbom() -> None:
         "mcp",
         "pyinstaller bootloader",
     }
+    assert all(
+        package["licenseDeclared"] != "NOASSERTION"
+        for package in packages.values()
+    )
+    for name in ("flexcache", "mpmath", "pint", "sympy"):
+        assert packages[name]["licenseDeclared"] == "BSD-3-Clause"
     # Native-library components depend on how the build interpreter links
     # OpenSSL/lzma/mpdecimal: statically linked interpreters (GitHub-hosted
     # toolcache builds) bundle no standalone dylibs for them, while Homebrew
@@ -526,16 +570,6 @@ def _bundled_files_from_comment(comment: object) -> list[str]:
     return [
         item.strip() for item in comment[len("Bundled files: ") :].split(", ")
     ]
-    assert packages["openssl"]["versionInfo"].startswith("3.")
-    assert packages["openssl"]["licenseDeclared"] == "Apache-2.0"
-    assert packages["xz utils liblzma"]["licenseDeclared"] == "0BSD"
-    assert packages["mpdecimal"]["licenseDeclared"] == "BSD-2-Clause"
-    assert all(package["licenseDeclared"] != "BSD" for package in packages.values())
-    native_comments = "\n".join(
-        package.get("comment", "") for package in packages.values()
-    )
-    for dylib in bundle.rglob("*.dylib"):
-        assert str(dylib.relative_to(bundle)) in native_comments
 
 
 def test_standalone_runtime_currency_uses_a_bundled_current_cache(tmp_path: Path) -> None:

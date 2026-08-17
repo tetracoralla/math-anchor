@@ -1,0 +1,56 @@
+# Contributing to Math Anchor
+
+Thank you for helping improve Math Anchor. Contributions should preserve one
+deterministic calculation core shared by the macOS calculator, CLI, MCP server,
+and Codex Plugin.
+
+## Before opening a change
+
+- Use macOS 14 or newer with Xcode Command Line Tools, Swift 6, and Python 3.11
+  or newer.
+- For a security vulnerability, use the repository's
+  [private vulnerability reporting](https://github.com/tetracoralla/math-anchor/security/advisories/new)
+  instead of a public issue.
+- For behavior changes, describe the user task and the affected human or Agent
+  flow before proposing new fields, tools, or UI.
+
+## Set up and verify
+
+```bash
+./script/bootstrap.sh
+./script/check_all.sh
+```
+
+`check_all.sh` runs the Python regression suite, Swift state checks and build,
+the packaged four-tool MCP transport, Plugin validation, dependency/license
+closure, and release-hygiene checks. A UI change also needs current rendered
+inspection; automated checks do not decide visual acceptance.
+
+Do not commit generated output under `.build/`, `dist/`, or
+`plugins/math-anchor/runtime/`.
+
+## Change requirements
+
+- Keep the public MCP surface to `math.search`, `math.describe`, `math.run`, and
+  `math.batch`; add operations to the registry.
+- Keep exact and approximate results distinct.
+- Never use Python `eval`, `exec`, string `sympify`, or `parse_expr` for input.
+- Add the smallest negative regression for parser, validation, timeout,
+  packaging, or error-path fixes.
+- Keep Agent schemas, protocol metadata, and engine details out of the human
+  calculator UI.
+- Update `pyproject.toml` and the Plugin manifest together when changing the
+  product version.
+
+## Pull requests
+
+Create a focused branch, keep unrelated changes out of the patch, and explain:
+
+1. the behavior or risk being changed;
+2. the source and tests that establish the new behavior;
+3. the development, Agent runtime, and human runtime lanes actually verified;
+4. any acceptance lane that remains pending.
+
+The protected `main` branch requires both macOS architecture jobs to pass.
+Signing credentials, notarization credentials, release tags, and published
+artifacts remain maintainer-controlled.

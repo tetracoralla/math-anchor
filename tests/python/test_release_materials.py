@@ -57,7 +57,37 @@ def test_dependency_lock_requires_a_sha256_hash_for_every_package(
 
 def test_legacy_ambiguous_license_is_not_emitted_as_invalid_spdx() -> None:
     installed = SimpleNamespace(
-        metadata={"License-Expression": None, "License": "BSD"}
+        metadata={"Name": "unknown-package", "License-Expression": None, "License": "BSD"},
+        version="1.0",
+    )
+
+    assert release_materials.declared_license(installed) == "NOASSERTION"
+
+
+@pytest.mark.parametrize(
+    ("name", "version"),
+    [
+        ("flexcache", "0.3"),
+        ("mpmath", "1.3.0"),
+        ("Pint", "0.25.3"),
+        ("sympy", "1.14.0"),
+    ],
+)
+def test_reviewed_legacy_bsd_release_has_explicit_spdx_license(
+    name: str, version: str
+) -> None:
+    installed = SimpleNamespace(
+        metadata={"Name": name, "License-Expression": None, "License": "BSD"},
+        version=version,
+    )
+
+    assert release_materials.declared_license(installed) == "BSD-3-Clause"
+
+
+def test_unreviewed_version_does_not_inherit_a_license_override() -> None:
+    installed = SimpleNamespace(
+        metadata={"Name": "Pint", "License-Expression": None, "License": "BSD"},
+        version="99.0",
     )
 
     assert release_materials.declared_license(installed) == "NOASSERTION"
