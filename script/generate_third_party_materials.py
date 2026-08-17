@@ -8,7 +8,7 @@ import hashlib
 from importlib.metadata import (
     PackageNotFoundError,
     distribution,
-    packages_distributions,
+    distributions,
 )
 import json
 from pathlib import Path
@@ -309,13 +309,47 @@ def _archive_top_level_modules(runtime: Path, bundle: Path) -> set[str]:
     return top_levels
 
 
+def _inferred_top_levels(files: Iterable[Path]) -> set[str]:
+    """Infer top-level module names from a distribution's installed files.
+
+    Some bundled distributions (numpy, pint, mcp) ship no top_level.txt,
+    and the stdlib packages_distributions() fallback for those arrived
+    only in later 3.11 patch releases, so this generator must not depend
+    on the interpreter patch version to see them.
+    """
+    tops: set[str] = set()
+    for item in files:
+        parts = item.parts
+        if not parts or not str(item).endswith((".py", ".so")):
+            continue
+        head = parts[0]
+        if head.endswith((".dist-info", ".egg-info", ".data")):
+            continue
+        tops.add(head.rsplit(".", 1)[0] if len(parts) == 1 else head)
+    return tops
+
+
+def _module_to_distributions() -> dict[str, list[str]]:
+    mapping: dict[str, list[str]] = {}
+    for dist in distributions():
+        declared = dist.read_text("top_level.txt")
+        names = (
+            [line.strip() for line in declared.splitlines() if line.strip()]
+            if declared
+            else sorted(_inferred_top_levels(dist.files or ()))
+        )
+        for name in names:
+            mapping.setdefault(name, []).append(dist.metadata["Name"])
+    return mapping
+
+
 def bundled_python_packages(
     bundle: Path,
     runtime: Path,
     locked: list[tuple[str, str]],
     project_name: str,
 ) -> list[tuple[str, str]]:
-    module_map = packages_distributions()
+    module_map = _module_to_distributions()
     mapped = {
         canonicalize_name(package)
         for module in _archive_top_level_modules(runtime, bundle)

@@ -115,3 +115,30 @@ def test_python_license_without_any_candidate_fails_cleanly(
 
     with pytest.raises(SystemExit, match="could not locate the license"):
         release_materials.python_license()
+
+
+def test_inferred_top_levels_from_installed_file_records() -> None:
+    from importlib.metadata import PackagePath
+
+    files = [
+        PackagePath("pint/__init__.py"),
+        PackagePath("pint/util.py"),
+        PackagePath("mcp/__init__.py"),
+        PackagePath("standalone.py"),
+        PackagePath("native/_speedups.so"),
+        PackagePath("mcp-1.16.0.dist-info/RECORD"),
+        PackagePath("share/data.json"),
+    ]
+
+    assert release_materials._inferred_top_levels(files) == {
+        "pint",
+        "mcp",
+        "standalone",
+        "native",
+    }
+
+
+def test_module_distribution_mapping_covers_distributions_without_top_level_txt() -> None:
+    mapping = release_materials._module_to_distributions()
+
+    assert {"mcp", "pint", "numpy"} <= set(mapping)
