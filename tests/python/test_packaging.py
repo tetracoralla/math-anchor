@@ -503,10 +503,29 @@ def test_packaged_runtime_has_matching_manifest_notices_and_sbom() -> None:
         "psutil",
         "mcp",
         "pyinstaller bootloader",
-        "openssl",
-        "xz utils liblzma",
-        "mpdecimal",
     }
+    # Native-library components depend on how the build interpreter links
+    # OpenSSL/lzma/mpdecimal: statically linked interpreters (GitHub-hosted
+    # toolcache builds) bundle no standalone dylibs for them, while Homebrew
+    # interpreters do. The environment-independent invariant is coverage:
+    # every third-party dylib actually present in the bundle must be claimed
+    # by an SBOM component, and libpython belongs to the Python component.
+    claimed = {
+        file
+        for package in sbom["packages"]
+        for file in _bundled_files_from_comment(package.get("comment"))
+    }
+    for path in sorted((bundle / "_internal").rglob("*.dylib")):
+        relative = str(path.relative_to(bundle))
+        assert relative in claimed, f"unclaimed bundled dylib: {relative}"
+
+
+def _bundled_files_from_comment(comment: object) -> list[str]:
+    if not isinstance(comment, str) or not comment.startswith("Bundled files: "):
+        return []
+    return [
+        item.strip() for item in comment[len("Bundled files: ") :].split(", ")
+    ]
     assert packages["openssl"]["versionInfo"].startswith("3.")
     assert packages["openssl"]["licenseDeclared"] == "Apache-2.0"
     assert packages["xz utils liblzma"]["licenseDeclared"] == "0BSD"

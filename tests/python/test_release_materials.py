@@ -142,3 +142,14 @@ def test_module_distribution_mapping_covers_distributions_without_top_level_txt(
     mapping = release_materials._module_to_distributions()
 
     assert {"mcp", "pint", "numpy"} <= set(mapping)
+
+
+def test_libpython_dylib_belongs_to_the_python_component(tmp_path: Path) -> None:
+    internal = tmp_path / "_internal"
+    internal.mkdir()
+    (internal / "libpython3.11.dylib").write_bytes(b"libpython3.11.dylib")
+
+    assert release_materials.native_components(tmp_path, ROOT) == []
+
+    python = release_materials.python_component(tmp_path)
+    assert "_internal/libpython3.11.dylib" in python.bundled_files

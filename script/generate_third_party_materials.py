@@ -385,7 +385,14 @@ def _native_version(paths: list[Path], pattern: bytes, component_name: str) -> s
 
 
 def native_components(bundle: Path, project_root: Path) -> list[BundledComponent]:
-    dylibs = sorted(bundle.rglob("*.dylib"))
+    # Shared libpython dylibs (python-build-standalone / uv-managed
+    # interpreters) belong to the Python runtime component, whose license
+    # they share, not to the third-party native-library gate.
+    dylibs = sorted(
+        path
+        for path in bundle.rglob("*.dylib")
+        if not path.name.startswith("libpython")
+    )
     unmatched = set(dylibs)
     components: list[BundledComponent] = []
     for definition in NATIVE_DEFINITIONS:
@@ -428,7 +435,12 @@ def native_components(bundle: Path, project_root: Path) -> list[BundledComponent
 def python_component(bundle: Path) -> BundledComponent:
     framework_files = tuple(
         str(path.relative_to(bundle))
-        for path in sorted(bundle.rglob("Python"))
+        for path in sorted(
+            [
+                *bundle.rglob("Python"),
+                *bundle.rglob("libpython*.dylib"),
+            ]
+        )
         if path.is_file()
     )
     license_path = python_license()
