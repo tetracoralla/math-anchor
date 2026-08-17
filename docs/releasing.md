@@ -49,10 +49,10 @@ Regenerate the development lock against the CI Python patch version and verify
 that both macOS architectures resolve the same file:
 
 ```bash
-uv pip compile pyproject.toml --extra dev --python-version 3.11.15 \
+uv pip compile pyproject.toml --extra dev --python-version 3.11.9 \
   --python-platform aarch64-apple-darwin --generate-hashes --no-annotate \
   --no-header --output-file requirements-dev.lock
-uv pip compile pyproject.toml --extra dev --python-version 3.11.15 \
+uv pip compile pyproject.toml --extra dev --python-version 3.11.9 \
   --python-platform x86_64-apple-darwin --constraints requirements-dev.lock \
   --generate-hashes --no-annotate --no-header \
   --output-file /tmp/math-anchor-requirements-dev-x86.lock
