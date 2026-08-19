@@ -8,10 +8,11 @@ import subprocess
 import sys
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor, wait
 from typing import Any
 
 from .output_policy import (
+    DEFAULT_BATCH_MAX_OUTPUT_BYTES,
     DEFAULT_MAX_OUTPUT_BYTES,
     DEFAULT_RESULT_MODE,
     MAX_OUTPUT_BYTES,
@@ -25,6 +26,15 @@ DEFAULT_TIMEOUT_MS = 10_000
 DEFAULT_MEMORY_MB = 1024
 STARTUP_TIMEOUT_MS = 5_000
 MAX_REUSABLE_WORKERS = 4
+WORKER_POLL_SECONDS = 0.025
+_BATCH_ITEM_FIELDS = {
+    "operation",
+    "arguments",
+    "timeoutMs",
+    "memoryMb",
+    "resultMode",
+    "maxOutputBytes",
+}
 
 
 def _error(code: str, message: str, details: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -64,9 +74,12 @@ class _WorkerPool:
         *,
         deadline: float,
         timeout_ms: int,
+        cancel_event: threading.Event | None = None,
     ) -> tuple[_ReusableWorker | None, dict[str, Any] | None]:
         while True:
             with self.condition:
+                if cancel_event is not None and cancel_event.is_set():
+                    return None, _error("E_CANCELLED", "operation was cancelled")
                 while self.available:
                     worker = self.available.pop()
                     resident = _resident_memory_bytes(worker.process.pid)
@@ -84,12 +97,13 @@ class _WorkerPool:
                         f"operation exceeded {timeout_ms} ms while waiting for a worker",
                         {"phase": "queue", "timeoutMs": timeout_ms},
                     )
-                self.condition.wait(timeout=remaining)
+                self.condition.wait(timeout=min(remaining, WORKER_POLL_SECONDS))
 
         worker, error = _start_worker(
             memory_bytes,
             deadline=deadline,
             timeout_ms=timeout_ms,
+            cancel_event=cancel_event,
         )
         if worker is None:
             with self.condition:
@@ -129,7 +143,10 @@ def run_operation(
     memory_mb: int = DEFAULT_MEMORY_MB,
     result_mode: str = DEFAULT_RESULT_MODE,
     max_output_bytes: int = DEFAULT_MAX_OUTPUT_BYTES,
+    cancel_event: threading.Event | None = None,
 ) -> dict[str, Any]:
+    if cancel_event is not None and cancel_event.is_set():
+        return _error("E_CANCELLED", "operation was cancelled")
     if not isinstance(timeout_ms, int) or isinstance(timeout_ms, bool):
         return _error("E_LIMIT", "timeoutMs must be an integer between 100 and 30000")
     if not 100 <= timeout_ms <= 30_000:
@@ -161,9 +178,13 @@ def run_operation(
         memory_bytes,
         deadline=deadline,
         timeout_ms=timeout_ms,
+        cancel_event=cancel_event,
     )
     if worker is None:
         return startup_error or _error("E_RUNTIME", "worker failed to start")
+    if cancel_event is not None and cancel_event.is_set():
+        _WORKER_POOL.release(worker, reusable=True)
+        return _error("E_CANCELLED", "operation was cancelled")
     if time.monotonic() >= deadline:
         _WORKER_POOL.release(worker, reusable=True)
         return _error(
@@ -177,10 +198,9 @@ def run_operation(
         deadline=deadline,
         timeout_ms=timeout_ms,
         memory_mb=memory_mb,
+        cancel_event=cancel_event,
     )
     _WORKER_POOL.release(worker, reusable=reusable)
-    if result.get("status") == "error":
-        return result
     return apply_output_policy(
         result,
         result_mode=result_mode,
@@ -193,7 +213,10 @@ def _start_worker(
     *,
     deadline: float,
     timeout_ms: int,
+    cancel_event: threading.Event | None,
 ) -> tuple[_ReusableWorker | None, dict[str, Any] | None]:
+    if cancel_event is not None and cancel_event.is_set():
+        return None, _error("E_CANCELLED", "operation was cancelled")
     environment = os.environ.copy()
     environment.update({"OPENBLAS_NUM_THREADS": "1", "OMP_NUM_THREADS": "1"})
     command = (
@@ -218,6 +241,7 @@ def _start_worker(
         memory_bytes,
         deadline=deadline,
         timeout_ms=timeout_ms,
+        cancel_event=cancel_event,
     )
     if startup_error is not None:
         return None, startup_error
@@ -231,6 +255,7 @@ def _execute_worker(
     deadline: float,
     timeout_ms: int,
     memory_mb: int,
+    cancel_event: threading.Event | None,
 ) -> tuple[dict[str, Any], bool]:
     process = worker.process
     memory_bytes = memory_mb * 1024 * 1024
@@ -246,6 +271,10 @@ def _execute_worker(
         response_read = executor.submit(_read_response_line, process)
         limit_error: dict[str, Any] | None = None
         while not response_read.done():
+            if cancel_event is not None and cancel_event.is_set():
+                limit_error = _error("E_CANCELLED", "operation was cancelled")
+                process.kill()
+                break
             if time.monotonic() >= deadline:
                 limit_error = _error("E_TIMEOUT", f"operation exceeded {timeout_ms} ms")
                 process.kill()
@@ -257,7 +286,7 @@ def _execute_worker(
                 break
             if process.poll() is not None:
                 break
-            time.sleep(0.025)
+            _wait_for_worker_progress(response_read)
 
         try:
             response_line, completed_at = response_read.result()
@@ -288,6 +317,13 @@ def _execute_worker(
     return {"status": "error", "error": error}, error.get("code") != "E_RUNTIME"
 
 
+def _wait_for_worker_progress(worker_future: Future[Any]) -> None:
+    # Wake as soon as the worker produces output instead of adding the full
+    # supervision cadence to every successful call. Long-running work still
+    # samples cancellation, deadline, memory, and liveness at the poll rate.
+    wait((worker_future,), timeout=WORKER_POLL_SECONDS)
+
+
 def _read_response_line(
     process: subprocess.Popen[str],
 ) -> tuple[str, float]:
@@ -301,6 +337,7 @@ def _await_worker_ready(
     *,
     deadline: float,
     timeout_ms: int,
+    cancel_event: threading.Event | None,
 ) -> dict[str, Any] | None:
     if process.stdout is None:
         process.kill()
@@ -309,6 +346,10 @@ def _await_worker_ready(
         readiness = executor.submit(process.stdout.readline)
         startup_deadline = min(deadline, time.monotonic() + STARTUP_TIMEOUT_MS / 1000)
         while not readiness.done():
+            if cancel_event is not None and cancel_event.is_set():
+                process.kill()
+                readiness.result()
+                return _error("E_CANCELLED", "operation was cancelled")
             if time.monotonic() >= startup_deadline:
                 process.kill()
                 readiness.result()
@@ -326,7 +367,7 @@ def _await_worker_ready(
                 return _error("E_MEMORY", "worker exceeded the memory limit during startup")
             if process.poll() is not None:
                 break
-            time.sleep(0.025)
+            _wait_for_worker_progress(readiness)
         line = readiness.result()
     try:
         ready = json.loads(line)
@@ -349,17 +390,36 @@ def _resident_memory_bytes(process_id: int) -> int | None:
 def run_batch(
     items: list[dict[str, Any]],
     *,
-    max_output_bytes: int = 256 * 1024,
+    timeout_ms: int = 30_000,
+    max_output_bytes: int = DEFAULT_BATCH_MAX_OUTPUT_BYTES,
+    cancel_event: threading.Event | None = None,
 ) -> dict[str, Any]:
+    if cancel_event is not None and cancel_event.is_set():
+        return _error("E_CANCELLED", "batch was cancelled")
     if not isinstance(items, list) or not 1 <= len(items) <= 32:
         return _error("E_LIMIT", "items must contain 1 to 32 operations")
+    if not isinstance(timeout_ms, int) or isinstance(timeout_ms, bool):
+        return _error("E_LIMIT", "timeoutMs must be an integer between 100 and 30000")
+    if not 100 <= timeout_ms <= 30_000:
+        return _error("E_LIMIT", "timeoutMs must be between 100 and 30000")
     if not isinstance(max_output_bytes, int) or isinstance(max_output_bytes, bool):
         return _error("E_LIMIT", f"maxOutputBytes must be an integer between {MIN_OUTPUT_BYTES} and {MAX_OUTPUT_BYTES}")
     if not MIN_OUTPUT_BYTES <= max_output_bytes <= MAX_OUTPUT_BYTES:
         return _error("E_LIMIT", f"maxOutputBytes must be between {MIN_OUTPUT_BYTES} and {MAX_OUTPUT_BYTES}")
+    deadline = time.monotonic() + timeout_ms / 1000
     worker_count = _batch_worker_count(items)
     with ThreadPoolExecutor(max_workers=worker_count, thread_name_prefix="calculator-batch") as executor:
-        results = list(executor.map(_run_batch_item, enumerate(items)))
+        futures = [
+            executor.submit(
+                _run_batch_item,
+                indexed_item,
+                cancel_event,
+                deadline,
+                timeout_ms,
+            )
+            for indexed_item in enumerate(items)
+        ]
+        results = [future.result() for future in futures]
     result = {
         "status": "ok" if all(result.get("status") == "ok" for result in results) else "partial",
         "count": len(results),
@@ -375,20 +435,54 @@ def run_batch(
     return result
 
 
-def _run_batch_item(indexed_item: tuple[int, dict[str, Any]]) -> dict[str, Any]:
+def _run_batch_item(
+    indexed_item: tuple[int, dict[str, Any]],
+    cancel_event: threading.Event | None = None,
+    batch_deadline: float | None = None,
+    batch_timeout_ms: int = 30_000,
+) -> dict[str, Any]:
     index, item = indexed_item
-    if not isinstance(item, dict) or not isinstance(item.get("operation"), str):
+    if (
+        not isinstance(item, dict)
+        or not isinstance(item.get("operation"), str)
+        or not isinstance(item.get("arguments"), dict)
+    ):
         return {
             "index": index,
-            **_error("E_INPUT", "each item requires an operation string and optional arguments object"),
+            **_error("E_INPUT", "each item requires an operation string and arguments object"),
         }
+    unexpected_fields = set(item) - _BATCH_ITEM_FIELDS
+    if unexpected_fields:
+        return {
+            "index": index,
+            **_error(
+                "E_INPUT",
+                "batch item contains unsupported fields",
+                {"fieldCount": len(unexpected_fields)},
+            ),
+        }
+    item_timeout_ms = item.get("timeoutMs", DEFAULT_TIMEOUT_MS)
+    if batch_deadline is not None:
+        remaining_ms = int((batch_deadline - time.monotonic()) * 1000)
+        if remaining_ms < 100:
+            return {
+                "index": index,
+                **_error(
+                    "E_TIMEOUT",
+                    f"batch exceeded its cumulative {batch_timeout_ms} ms deadline",
+                    {"phase": "batch", "timeoutMs": batch_timeout_ms},
+                ),
+            }
+        if isinstance(item_timeout_ms, int) and not isinstance(item_timeout_ms, bool):
+            item_timeout_ms = min(item_timeout_ms, remaining_ms)
     result = run_operation(
         item["operation"],
-        item.get("arguments", {}),
-        timeout_ms=item.get("timeoutMs", DEFAULT_TIMEOUT_MS),
+        item["arguments"],
+        timeout_ms=item_timeout_ms,
         memory_mb=item.get("memoryMb", DEFAULT_MEMORY_MB),
         result_mode=item.get("resultMode", DEFAULT_RESULT_MODE),
         max_output_bytes=item.get("maxOutputBytes", DEFAULT_MAX_OUTPUT_BYTES),
+        cancel_event=cancel_event,
     )
     return {"index": index, **result}
 

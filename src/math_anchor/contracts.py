@@ -7,6 +7,12 @@ from jsonschema import Draft202012Validator
 from jsonschema.exceptions import ValidationError
 
 from .errors import CalculatorError
+from .output_policy import (
+    DEFAULT_BATCH_MAX_OUTPUT_BYTES,
+    DEFAULT_MAX_OUTPUT_BYTES,
+    MAX_OUTPUT_BYTES,
+    MIN_OUTPUT_BYTES,
+)
 
 
 _LIMIT_VALIDATORS = {
@@ -18,6 +24,7 @@ _LIMIT_VALIDATORS = {
     "minLength",
     "minimum",
 }
+_MAX_VALIDATION_MESSAGE_BYTES = 512
 
 _LIMIT_PROPERTIES = {
     "timeoutMs": {
@@ -40,9 +47,9 @@ _LIMIT_PROPERTIES = {
     },
     "maxOutputBytes": {
         "type": "integer",
-        "minimum": 1024,
-        "maximum": 1_048_576,
-        "default": 131_072,
+        "minimum": MIN_OUTPUT_BYTES,
+        "maximum": MAX_OUTPUT_BYTES,
+        "default": DEFAULT_MAX_OUTPUT_BYTES,
         "description": "Strict UTF-8 byte budget for structured output.",
     },
 }
@@ -817,6 +824,30 @@ RUN_RESULT_SCHEMA = {
     ]
 }
 
+# Keep the complete per-kind schema above as the runtime validation authority.
+# Advertising that entire union on every tool listing made Agents pay for more
+# than 20 KB of result detail before making an ordinary call. The live tool
+# therefore publishes the stable common envelope and dominant scalar fields;
+# operation-specific output remains structured and is still validated against
+# RUN_RESULT_SCHEMA before it crosses the execution boundary.
+RUN_TOOL_OUTPUT_SCHEMA = {
+    "type": "object",
+    "additionalProperties": True,
+    "properties": {
+        "status": {"enum": ["ok", "uncertain", "error"]},
+        "operation": {"type": "string"},
+        "kind": {"type": "string"},
+        "exact": _TEXT_OR_NULL,
+        "approx": _TEXT_OR_NULL,
+        "precision": {"type": "integer", "minimum": 2},
+        "unit": _TEXT_OR_NULL,
+        "warnings": {"type": "array", "items": {"type": "string"}},
+        "error": ERROR_RESULT_SCHEMA["properties"]["error"],
+    },
+    "required": ["status"],
+    "$defs": {"textOrNull": deepcopy(_TEXT_OR_NULL_DEFINITION)},
+}
+
 
 _INDEXED_RESULT_SCHEMA = {
     "type": "object",
@@ -863,9 +894,12 @@ def validate_operation_arguments(operation: str, schema: dict[str, Any], argumen
     error = errors[0]
     path = ".".join(str(part) for part in error.absolute_path) or "arguments"
     code = "E_LIMIT" if error.validator in _LIMIT_VALIDATORS else "E_INPUT"
+    message = error.message
+    if len(message.encode("utf-8")) > _MAX_VALIDATION_MESSAGE_BYTES:
+        message = f"value does not satisfy {error.validator}"
     raise CalculatorError(
         code,
-        f"invalid {operation} arguments at {path}: {error.message}",
+        f"invalid {operation} arguments at {path}: {message}",
         {"path": list(error.absolute_path), "rule": error.validator},
     )
 
@@ -899,6 +933,7 @@ def operation_request_variants(
     *,
     include_limits: bool,
     close_object: bool = True,
+    inherit_root_contract: bool = False,
 ) -> list[dict[str, Any]]:
     variants = []
     for operation, arguments_schema in operation_schemas:
@@ -908,12 +943,10 @@ def operation_request_variants(
         }
         if include_limits:
             properties.update(deepcopy(_LIMIT_PROPERTIES))
-        variant = {
-            "title": operation,
-            "type": "object",
-            "properties": properties,
-            "required": ["operation", "arguments"],
-        }
+        variant = {"properties": properties}
+        if not inherit_root_contract:
+            variant["type"] = "object"
+            variant["required"] = ["operation", "arguments"]
         if close_object:
             variant["additionalProperties"] = False
         variants.append(variant)
@@ -938,6 +971,7 @@ def run_tool_parameters(operation_schemas: list[tuple[str, dict[str, Any]]]) -> 
             operation_schemas,
             include_limits=False,
             close_object=False,
+            inherit_root_contract=True,
         ),
     }
 
@@ -946,13 +980,13 @@ def batch_item_parameters() -> dict[str, Any]:
     return {
         "type": "object",
         "additionalProperties": False,
+        # The per-item limits are the same knob values math.run advertises;
+        # publishing them keeps the per-item output budget discoverable
+        # instead of failing with an undocumented default.
         "properties": {
             "operation": {"type": "string", "minLength": 1},
             "arguments": {"type": "object"},
-            "timeoutMs": {},
-            "memoryMb": {},
-            "resultMode": {},
-            "maxOutputBytes": {},
+            **deepcopy(_LIMIT_PROPERTIES),
         },
         "required": ["operation", "arguments"],
     }
@@ -970,11 +1004,18 @@ def batch_tool_parameters() -> dict[str, Any]:
                 "maxItems": 32,
                 "items": batch_item_parameters(),
             },
+            "timeoutMs": {
+                "type": "integer",
+                "minimum": 100,
+                "maximum": 30_000,
+                "default": 30_000,
+                "description": "Cumulative deadline for the complete batch, including queued items.",
+            },
             "maxOutputBytes": {
                 "type": "integer",
-                "minimum": 1024,
-                "maximum": 1_048_576,
-                "default": 262_144,
+                "minimum": MIN_OUTPUT_BYTES,
+                "maximum": MAX_OUTPUT_BYTES,
+                "default": DEFAULT_BATCH_MAX_OUTPUT_BYTES,
                 "description": "Strict UTF-8 byte budget for the complete ordered batch result.",
             },
         },

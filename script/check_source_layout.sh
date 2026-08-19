@@ -3,13 +3,19 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 GENERATED_OUTPUT_RELATIVES=(
+  ".venv/"
   "plugins/math-anchor/runtime/"
   ".build/"
+  ".swiftpm/"
+  "build/"
   "dist/"
 )
 GENERATED_OUTPUT_DIRS=(
+  "$ROOT_DIR/.venv"
   "$ROOT_DIR/plugins/math-anchor/runtime"
   "$ROOT_DIR/.build"
+  "$ROOT_DIR/.swiftpm"
+  "$ROOT_DIR/build"
   "$ROOT_DIR/dist"
 )
 GITIGNORE="$ROOT_DIR/.gitignore"
@@ -29,7 +35,9 @@ case "$MODE" in
 esac
 
 source "$ROOT_DIR/script/python_env.sh"
-if ! resolve_math_anchor_python "to validate source paths"; then
+# Never execute an interpreter from this repository before its generated paths
+# have been validated. In particular, .venv may itself be an unsafe symlink.
+if ! resolve_math_anchor_python "to validate source paths" "$ROOT_DIR"; then
   exit 1
 fi
 PATH_VALIDATION_PYTHON="$RESOLVED_MATH_ANCHOR_PYTHON"

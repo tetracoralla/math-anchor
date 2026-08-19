@@ -27,7 +27,8 @@ the original archive before generating any local outputs:
 license material and an SPDX SBOM inside it, verifies the complete file
 inventory and architecture, then exercises the real Plugin transport.
 The explicit `--archive-clean` lane rejects a metadata-free archive that already
-contains generated runtime files. `check_all.sh` uses the separate
+contains a virtual environment, Plugin runtime, Swift/build cache, benchmark
+receipt, or app artifact. `check_all.sh` uses the separate
 `--development` lane, so it remains repeatable after its first run generates a
 runtime. Both lanes reject symbolic links in any runtime-output path component
 and verify that the resolved output path remains inside the source tree.
@@ -82,10 +83,26 @@ Prepare the self-contained Plugin directory first:
 ```
 
 Then select `plugins/math-anchor/` in Codex's local Plugin installation flow and
-start a fresh Codex task. The installed Plugin is healthy only when its loaded
+start a fresh Codex task. For a repeatable CLI installation from this checkout,
+use:
+
+```bash
+codex plugin marketplace add .
+codex plugin add math-anchor@openadam
+```
+
+The installed Plugin is healthy only when its loaded
 Skill and all four tools (`math.search`, `math.describe`, `math.run`, and
 `math.batch`) are visible together. A source checkout without the generated
 runtime is intentionally not an installable Plugin artifact.
+
+To exercise the independent installed copy rather than the source directory,
+pass its path from `codex plugin add` back to the transport check:
+
+```bash
+.venv/bin/python script/check_mcp.py \
+  --plugin-root ~/.codex/plugins/cache/openadam/math-anchor/0.1.0
+```
 
 ## Signed macOS artifacts
 
@@ -106,6 +123,8 @@ export MATH_ANCHOR_APP_VERSION=0.1.0
 export MATH_ANCHOR_BUILD_NUMBER=1
 export MATH_ANCHOR_CODESIGN_IDENTITY="Developer ID Application: Example (TEAMID)"
 export MATH_ANCHOR_NOTARY_PROFILE="math-anchor-notary"
+# Set this as well when the profile lives in a non-default keychain.
+export MATH_ANCHOR_NOTARY_KEYCHAIN="/path/to/release.keychain-db"
 export MATH_ANCHOR_EXPECTED_ARCH="$(uname -m)"
 ./script/release_macos.sh
 ```
@@ -113,10 +132,32 @@ export MATH_ANCHOR_EXPECTED_ARCH="$(uname -m)"
 The release script builds with Swift's release configuration, validates the
 clean annotated source tag, canonical App/Plugin/Python/runtime version, build
 number, runtime manifest, and target architecture. It signs nested Mach-O files
-with the hardened runtime, verifies the bundle, submits it for notarization,
+with the hardened runtime, regenerates the embedded SBOM and file manifest from
+those final signed bytes before sealing the outer app, verifies the bundle, submits it for notarization,
 staples and validates the ticket, runs Gatekeeper assessment, and only then
-creates the final architecture-labelled zip. Build arm64 and x86_64 artifacts
+creates the final architecture-labelled zip, detached SHA-256 checksum, and
+architecture-labelled SPDX SBOM. Build arm64 and x86_64 artifacts
 on matching hosts; do not relabel one architecture as another.
+
+Pushing the annotated release tag runs `.github/workflows/release.yml` on both
+matching GitHub macOS architectures and publishes a GitHub Release only after
+both signed artifacts pass notarization and checksum verification. Configure
+these repository Actions secrets before pushing the tag:
+
+- `APPLE_DEVELOPER_ID_P12_BASE64`: base64-encoded Developer ID Application
+  certificate and private key in PKCS#12 format;
+- `APPLE_DEVELOPER_ID_P12_PASSWORD`: password for that PKCS#12 file;
+- `APPLE_NOTARY_KEY_ID` and `APPLE_NOTARY_ISSUER_ID`: App Store Connect API key
+  identifiers;
+- `APPLE_NOTARY_PRIVATE_KEY_BASE64`: base64-encoded App Store Connect `.p8`
+  private key.
+
+The workflow imports credentials into an ephemeral runner keychain, explicitly
+uses that same keychain for the notarization submission, and does not place the
+credentials in the source tree or release assets. Without these five configured
+secrets, the release job fails closed before signing. It also refuses to replace
+assets on an existing GitHub Release: correcting published bytes requires an
+explicitly new version and tag rather than silently changing an old release.
 
 Signing identities and notarization credentials are owner-controlled secrets.
 Their absence is an honest binary-release blocker, not something the source

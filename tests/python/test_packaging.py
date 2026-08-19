@@ -19,6 +19,18 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 PLUGIN = ROOT / "plugins" / "math-anchor"
+GENERATED_OUTPUTS = (
+    ".venv/",
+    "plugins/math-anchor/runtime/",
+    ".build/",
+    ".swiftpm/",
+    "build/",
+    "dist/",
+)
+
+
+def _generated_gitignore() -> str:
+    return "\n".join(GENERATED_OUTPUTS) + "\n"
 
 
 def test_public_identity_uses_math_anchor_across_distribution_surfaces() -> None:
@@ -43,6 +55,47 @@ def test_plugin_transport_stays_inside_the_plugin_bundle() -> None:
     assert executable.is_relative_to(PLUGIN.resolve())
 
 
+def test_local_codex_marketplace_exposes_the_packaged_plugin() -> None:
+    marketplace = json.loads(
+        (ROOT / ".agents" / "plugins" / "marketplace.json").read_text()
+    )
+    assert marketplace["name"] == "openadam"
+    assert marketplace["plugins"] == [
+        {
+            "name": "math-anchor",
+            "source": {"source": "local", "path": "./plugins/math-anchor"},
+            "policy": {
+                "installation": "AVAILABLE",
+                "authentication": "ON_INSTALL",
+            },
+            "category": "Productivity",
+        }
+    ]
+
+
+def test_calculation_skill_keeps_cost_and_trust_boundaries() -> None:
+    skill = (PLUGIN / "skills" / "calculate" / "SKILL.md").read_text()
+    assert "Do not load it for trivial, low-risk arithmetic" in skill
+    assert "A successful tool response proves that the declared operation ran" in skill
+    assert "Stop after the first successful call for an ordinary calculation" in skill
+    assert "Never call `list_mcp_resources`" in skill
+    assert "dimensional-compatibility checks use `quantity.evaluate`" in skill
+    assert "`precision` is not a top-level `math.run` field" in skill
+    assert "at least two guard digits in the first call" in skill
+    agent_metadata = (
+        PLUGIN / "skills" / "calculate" / "agents" / "openai.yaml"
+    ).read_text()
+    assert 'value: "math-anchor"' in agent_metadata
+
+
+@pytest.mark.parametrize("entrypoint", ["check_all.sh", "package_runtime.sh"])
+def test_build_entrypoints_pin_their_working_directory(entrypoint: str) -> None:
+    script = (ROOT / "script" / entrypoint).read_text(encoding="utf-8")
+    root_assignment = script.index('ROOT_DIR="$(cd ')
+    pinned_working_directory = script.index('cd "$ROOT_DIR"')
+    assert root_assignment < pinned_working_directory
+
+
 def test_app_packaging_copies_the_standalone_runtime() -> None:
     script = (ROOT / "script" / "build_and_run.sh").read_text()
     assert 'APP_RESOURCES="$APP_CONTENTS/Resources"' in script
@@ -53,6 +106,13 @@ def test_runtime_rebuild_check_ignores_generated_python_bytecode() -> None:
     script = (ROOT / "script" / "package_runtime.sh").read_text()
     assert "! -path '*/__pycache__/*'" in script
     assert "! -name '*.pyc'" in script
+
+
+def test_runtime_packaging_materializes_pyinstaller_loader_for_codex_copy() -> None:
+    script = (ROOT / "script" / "package_runtime.sh").read_text()
+    assert 'PYTHON_RUNTIME_LOADER="$PLUGIN_RUNTIME_BUNDLE/_internal/Python"' in script
+    assert 'cp -pL "$PYTHON_RUNTIME_LOADER"' in script
+    assert '[[ -L "$PYTHON_RUNTIME_LOADER" ]]' in script
 
 
 def test_generated_runtime_is_ignored_by_the_source_repository() -> None:
@@ -69,8 +129,11 @@ def test_generated_runtime_is_ignored_by_the_source_repository() -> None:
 @pytest.mark.parametrize(
     ("ignored_relative", "generated_relative"),
     [
+        (".venv/", ".venv/generated"),
         ("plugins/math-anchor/runtime/", "plugins/math-anchor/runtime/binary"),
         (".build/", ".build/generated"),
+        (".swiftpm/", ".swiftpm/generated"),
+        ("build/", "build/generated"),
         ("dist/", "dist/generated"),
     ],
 )
@@ -98,7 +161,7 @@ def test_source_layout_reports_each_tracked_or_unignored_generated_output(
         capture_output=True,
         check=True,
     )
-    ignored_outputs = ["plugins/math-anchor/runtime/", ".build/", "dist/"]
+    ignored_outputs = list(GENERATED_OUTPUTS)
     (archive / ".gitignore").write_text(
         "\n".join(ignored_outputs) + "\n", encoding="utf-8"
     )
@@ -149,9 +212,7 @@ def test_source_archive_without_git_metadata_has_an_equivalent_layout_check(
     shutil.copy2(ROOT / "script" / "check_source_layout.sh", script_dir)
     shutil.copy2(ROOT / "script" / "validate_repo_paths.py", script_dir)
     shutil.copy2(ROOT / "script" / "python_env.sh", script_dir)
-    (archive / ".gitignore").write_text(
-        "plugins/math-anchor/runtime/\n.build/\ndist/\n", encoding="utf-8"
-    )
+    (archive / ".gitignore").write_text(_generated_gitignore(), encoding="utf-8")
 
     clean = subprocess.run(
         [str(script_dir / "check_source_layout.sh"), "--archive-clean"],
@@ -203,9 +264,7 @@ def test_source_layout_rejects_every_runtime_symlink_ancestor(
     shutil.copy2(ROOT / "script" / "check_source_layout.sh", script_dir)
     shutil.copy2(ROOT / "script" / "validate_repo_paths.py", script_dir)
     shutil.copy2(ROOT / "script" / "python_env.sh", script_dir)
-    (archive / ".gitignore").write_text(
-        "plugins/math-anchor/runtime/\n.build/\ndist/\n", encoding="utf-8"
-    )
+    (archive / ".gitignore").write_text(_generated_gitignore(), encoding="utf-8")
 
     external = tmp_path / f"external-{linked_component}"
     if linked_component == "plugins":
@@ -274,6 +333,7 @@ def test_build_and_run_refuses_dist_symlink_before_replacing_the_app_bundle(
     script_dir.mkdir(parents=True)
     for name in (
         "build_and_run.sh",
+        "check_source_layout.sh",
         "swift_env.sh",
         "validate_repo_paths.py",
         "python_env.sh",
@@ -299,16 +359,19 @@ def test_build_and_run_refuses_dist_symlink_before_replacing_the_app_bundle(
     assert sentinel.read_text(encoding="utf-8") == "outside repository"
 
 
-def test_swift_env_refuses_module_cache_parent_symlink(tmp_path: Path) -> None:
+@pytest.mark.parametrize("linked_output", [".build", ".swiftpm"])
+def test_swift_env_refuses_generated_parent_symlink(
+    tmp_path: Path, linked_output: str
+) -> None:
     archive = tmp_path / "math-anchor-source"
     script_dir = archive / "script"
     script_dir.mkdir(parents=True)
     for name in ("swift_env.sh", "validate_repo_paths.py", "python_env.sh"):
         shutil.copy2(ROOT / "script" / name, script_dir)
 
-    external_build = tmp_path / "external-build"
+    external_build = tmp_path / f"external-{linked_output.removeprefix('.')}"
     external_build.mkdir()
-    (archive / ".build").symlink_to(external_build, target_is_directory=True)
+    (archive / linked_output).symlink_to(external_build, target_is_directory=True)
 
     configured = subprocess.run(
         [
@@ -326,19 +389,29 @@ def test_swift_env_refuses_module_cache_parent_symlink(tmp_path: Path) -> None:
     assert list(external_build.iterdir()) == []
 
 
-def test_bootstrap_refuses_symlinked_existing_venv(tmp_path: Path) -> None:
+@pytest.mark.parametrize("external_exists", [False, True])
+def test_bootstrap_refuses_symlinked_venv(
+    tmp_path: Path, external_exists: bool
+) -> None:
     archive = tmp_path / "math-anchor-source"
     script_dir = archive / "script"
     script_dir.mkdir(parents=True)
-    shutil.copy2(ROOT / "script" / "bootstrap.sh", script_dir)
+    for name in (
+        "bootstrap.sh",
+        "validate_repo_paths.py",
+        "python_env.sh",
+    ):
+        shutil.copy2(ROOT / "script" / name, script_dir)
 
     external_venv = tmp_path / "external-venv"
     external_bin = external_venv / "bin"
-    external_bin.mkdir(parents=True)
+    if external_exists:
+        external_bin.mkdir(parents=True)
     marker = tmp_path / "external-venv-used"
     stub = external_bin / "python"
-    stub.write_text(f'#!/bin/sh\ntouch "{marker}"\nexit 0\n', encoding="utf-8")
-    stub.chmod(0o755)
+    if external_exists:
+        stub.write_text(f'#!/bin/sh\ntouch "{marker}"\nexit 0\n', encoding="utf-8")
+        stub.chmod(0o755)
     (archive / ".venv").symlink_to(external_venv, target_is_directory=True)
 
     bootstrapped = subprocess.run(
@@ -349,8 +422,120 @@ def test_bootstrap_refuses_symlinked_existing_venv(tmp_path: Path) -> None:
         check=False,
     )
     assert bootstrapped.returncode != 0
-    assert "symbolic link to an existing environment" in bootstrapped.stderr
+    assert "symbolic-link component" in bootstrapped.stderr
     assert not marker.exists()
+
+
+def test_release_hygiene_refuses_external_venv_before_executing_it(
+    tmp_path: Path,
+) -> None:
+    archive = tmp_path / "math-anchor-source"
+    script_dir = archive / "script"
+    script_dir.mkdir(parents=True)
+    for name in (
+        "check_release_hygiene.sh",
+        "check_source_layout.sh",
+        "validate_repo_paths.py",
+        "python_env.sh",
+    ):
+        shutil.copy2(ROOT / "script" / name, script_dir)
+    (archive / ".gitignore").write_text(_generated_gitignore(), encoding="utf-8")
+
+    external_venv = tmp_path / "external-venv"
+    external_bin = external_venv / "bin"
+    external_bin.mkdir(parents=True)
+    marker = tmp_path / "external-python-ran"
+    stub = external_bin / "python"
+    stub.write_text(f'#!/bin/sh\ntouch "{marker}"\nexit 1\n', encoding="utf-8")
+    stub.chmod(0o755)
+    (archive / ".venv").symlink_to(external_venv, target_is_directory=True)
+
+    checked = subprocess.run(
+        [str(script_dir / "check_release_hygiene.sh")],
+        cwd=archive,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert checked.returncode != 0
+    assert "symbolic-link component" in checked.stderr
+    assert not marker.exists()
+
+
+def test_source_layout_does_not_execute_explicit_python_from_unsafe_venv(
+    tmp_path: Path,
+) -> None:
+    archive = tmp_path / "math-anchor-source"
+    script_dir = archive / "script"
+    script_dir.mkdir(parents=True)
+    for name in (
+        "check_source_layout.sh",
+        "validate_repo_paths.py",
+        "python_env.sh",
+    ):
+        shutil.copy2(ROOT / "script" / name, script_dir)
+    (archive / ".gitignore").write_text(_generated_gitignore(), encoding="utf-8")
+
+    external_venv = tmp_path / "external-venv"
+    external_bin = external_venv / "bin"
+    external_bin.mkdir(parents=True)
+    marker = tmp_path / "explicit-python-ran"
+    stub = external_bin / "python"
+    stub.write_text(f'#!/bin/sh\ntouch "{marker}"\nexit 0\n', encoding="utf-8")
+    stub.chmod(0o755)
+    (archive / ".venv").symlink_to(external_venv, target_is_directory=True)
+
+    environment = os.environ.copy()
+    environment["MATH_ANCHOR_PYTHON"] = str(archive / ".venv" / "bin" / "python")
+    checked = subprocess.run(
+        [str(script_dir / "check_source_layout.sh"), "--development"],
+        cwd=archive,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert checked.returncode != 0
+    assert "symbolic-link component" in checked.stderr
+    assert not marker.exists()
+
+
+@pytest.mark.parametrize("entrypoint", ["check_all.sh", "build_and_run.sh"])
+def test_top_level_build_entrypoints_preflight_venv_before_any_build_output(
+    tmp_path: Path, entrypoint: str
+) -> None:
+    archive = tmp_path / "math-anchor-source"
+    script_dir = archive / "script"
+    script_dir.mkdir(parents=True)
+    for name in (
+        entrypoint,
+        "check_source_layout.sh",
+        "validate_repo_paths.py",
+        "python_env.sh",
+        "swift_env.sh",
+    ):
+        shutil.copy2(ROOT / "script" / name, script_dir)
+    (archive / ".gitignore").write_text(_generated_gitignore(), encoding="utf-8")
+
+    external_venv = tmp_path / "external-venv"
+    external_venv.mkdir()
+    (archive / ".venv").symlink_to(external_venv, target_is_directory=True)
+
+    arguments = [str(script_dir / entrypoint)]
+    if entrypoint == "build_and_run.sh":
+        arguments.append("--package")
+    checked = subprocess.run(
+        arguments,
+        cwd=archive,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert checked.returncode != 0
+    assert "symbolic-link component" in checked.stderr
+    assert not (archive / ".build").exists()
+    assert not (archive / "dist").exists()
+    assert list(external_venv.iterdir()) == []
 
 
 def test_release_hygiene_reports_force_tracked_runtime(tmp_path: Path) -> None:
@@ -370,9 +555,7 @@ def test_release_hygiene_reports_force_tracked_runtime(tmp_path: Path) -> None:
         capture_output=True,
         check=True,
     )
-    (archive / ".gitignore").write_text(
-        "plugins/math-anchor/runtime/\n.build/\ndist/\n", encoding="utf-8"
-    )
+    (archive / ".gitignore").write_text(_generated_gitignore(), encoding="utf-8")
     runtime = archive / "plugins" / "math-anchor" / "runtime"
     runtime.mkdir(parents=True)
     (runtime / "binary").write_bytes(b"generated")
@@ -463,6 +646,38 @@ def test_github_ci_covers_both_supported_macos_architectures() -> None:
     assert "actions/setup-python@v" not in workflow
 
 
+def test_github_release_requires_signed_notarized_assets_from_both_architectures() -> None:
+    workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "runner: macos-15\n            architecture: arm64" in workflow
+    assert "runner: macos-15-intel\n            architecture: x86_64" in workflow
+    assert "persist-credentials: false" in workflow
+    assert "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02" in workflow
+    assert "actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093" in workflow
+    assert "APPLE_DEVELOPER_ID_P12_BASE64" in workflow
+    assert "APPLE_NOTARY_PRIVATE_KEY_BASE64" in workflow
+    assert 'export MATH_ANCHOR_NOTARY_KEYCHAIN="$keychain_path"' in workflow
+    assert "./script/release_macos.sh" in workflow
+    assert "sha256sum --check" in workflow
+    assert "gh release create" in workflow
+    assert "--clobber" not in workflow
+    assert "Refusing to replace assets on existing release" in workflow
+
+
+def test_signed_release_refreshes_embedded_materials_after_nested_signing() -> None:
+    script = (ROOT / "script" / "release_macos.sh").read_text(encoding="utf-8")
+    nested_signing = script.index('done < <(find "$APP_BUNDLE/Contents" -type f -print0)')
+    regenerate_sbom = script.index('"$ROOT_DIR/script/generate_third_party_materials.py"', nested_signing)
+    rewrite_manifest = script.index('"$ROOT_DIR/script/runtime_manifest.py" write', regenerate_sbom)
+    outer_signing = script.index('codesign --force --timestamp --options runtime --sign "$SIGNING_IDENTITY" "$APP_BUNDLE"')
+
+    assert nested_signing < regenerate_sbom < rewrite_manifest < outer_signing
+    assert 'cp "$APP_RUNTIME_BUNDLE/sbom.spdx.json" "$SBOM"' in script
+    assert 'shasum -a 256 "${ARCHIVE##*/}"' in script
+
+
 def test_release_scripts_require_versioned_signed_notarized_artifacts() -> None:
     local_build = (ROOT / "script" / "build_and_run.sh").read_text()
     release = (ROOT / "script" / "release_macos.sh").read_text()
@@ -472,6 +687,8 @@ def test_release_scripts_require_versioned_signed_notarized_artifacts() -> None:
     assert 'APP_EXECUTABLE="MathAnchor"' in local_build
     assert "--options runtime" in release
     assert "notarytool submit" in release
+    assert 'NOTARY_KEYCHAIN="${MATH_ANCHOR_NOTARY_KEYCHAIN:-}"' in release
+    assert 'NOTARY_ARGUMENTS+=(--keychain "$NOTARY_KEYCHAIN")' in release
     assert "stapler validate" in release
     assert "spctl --assess" in release
     assert "check_release_source.sh" in release
@@ -524,6 +741,9 @@ def test_packaged_runtime_has_matching_manifest_notices_and_sbom() -> None:
     notice_path = bundle / "THIRD_PARTY_NOTICES.txt"
     sbom_path = bundle / "sbom.spdx.json"
     assert runtime.is_file()
+    loader = bundle / "_internal" / "Python"
+    assert loader.is_file()
+    assert not loader.is_symlink()
     assert notice_path.stat().st_size > 10_000
     manifest = json.loads(manifest_path.read_text())
     assert manifest["buildArchitecture"] == platform.machine()

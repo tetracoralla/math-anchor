@@ -1,0 +1,156 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions: {}
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  signed-macos:
+    name: signed macOS (${{ matrix.architecture }})
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            architecture: arm64
+          - runner: macos-15-intel
+            architecture: x86_64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11.9"
+          cache: pip
+          cache-dependency-path: requirements-dev.lock
+      - name: Bootstrap locked dependencies
+        run: ./script/bootstrap.sh
+      - name: Build, sign, notarize, and staple
+        shell: bash
+        env:
+          APPLE_DEVELOPER_ID_P12_BASE64: ${{ secrets.APPLE_DEVELOPER_ID_P12_BASE64 }}
+          APPLE_DEVELOPER_ID_P12_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_P12_PASSWORD }}
+          APPLE_NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
+          APPLE_NOTARY_ISSUER_ID: ${{ secrets.APPLE_NOTARY_ISSUER_ID }}
+          APPLE_NOTARY_PRIVATE_KEY_BASE64: ${{ secrets.APPLE_NOTARY_PRIVATE_KEY_BASE64 }}
+          MATH_ANCHOR_EXPECTED_ARCH: ${{ matrix.architecture }}
+        run: |
+          set -euo pipefail
+          for required in \
+            APPLE_DEVELOPER_ID_P12_BASE64 \
+            APPLE_DEVELOPER_ID_P12_PASSWORD \
+            APPLE_NOTARY_KEY_ID \
+            APPLE_NOTARY_ISSUER_ID \
+            APPLE_NOTARY_PRIVATE_KEY_BASE64; do
+            if [[ -z "${!required:-}" ]]; then
+              echo "Required release secret is missing: $required" >&2
+              exit 1
+            fi
+          done
+
+          certificate_path="$RUNNER_TEMP/math-anchor-developer-id.p12"
+          notary_key_path="$RUNNER_TEMP/AuthKey_${APPLE_NOTARY_KEY_ID}.p8"
+          keychain_path="$RUNNER_TEMP/math-anchor-signing.keychain-db"
+          if [[ -z "$RUNNER_TEMP" || "$certificate_path" != "$RUNNER_TEMP/"* || \
+                "$notary_key_path" != "$RUNNER_TEMP/"* || "$keychain_path" != "$RUNNER_TEMP/"* ]]; then
+            echo "Refusing unexpected credential paths." >&2
+            exit 1
+          fi
+          cleanup() {
+            security delete-keychain "$keychain_path" >/dev/null 2>&1 || true
+            rm -f "$certificate_path" "$notary_key_path"
+          }
+          trap cleanup EXIT
+
+          printf '%s' "$APPLE_DEVELOPER_ID_P12_BASE64" | /usr/bin/base64 -D > "$certificate_path"
+          printf '%s' "$APPLE_NOTARY_PRIVATE_KEY_BASE64" | /usr/bin/base64 -D > "$notary_key_path"
+          keychain_password="$(openssl rand -hex 24)"
+          if [[ -z "$keychain_password" ]]; then
+            echo "Could not create an ephemeral keychain password." >&2
+            exit 1
+          fi
+          security create-keychain -p "$keychain_password" "$keychain_path"
+          security set-keychain-settings -lut 21600 "$keychain_path"
+          security unlock-keychain -p "$keychain_password" "$keychain_path"
+          security import "$certificate_path" -k "$keychain_path" \
+            -P "$APPLE_DEVELOPER_ID_P12_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s \
+            -k "$keychain_password" "$keychain_path"
+          security list-keychains -d user -s "$keychain_path"
+
+          signing_identity="$(
+            security find-identity -v -p codesigning "$keychain_path" |
+              sed -n 's/.*"\(Developer ID Application:.*\)"/\1/p' |
+              head -n 1
+          )"
+          if [[ -z "$signing_identity" ]]; then
+            echo "The imported certificate did not provide a Developer ID Application identity." >&2
+            exit 1
+          fi
+
+          xcrun notarytool store-credentials math-anchor-ci \
+            --key "$notary_key_path" \
+            --key-id "$APPLE_NOTARY_KEY_ID" \
+            --issuer "$APPLE_NOTARY_ISSUER_ID" \
+            --keychain "$keychain_path"
+
+          export MATH_ANCHOR_APP_VERSION="${GITHUB_REF_NAME#v}"
+          export MATH_ANCHOR_BUILD_NUMBER="${GITHUB_RUN_NUMBER}"
+          export MATH_ANCHOR_CODESIGN_IDENTITY="$signing_identity"
+          export MATH_ANCHOR_NOTARY_PROFILE="math-anchor-ci"
+          export MATH_ANCHOR_NOTARY_KEYCHAIN="$keychain_path"
+          ./script/release_macos.sh
+      - name: Upload signed release assets
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-${{ matrix.architecture }}
+          path: |
+            dist/Math-Anchor-*-${{ matrix.architecture }}.zip
+            dist/Math-Anchor-*-${{ matrix.architecture }}.zip.sha256
+            dist/Math-Anchor-*-${{ matrix.architecture }}.spdx.json
+          if-no-files-found: error
+          compression-level: 0
+
+  publish:
+    name: Publish GitHub release
+    needs: signed-macos
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: release-*
+          path: release-assets
+          merge-multiple: true
+      - name: Verify and publish assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          for checksum in release-assets/*.zip.sha256; do
+            (cd release-assets && sha256sum --check "${checksum##*/}")
+          done
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "Refusing to replace assets on existing release $GITHUB_REF_NAME." >&2
+            exit 1
+          fi
+          gh release create "$GITHUB_REF_NAME" release-assets/* \
+            --verify-tag \
+            --title "Math Anchor ${GITHUB_REF_NAME#v}" \
+            --generate-notes

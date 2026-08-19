@@ -1,6 +1,12 @@
 import pytest
 
-from math_anchor.catalog import describe_operation, search_operations
+from math_anchor.catalog import (
+    MAX_CATEGORY_LENGTH,
+    MAX_OPERATION_ID_LENGTH,
+    MAX_SEARCH_QUERY_LENGTH,
+    describe_operation,
+    search_operations,
+)
 from math_anchor.errors import CalculatorError
 from math_anchor.runtime import execute_direct
 
@@ -15,11 +21,30 @@ def test_catalog_discovery_is_compact_and_descriptions_are_precise() -> None:
 
 
 @pytest.mark.parametrize(
+    "call",
+    [
+        lambda: search_operations("x" * (MAX_SEARCH_QUERY_LENGTH + 1)),
+        lambda: search_operations("", "x" * (MAX_CATEGORY_LENGTH + 1)),
+        lambda: describe_operation("x" * (MAX_OPERATION_ID_LENGTH + 1)),
+    ],
+)
+def test_catalog_discovery_rejects_oversized_coordinates_without_reflecting_them(
+    call,
+) -> None:
+    with pytest.raises(CalculatorError) as caught:
+        call()
+
+    assert caught.value.code == "E_LIMIT"
+    assert len(caught.value.message) < 128
+
+
+@pytest.mark.parametrize(
     ("query", "operation"),
     [
         ("帮我求导", "calculus.derivative"),
         ("计算这个积分", "calculus.integrate"),
         ("做单位换算", "units.convert"),
+        ("计算带单位的表达式并检测不同维度单位相加，例如 1 米 + 1 秒", "quantity.evaluate"),
         ("矩阵特征值", "matrix.eigenvalues"),
     ],
 )

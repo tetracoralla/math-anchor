@@ -78,7 +78,7 @@ final class MathRuntimeService: MathEvaluating, UnitConverting, CurrencyConverti
     }
 
     private struct RuntimeErrorPayload: Decodable {
-        let message: String
+        let code: String?
     }
 
     private struct RuntimePayload: Decodable {
@@ -326,7 +326,7 @@ final class MathRuntimeService: MathEvaluating, UnitConverting, CurrencyConverti
             throw MathRuntimeError.invalidResponse
         }
         guard payload.status == "ok" else {
-            throw MathRuntimeError.operation(payload.error?.message ?? "Calculation failed.")
+            throw MathRuntimeError.fromRuntime(code: payload.error?.code)
         }
         return payload
     }

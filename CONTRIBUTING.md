@@ -42,6 +42,30 @@ Do not commit generated output under `.build/`, `dist/`, or
 - Update `pyproject.toml` and the Plugin manifest together when changing the
   product version.
 
+## Report and repair a wrong calculation
+
+Include the user request, selected tool and operation, structured arguments,
+complete result or stable error code, Math Anchor version, and whether the
+problem reproduces through the packaged Plugin. Remove private business data
+before posting a public issue.
+
+Classify the defect before fixing it:
+
+- wrong request translation or premature tool selection belongs in the product
+  Skill and cold-session routing probes;
+- rejected valid input or accepted invalid input belongs in the schema,
+  validation, and a negative regression;
+- a wrong successful value belongs in the shared calculation core plus an
+  independent oracle or invariant regression;
+- a crash, timeout, memory breach, cancellation failure, or malformed response
+  belongs at the worker or transport boundary;
+- packaging-only failure must reproduce from the installed Plugin rather than
+  only the source checkout.
+
+After a repair, rebuild the standalone runtime, reinstall the Plugin, start a
+fresh Codex task, and rerun the original failing request plus the nearest
+boundary cases. Do not close a wrong-result report from a unit test alone.
+
 ## Pull requests
 
 Create a focused branch, keep unrelated changes out of the patch, and explain:

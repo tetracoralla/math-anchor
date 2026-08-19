@@ -14,12 +14,4 @@ enum CalculatorMode: String, CaseIterable, Identifiable {
         case .conversion: "Convert"
         }
     }
-
-    var systemImage: String {
-        switch self {
-        case .basic: "plus.forwardslash.minus"
-        case .scientific: "function"
-        case .conversion: "ruler"
-        }
-    }
 }

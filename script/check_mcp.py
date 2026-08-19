@@ -1,13 +1,23 @@
 from __future__ import annotations
 
+import argparse
 import asyncio
 import json
 import tempfile
 import time
 from pathlib import Path
 
-from mcp import ClientSession, StdioServerParameters
+import psutil
+from mcp import ClientSession
 from mcp.client.stdio import stdio_client
+from mcp.shared.exceptions import McpError
+from mcp.types import (
+    CancelledNotification,
+    CancelledNotificationParams,
+    ClientNotification,
+)
+
+from plugin_server import plugin_server_parameters, tools_listing_bytes
 
 
 def schema_is_closed(schema: dict) -> bool:
@@ -16,20 +26,21 @@ def schema_is_closed(schema: dict) -> bool:
     return schema.get("additionalProperties") is False
 
 
-async def main() -> None:
+def persistent_worker_cpu_seconds() -> dict[int, float]:
+    snapshot: dict[int, float] = {}
+    for process in psutil.Process().children(recursive=True):
+        try:
+            if "--persistent" in process.cmdline():
+                snapshot[process.pid] = sum(process.cpu_times()[:2])
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+    return snapshot
+
+
+async def main(plugin_root: Path | None = None) -> None:
     root = Path(__file__).resolve().parent.parent
-    plugin_root = root / "plugins/math-anchor"
-    plugin_config = json.loads((plugin_root / ".mcp.json").read_text())
-    server_config = plugin_config["mcpServers"]["math-anchor"]
-    server_cwd = (plugin_root / server_config["cwd"]).resolve()
-    server_command = Path(server_config["command"])
-    if not server_command.is_absolute():
-        server_command = (server_cwd / server_command).resolve()
-    parameters = StdioServerParameters(
-        command=str(server_command),
-        args=server_config.get("args", []),
-        cwd=str(server_cwd),
-    )
+    selected_plugin = plugin_root or root / "plugins/math-anchor"
+    parameters = plugin_server_parameters(selected_plugin)
     server_errors = tempfile.TemporaryFile(mode="w+", encoding="utf-8")
     async with stdio_client(parameters, errlog=server_errors) as (read_stream, write_stream):
         async with ClientSession(read_stream, write_stream) as session:
@@ -50,29 +61,45 @@ async def main() -> None:
             batch_schema_bytes = len(
                 json.dumps(batch_tool.inputSchema, ensure_ascii=False, separators=(",", ":")).encode()
             )
-            listed_bytes = len(
-                json.dumps(
-                    [tool.model_dump(by_alias=True, exclude_none=True) for tool in listed.tools],
-                    ensure_ascii=False,
-                    separators=(",", ":"),
-                ).encode()
-            )
+            listed_bytes = tools_listing_bytes(listed.tools)
+            assert all(tool.inputSchema["additionalProperties"] is False for tool in listed.tools)
             assert "oneOf" not in batch_tool.inputSchema["properties"]["items"]["items"]
             assert batch_schema_bytes < 2_000
-            assert listed_bytes < 64_000
+            assert listed_bytes < 40_000
             assert run_tool.inputSchema["additionalProperties"] is False
             assert all(
                 schema_is_closed(variant["properties"]["arguments"])
                 for variant in run_tool.inputSchema["oneOf"]
             )
-            assert len(run_tool.outputSchema["oneOf"]) >= 6
-            assert set(run_tool.outputSchema["$defs"]) >= {"textOrNull", "value", "textMatrix"}
+            assert run_output_schema_bytes < 2_000
+            assert run_tool.outputSchema["required"] == ["status"]
+            assert {"exact", "approx", "warnings", "error"} <= set(
+                run_tool.outputSchema["properties"]
+            )
 
             direct = await session.call_tool(
                 "math.run",
                 {"operation": "expression.evaluate", "arguments": {"expression": "6*7"}},
             )
             assert direct.structuredContent["exact"] == "42"
+
+            rejected_outer = await session.call_tool(
+                "math.search",
+                {"query": "integrate", "unexpected": True},
+            )
+            assert rejected_outer.isError is True
+            oversized_discovery = await session.call_tool(
+                "math.search",
+                {"query": "x" * 200_000},
+            )
+            assert oversized_discovery.isError is True
+            assert len(
+                json.dumps(
+                    oversized_discovery.model_dump(by_alias=True, exclude_none=True),
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                ).encode()
+            ) < 1_024
 
             equivalent = await session.call_tool(
                 "math.run",
@@ -282,6 +309,11 @@ async def main() -> None:
                             "operation": "expression.evaluate",
                             "arguments": {"expression": "2+2", "unexpected": True},
                         },
+                        {
+                            "operation": "expression.evaluate",
+                            "arguments": {"expression": "4+4"},
+                            "unexpected": True,
+                        },
                         {"operation": "expression.evaluate", "arguments": {"expression": "3+3"}},
                     ]
                 },
@@ -289,7 +321,8 @@ async def main() -> None:
             assert partial.structuredContent["status"] == "partial"
             assert partial.structuredContent["results"][0]["index"] == 0
             assert partial.structuredContent["results"][0]["error"]["code"] == "E_INPUT"
-            assert partial.structuredContent["results"][1]["exact"] == "6"
+            assert partial.structuredContent["results"][1]["error"]["code"] == "E_INPUT"
+            assert partial.structuredContent["results"][2]["exact"] == "6"
 
             warm_start = time.perf_counter()
             for _ in range(5):
@@ -304,6 +337,69 @@ async def main() -> None:
             # regression pays a fresh worker startup per call and lands
             # several times above this bound.
             assert warm_elapsed < 5.0, f"five warm math.run calls took {warm_elapsed:.3f}s"
+
+            # Drive real protocol cancellation: the bundled client SDK only
+            # cleans up its local stream when a task is cancelled and never
+            # sends notifications/cancelled, so cancelling the task below
+            # would leave the server-side worker computing to its 30 s
+            # timeout. Send the notification explicitly, then verify the
+            # active worker was killed instead of merely freed a pool slot.
+            # The SDK assigns sequential integer request ids, so the in-flight
+            # call consumes the current counter value; if this private field
+            # disappears in a future SDK, fail here rather than silently
+            # testing nothing.
+            cancelled_request_id = session._request_id
+            cancelled_call = asyncio.create_task(
+                session.call_tool(
+                    "math.run",
+                    {
+                        "operation": "expression.evaluate",
+                        "arguments": {
+                            "expression": "floor(gamma(exp(7)))",
+                            "precision": 16,
+                        },
+                        "timeoutMs": 30_000,
+                    },
+                )
+            )
+            await asyncio.sleep(0.3)
+            await session.send_notification(
+                ClientNotification(
+                    CancelledNotification(
+                        method="notifications/cancelled",
+                        params=CancelledNotificationParams(
+                            requestId=cancelled_request_id,
+                            reason="check cancellation",
+                        ),
+                    )
+                )
+            )
+            try:
+                await cancelled_call
+            except McpError:
+                pass
+            else:  # pragma: no cover - the server must reject the cancelled request
+                raise AssertionError("cancelled MCP request unexpectedly completed")
+            workers_before = persistent_worker_cpu_seconds()
+            await asyncio.sleep(0.5)
+            workers_after = persistent_worker_cpu_seconds()
+            leaked = {
+                pid: round(cpu - workers_before[pid], 3)
+                for pid, cpu in workers_after.items()
+                if pid in workers_before and cpu - workers_before[pid] > 0.35
+            }
+            assert not leaked, f"workers kept computing after cancellation: {leaked}"
+            recovered_after_cancel = await asyncio.wait_for(
+                session.call_tool(
+                    "math.run",
+                    {
+                        "operation": "expression.evaluate",
+                        "arguments": {"expression": "6*7"},
+                    },
+                ),
+                timeout=3,
+            )
+            assert recovered_after_cancel.structuredContent["exact"] == "42"
 
             blocked = await session.call_tool(
                 "math.run",
@@ -322,7 +418,7 @@ async def main() -> None:
         "MCP runtime check passed through plugin transport: one-call typed run, multilingual discovery, "
         "description, equivalence and solution verification, unit expressions, financial math, stability-aware "
         "linear solving, numerical integration, probability, inferential statistics, standard algebra, exact/high-precision results, "
-        "schema rejection, domain errors, precision provenance, large integer output, ordered partial batch, "
+        "schema rejection, domain errors, precision provenance, large integer output, ordered partial batch, cancellation recovery, "
         "and unsafe-input rejection. "
         f"math.run advertises 31 input variants in {run_schema_bytes} bytes; "
         f"its result contract is {run_output_schema_bytes} bytes; "
@@ -332,4 +428,11 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    parser = argparse.ArgumentParser(description="Exercise a packaged Math Anchor Plugin")
+    parser.add_argument(
+        "--plugin-root",
+        type=Path,
+        help="installed or source Plugin directory (defaults to plugins/math-anchor)",
+    )
+    arguments = parser.parse_args()
+    asyncio.run(main(arguments.plugin_root))

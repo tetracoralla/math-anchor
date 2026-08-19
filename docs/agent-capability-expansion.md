@@ -26,8 +26,10 @@ runtime can execute and validate all of these operation families:
 - Discovery, direct execution, ordered batch execution, and the packaged plugin
   remain the related flows. No additional public MCP tool is introduced.
 - Every operation is one registry entry with a bounded, discriminated input
-  schema, a safe handler, a strict result schema, examples, and multilingual
-  discovery terms.
+  schema, a safe handler, an internally enforced strict result schema,
+  examples, and multilingual discovery terms. The MCP listing advertises only
+  the common result envelope so Agents do not pay for the entire result union
+  before each call.
 - Symbolic expressions continue through the explicit AST translator. Unit
   expressions use their own smaller AST whitelist. Model-generated Python is
   never executed.

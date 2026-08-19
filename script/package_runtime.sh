@@ -2,10 +2,13 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+cd "$ROOT_DIR"
 VENV_PYTHON="$ROOT_DIR/.venv/bin/python"
 PLUGIN_RUNTIME_DIR="$ROOT_DIR/plugins/math-anchor/runtime"
 PLUGIN_RUNTIME_BUNDLE="$PLUGIN_RUNTIME_DIR/math-anchor-runtime"
 PLUGIN_RUNTIME="$PLUGIN_RUNTIME_BUNDLE/math-anchor-runtime"
+PYTHON_RUNTIME_LOADER="$PLUGIN_RUNTIME_BUNDLE/_internal/Python"
+PYTHON_RUNTIME_LOADER_MATERIALIZED="$PLUGIN_RUNTIME_BUNDLE/_internal/Python.materialized"
 RUNTIME_LOCK="$ROOT_DIR/requirements-runtime.lock"
 BUILD_DIR="$ROOT_DIR/.build/runtime-package"
 DIST_DIR="$BUILD_DIR/dist"
@@ -37,7 +40,8 @@ validate_write_paths() {
     "$SPEC_FILE" \
     "$PLUGIN_RUNTIME_DIR" \
     "$PLUGIN_RUNTIME_BUNDLE" \
-    "$PLUGIN_RUNTIME"
+    "$PLUGIN_RUNTIME" \
+    "$PYTHON_RUNTIME_LOADER_MATERIALIZED"
 }
 
 # This must run before bootstrap, directory creation, or any generated-path read.
@@ -108,6 +112,18 @@ validate_write_paths
 rm -rf "$PLUGIN_RUNTIME_BUNDLE"
 ditto "$DIST_RUNTIME_BUNDLE" "$PLUGIN_RUNTIME_BUNDLE"
 chmod +x "$PLUGIN_RUNTIME"
+if [[ -L "$PYTHON_RUNTIME_LOADER" ]]; then
+  cp -pL "$PYTHON_RUNTIME_LOADER" "$PYTHON_RUNTIME_LOADER_MATERIALIZED"
+  if [[ ! -f "$PYTHON_RUNTIME_LOADER_MATERIALIZED" ]] || [[ -L "$PYTHON_RUNTIME_LOADER_MATERIALIZED" ]]; then
+    echo "Failed to materialize the packaged Python loader." >&2
+    exit 1
+  fi
+  mv -f "$PYTHON_RUNTIME_LOADER_MATERIALIZED" "$PYTHON_RUNTIME_LOADER"
+fi
+if [[ ! -f "$PYTHON_RUNTIME_LOADER" ]] || [[ -L "$PYTHON_RUNTIME_LOADER" ]]; then
+  echo "The packaged Python loader must be a regular file for Codex installation." >&2
+  exit 1
+fi
 "$VENV_PYTHON" "$ROOT_DIR/script/generate_third_party_materials.py" \
   --lock "$RUNTIME_LOCK" \
   --project "$ROOT_DIR/pyproject.toml" \
