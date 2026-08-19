@@ -36,6 +36,7 @@ PATH_VALIDATOR="$ROOT_DIR/script/validate_repo_paths.py"
 
 # This must run before the Swift module-cache creation, bootstrap, or any
 # rm -rf / mkdir -p / ditto on the app bundle subtree.
+"$ROOT_DIR/script/check_source_layout.sh" --development
 source "$ROOT_DIR/script/python_env.sh"
 if ! resolve_math_anchor_python "to validate app bundle paths"; then
   exit 1

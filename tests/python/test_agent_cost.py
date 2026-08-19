@@ -52,6 +52,8 @@ def test_tool_discovery_keeps_the_full_input_contract_without_republishing_every
     )
 
     assert len(run_tool.parameters["oneOf"]) == 31
+    assert all("type" not in variant for variant in run_tool.parameters["oneOf"])
+    assert all("required" not in variant for variant in run_tool.parameters["oneOf"])
     assert output_bytes < 2_000
     assert listed_bytes < 40_000
     assert run_tool.parameters["properties"]["maxOutputBytes"]["default"] == DEFAULT_MAX_OUTPUT_BYTES

@@ -27,7 +27,8 @@ the original archive before generating any local outputs:
 license material and an SPDX SBOM inside it, verifies the complete file
 inventory and architecture, then exercises the real Plugin transport.
 The explicit `--archive-clean` lane rejects a metadata-free archive that already
-contains generated runtime files. `check_all.sh` uses the separate
+contains a virtual environment, Plugin runtime, Swift/build cache, benchmark
+receipt, or app artifact. `check_all.sh` uses the separate
 `--development` lane, so it remains repeatable after its first run generates a
 runtime. Both lanes reject symbolic links in any runtime-output path component
 and verify that the resolved output path remains inside the source tree.

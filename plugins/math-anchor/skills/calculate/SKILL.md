@@ -1,6 +1,6 @@
 ---
 name: calculate
-description: Use Math Anchor for reliability-sensitive mathematics: exact or high-precision evaluation, verification, algebra, calculus, number theory, combinatorics, linear algebra, financial math, probability, statistics, and physical quantities. Do not load it for trivial, low-risk arithmetic the model can immediately verify; trigger when precision, exactness, units, diagnostics, reuse, or consequences justify a deterministic calculation.
+description: Use Math Anchor for reliability-sensitive mathematics: exact or high-precision evaluation, verification, algebra, calculus, number theory, combinatorics, linear algebra, financial math, probability, statistics, and physical quantities. Its four tools are already registered; for a known operation call math.run directly without listing MCP resources. Do not load it for trivial, low-risk arithmetic the model can immediately verify; trigger when precision, exactness, units, diagnostics, reuse, or consequences justify a deterministic calculation.
 ---
 
 # Calculate
@@ -16,7 +16,9 @@ Let reasoning translate the user's request into mathematics, then use the runtim
 
 ## Select the operation
 
+- The four Math Anchor tools are already registered. Never call `list_mcp_resources`, inspect a source checkout, or use a shell command to discover them.
 - For an ordinary supported request, call `math.run` directly. Its executable schema contains the stable operation ids and each operation's current arguments.
+- Unit-bearing arithmetic and dimensional-compatibility checks use `quantity.evaluate`; a concrete expression such as `1 * meter + 1 * second` is a known operation and does not require search or describe.
 - Call `math.search` only when the mathematical operation is genuinely unfamiliar or ambiguous. Search using the user's task language.
 - Call `math.describe` only for the selected unfamiliar operation when its contract still needs inspection.
 

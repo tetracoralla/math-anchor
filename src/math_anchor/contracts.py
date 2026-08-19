@@ -933,6 +933,7 @@ def operation_request_variants(
     *,
     include_limits: bool,
     close_object: bool = True,
+    inherit_root_contract: bool = False,
 ) -> list[dict[str, Any]]:
     variants = []
     for operation, arguments_schema in operation_schemas:
@@ -942,11 +943,10 @@ def operation_request_variants(
         }
         if include_limits:
             properties.update(deepcopy(_LIMIT_PROPERTIES))
-        variant = {
-            "type": "object",
-            "properties": properties,
-            "required": ["operation", "arguments"],
-        }
+        variant = {"properties": properties}
+        if not inherit_root_contract:
+            variant["type"] = "object"
+            variant["required"] = ["operation", "arguments"]
         if close_object:
             variant["additionalProperties"] = False
         variants.append(variant)
@@ -971,6 +971,7 @@ def run_tool_parameters(operation_schemas: list[tuple[str, dict[str, Any]]]) -> 
             operation_schemas,
             include_limits=False,
             close_object=False,
+            inherit_root_contract=True,
         ),
     }
 

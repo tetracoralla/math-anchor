@@ -4,7 +4,9 @@
 # before the development virtualenv exists. Sets RESOLVED_MATH_ANCHOR_PYTHON.
 resolve_math_anchor_python() {
   local context="${1:-required}"
+  local rejected_root="${2:-}"
   local candidate
+  local candidate_lexical_path
   local candidate_path
 
   RESOLVED_MATH_ANCHOR_PYTHON=""
@@ -16,6 +18,16 @@ resolve_math_anchor_python() {
     else
       command -v "$candidate" >/dev/null 2>&1 || continue
       candidate_path="$(command -v "$candidate")"
+    fi
+    if [[ -n "$rejected_root" ]]; then
+      if [[ "$candidate_path" == /* ]]; then
+        candidate_lexical_path="$candidate_path"
+      else
+        candidate_lexical_path="$(pwd -P)/$candidate_path"
+      fi
+      case "$candidate_lexical_path" in
+        "$rejected_root" | "$rejected_root"/*) continue ;;
+      esac
     fi
     if "$candidate_path" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)' >/dev/null 2>&1; then
       RESOLVED_MATH_ANCHOR_PYTHON="$candidate_path"

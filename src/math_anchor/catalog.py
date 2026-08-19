@@ -26,6 +26,7 @@ from .operations import (
 MAX_SEARCH_QUERY_LENGTH = 256
 MAX_CATEGORY_LENGTH = 64
 MAX_OPERATION_ID_LENGTH = 128
+_CJK_RUN = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]+")
 
 
 _PRECISION = {
@@ -162,6 +163,16 @@ def _object(
         "properties": properties,
         "required": list(required),
     }
+
+
+def _search_tokens(normalized_query: str) -> set[str]:
+    tokens = set(re.findall(r"[a-z0-9]+", normalized_query))
+    for run in _CJK_RUN.findall(normalized_query):
+        if len(run) == 1:
+            tokens.add(run)
+        else:
+            tokens.update(run[index : index + 2] for index in range(len(run) - 1))
+    return tokens
 
 
 _SPECS = (
@@ -952,7 +963,7 @@ _SPECS = (
             {"expression": "3 * meter + 25 * centimeter", "toUnit": "meter"},
         ),
         handler=quantity.evaluate,
-        keywords=("dimensional analysis", "unit expression", "force", "compound units", "带单位表达式", "量纲分析", "单位运算"),
+        keywords=("dimensional analysis", "unit expression", "force", "compound units", "带单位表达式", "带单位的表达式", "量纲分析", "维度单位", "单位运算"),
     ),
     OperationSpec(
         id="finance.calculate",
@@ -1056,7 +1067,7 @@ def search_operations(query: str = "", category: str | None = None) -> dict[str,
             f"category must contain at most {MAX_CATEGORY_LENGTH} characters",
         )
     normalized_query = query.strip().lower()
-    tokens = set(re.findall(r"[a-z0-9]+", normalized_query))
+    tokens = _search_tokens(normalized_query)
     candidates = [spec for spec in _SPECS if category is None or spec.category == category]
     if normalized_query:
         scored: list[tuple[int, OperationSpec]] = []

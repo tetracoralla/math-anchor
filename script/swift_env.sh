@@ -29,6 +29,7 @@ configure_swift_environment() {
   if ! "$RESOLVED_MATH_ANCHOR_PYTHON" "$root_dir/script/validate_repo_paths.py" \
       --root "$root_dir" \
       "$root_dir/.build" \
+      "$root_dir/.swiftpm" \
       "$SWIFTPM_MODULECACHE_OVERRIDE" \
       "$CLANG_MODULE_CACHE_PATH"; then
     return 1

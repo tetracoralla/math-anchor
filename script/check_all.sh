@@ -2,10 +2,14 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+cd "$ROOT_DIR"
+
+# Preflight every generated path before Swift creates its module cache or any
+# later step bootstraps, packages, or replaces an artifact.
+"$ROOT_DIR/script/check_source_layout.sh" --development
+
 source "$ROOT_DIR/script/swift_env.sh"
 configure_swift_environment "$ROOT_DIR"
-
-"$ROOT_DIR/script/check_source_layout.sh" --development
 
 if [[ ! -x "$ROOT_DIR/.venv/bin/python" ]]; then
   "$ROOT_DIR/script/bootstrap.sh"

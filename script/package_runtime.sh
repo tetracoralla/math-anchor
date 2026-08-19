@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+cd "$ROOT_DIR"
 VENV_PYTHON="$ROOT_DIR/.venv/bin/python"
 PLUGIN_RUNTIME_DIR="$ROOT_DIR/plugins/math-anchor/runtime"
 PLUGIN_RUNTIME_BUNDLE="$PLUGIN_RUNTIME_DIR/math-anchor-runtime"

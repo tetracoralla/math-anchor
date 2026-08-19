@@ -19,6 +19,18 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 PLUGIN = ROOT / "plugins" / "math-anchor"
+GENERATED_OUTPUTS = (
+    ".venv/",
+    "plugins/math-anchor/runtime/",
+    ".build/",
+    ".swiftpm/",
+    "build/",
+    "dist/",
+)
+
+
+def _generated_gitignore() -> str:
+    return "\n".join(GENERATED_OUTPUTS) + "\n"
 
 
 def test_public_identity_uses_math_anchor_across_distribution_surfaces() -> None:
@@ -66,12 +78,22 @@ def test_calculation_skill_keeps_cost_and_trust_boundaries() -> None:
     assert "Do not load it for trivial, low-risk arithmetic" in skill
     assert "A successful tool response proves that the declared operation ran" in skill
     assert "Stop after the first successful call for an ordinary calculation" in skill
+    assert "Never call `list_mcp_resources`" in skill
+    assert "dimensional-compatibility checks use `quantity.evaluate`" in skill
     assert "`precision` is not a top-level `math.run` field" in skill
     assert "at least two guard digits in the first call" in skill
     agent_metadata = (
         PLUGIN / "skills" / "calculate" / "agents" / "openai.yaml"
     ).read_text()
     assert 'value: "math-anchor"' in agent_metadata
+
+
+@pytest.mark.parametrize("entrypoint", ["check_all.sh", "package_runtime.sh"])
+def test_build_entrypoints_pin_their_working_directory(entrypoint: str) -> None:
+    script = (ROOT / "script" / entrypoint).read_text(encoding="utf-8")
+    root_assignment = script.index('ROOT_DIR="$(cd ')
+    pinned_working_directory = script.index('cd "$ROOT_DIR"')
+    assert root_assignment < pinned_working_directory
 
 
 def test_app_packaging_copies_the_standalone_runtime() -> None:
@@ -107,8 +129,11 @@ def test_generated_runtime_is_ignored_by_the_source_repository() -> None:
 @pytest.mark.parametrize(
     ("ignored_relative", "generated_relative"),
     [
+        (".venv/", ".venv/generated"),
         ("plugins/math-anchor/runtime/", "plugins/math-anchor/runtime/binary"),
         (".build/", ".build/generated"),
+        (".swiftpm/", ".swiftpm/generated"),
+        ("build/", "build/generated"),
         ("dist/", "dist/generated"),
     ],
 )
@@ -136,7 +161,7 @@ def test_source_layout_reports_each_tracked_or_unignored_generated_output(
         capture_output=True,
         check=True,
     )
-    ignored_outputs = ["plugins/math-anchor/runtime/", ".build/", "dist/"]
+    ignored_outputs = list(GENERATED_OUTPUTS)
     (archive / ".gitignore").write_text(
         "\n".join(ignored_outputs) + "\n", encoding="utf-8"
     )
@@ -187,9 +212,7 @@ def test_source_archive_without_git_metadata_has_an_equivalent_layout_check(
     shutil.copy2(ROOT / "script" / "check_source_layout.sh", script_dir)
     shutil.copy2(ROOT / "script" / "validate_repo_paths.py", script_dir)
     shutil.copy2(ROOT / "script" / "python_env.sh", script_dir)
-    (archive / ".gitignore").write_text(
-        "plugins/math-anchor/runtime/\n.build/\ndist/\n", encoding="utf-8"
-    )
+    (archive / ".gitignore").write_text(_generated_gitignore(), encoding="utf-8")
 
     clean = subprocess.run(
         [str(script_dir / "check_source_layout.sh"), "--archive-clean"],
@@ -241,9 +264,7 @@ def test_source_layout_rejects_every_runtime_symlink_ancestor(
     shutil.copy2(ROOT / "script" / "check_source_layout.sh", script_dir)
     shutil.copy2(ROOT / "script" / "validate_repo_paths.py", script_dir)
     shutil.copy2(ROOT / "script" / "python_env.sh", script_dir)
-    (archive / ".gitignore").write_text(
-        "plugins/math-anchor/runtime/\n.build/\ndist/\n", encoding="utf-8"
-    )
+    (archive / ".gitignore").write_text(_generated_gitignore(), encoding="utf-8")
 
     external = tmp_path / f"external-{linked_component}"
     if linked_component == "plugins":
@@ -312,6 +333,7 @@ def test_build_and_run_refuses_dist_symlink_before_replacing_the_app_bundle(
     script_dir.mkdir(parents=True)
     for name in (
         "build_and_run.sh",
+        "check_source_layout.sh",
         "swift_env.sh",
         "validate_repo_paths.py",
         "python_env.sh",
@@ -337,16 +359,19 @@ def test_build_and_run_refuses_dist_symlink_before_replacing_the_app_bundle(
     assert sentinel.read_text(encoding="utf-8") == "outside repository"
 
 
-def test_swift_env_refuses_module_cache_parent_symlink(tmp_path: Path) -> None:
+@pytest.mark.parametrize("linked_output", [".build", ".swiftpm"])
+def test_swift_env_refuses_generated_parent_symlink(
+    tmp_path: Path, linked_output: str
+) -> None:
     archive = tmp_path / "math-anchor-source"
     script_dir = archive / "script"
     script_dir.mkdir(parents=True)
     for name in ("swift_env.sh", "validate_repo_paths.py", "python_env.sh"):
         shutil.copy2(ROOT / "script" / name, script_dir)
 
-    external_build = tmp_path / "external-build"
+    external_build = tmp_path / f"external-{linked_output.removeprefix('.')}"
     external_build.mkdir()
-    (archive / ".build").symlink_to(external_build, target_is_directory=True)
+    (archive / linked_output).symlink_to(external_build, target_is_directory=True)
 
     configured = subprocess.run(
         [
@@ -364,19 +389,29 @@ def test_swift_env_refuses_module_cache_parent_symlink(tmp_path: Path) -> None:
     assert list(external_build.iterdir()) == []
 
 
-def test_bootstrap_refuses_symlinked_existing_venv(tmp_path: Path) -> None:
+@pytest.mark.parametrize("external_exists", [False, True])
+def test_bootstrap_refuses_symlinked_venv(
+    tmp_path: Path, external_exists: bool
+) -> None:
     archive = tmp_path / "math-anchor-source"
     script_dir = archive / "script"
     script_dir.mkdir(parents=True)
-    shutil.copy2(ROOT / "script" / "bootstrap.sh", script_dir)
+    for name in (
+        "bootstrap.sh",
+        "validate_repo_paths.py",
+        "python_env.sh",
+    ):
+        shutil.copy2(ROOT / "script" / name, script_dir)
 
     external_venv = tmp_path / "external-venv"
     external_bin = external_venv / "bin"
-    external_bin.mkdir(parents=True)
+    if external_exists:
+        external_bin.mkdir(parents=True)
     marker = tmp_path / "external-venv-used"
     stub = external_bin / "python"
-    stub.write_text(f'#!/bin/sh\ntouch "{marker}"\nexit 0\n', encoding="utf-8")
-    stub.chmod(0o755)
+    if external_exists:
+        stub.write_text(f'#!/bin/sh\ntouch "{marker}"\nexit 0\n', encoding="utf-8")
+        stub.chmod(0o755)
     (archive / ".venv").symlink_to(external_venv, target_is_directory=True)
 
     bootstrapped = subprocess.run(
@@ -387,8 +422,120 @@ def test_bootstrap_refuses_symlinked_existing_venv(tmp_path: Path) -> None:
         check=False,
     )
     assert bootstrapped.returncode != 0
-    assert "symbolic link to an existing environment" in bootstrapped.stderr
+    assert "symbolic-link component" in bootstrapped.stderr
     assert not marker.exists()
+
+
+def test_release_hygiene_refuses_external_venv_before_executing_it(
+    tmp_path: Path,
+) -> None:
+    archive = tmp_path / "math-anchor-source"
+    script_dir = archive / "script"
+    script_dir.mkdir(parents=True)
+    for name in (
+        "check_release_hygiene.sh",
+        "check_source_layout.sh",
+        "validate_repo_paths.py",
+        "python_env.sh",
+    ):
+        shutil.copy2(ROOT / "script" / name, script_dir)
+    (archive / ".gitignore").write_text(_generated_gitignore(), encoding="utf-8")
+
+    external_venv = tmp_path / "external-venv"
+    external_bin = external_venv / "bin"
+    external_bin.mkdir(parents=True)
+    marker = tmp_path / "external-python-ran"
+    stub = external_bin / "python"
+    stub.write_text(f'#!/bin/sh\ntouch "{marker}"\nexit 1\n', encoding="utf-8")
+    stub.chmod(0o755)
+    (archive / ".venv").symlink_to(external_venv, target_is_directory=True)
+
+    checked = subprocess.run(
+        [str(script_dir / "check_release_hygiene.sh")],
+        cwd=archive,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert checked.returncode != 0
+    assert "symbolic-link component" in checked.stderr
+    assert not marker.exists()
+
+
+def test_source_layout_does_not_execute_explicit_python_from_unsafe_venv(
+    tmp_path: Path,
+) -> None:
+    archive = tmp_path / "math-anchor-source"
+    script_dir = archive / "script"
+    script_dir.mkdir(parents=True)
+    for name in (
+        "check_source_layout.sh",
+        "validate_repo_paths.py",
+        "python_env.sh",
+    ):
+        shutil.copy2(ROOT / "script" / name, script_dir)
+    (archive / ".gitignore").write_text(_generated_gitignore(), encoding="utf-8")
+
+    external_venv = tmp_path / "external-venv"
+    external_bin = external_venv / "bin"
+    external_bin.mkdir(parents=True)
+    marker = tmp_path / "explicit-python-ran"
+    stub = external_bin / "python"
+    stub.write_text(f'#!/bin/sh\ntouch "{marker}"\nexit 0\n', encoding="utf-8")
+    stub.chmod(0o755)
+    (archive / ".venv").symlink_to(external_venv, target_is_directory=True)
+
+    environment = os.environ.copy()
+    environment["MATH_ANCHOR_PYTHON"] = str(archive / ".venv" / "bin" / "python")
+    checked = subprocess.run(
+        [str(script_dir / "check_source_layout.sh"), "--development"],
+        cwd=archive,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert checked.returncode != 0
+    assert "symbolic-link component" in checked.stderr
+    assert not marker.exists()
+
+
+@pytest.mark.parametrize("entrypoint", ["check_all.sh", "build_and_run.sh"])
+def test_top_level_build_entrypoints_preflight_venv_before_any_build_output(
+    tmp_path: Path, entrypoint: str
+) -> None:
+    archive = tmp_path / "math-anchor-source"
+    script_dir = archive / "script"
+    script_dir.mkdir(parents=True)
+    for name in (
+        entrypoint,
+        "check_source_layout.sh",
+        "validate_repo_paths.py",
+        "python_env.sh",
+        "swift_env.sh",
+    ):
+        shutil.copy2(ROOT / "script" / name, script_dir)
+    (archive / ".gitignore").write_text(_generated_gitignore(), encoding="utf-8")
+
+    external_venv = tmp_path / "external-venv"
+    external_venv.mkdir()
+    (archive / ".venv").symlink_to(external_venv, target_is_directory=True)
+
+    arguments = [str(script_dir / entrypoint)]
+    if entrypoint == "build_and_run.sh":
+        arguments.append("--package")
+    checked = subprocess.run(
+        arguments,
+        cwd=archive,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert checked.returncode != 0
+    assert "symbolic-link component" in checked.stderr
+    assert not (archive / ".build").exists()
+    assert not (archive / "dist").exists()
+    assert list(external_venv.iterdir()) == []
 
 
 def test_release_hygiene_reports_force_tracked_runtime(tmp_path: Path) -> None:
@@ -408,9 +555,7 @@ def test_release_hygiene_reports_force_tracked_runtime(tmp_path: Path) -> None:
         capture_output=True,
         check=True,
     )
-    (archive / ".gitignore").write_text(
-        "plugins/math-anchor/runtime/\n.build/\ndist/\n", encoding="utf-8"
-    )
+    (archive / ".gitignore").write_text(_generated_gitignore(), encoding="utf-8")
     runtime = archive / "plugins" / "math-anchor" / "runtime"
     runtime.mkdir(parents=True)
     (runtime / "binary").write_bytes(b"generated")

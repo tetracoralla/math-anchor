@@ -44,6 +44,7 @@ def test_catalog_discovery_rejects_oversized_coordinates_without_reflecting_them
         ("帮我求导", "calculus.derivative"),
         ("计算这个积分", "calculus.integrate"),
         ("做单位换算", "units.convert"),
+        ("计算带单位的表达式并检测不同维度单位相加，例如 1 米 + 1 秒", "quantity.evaluate"),
         ("矩阵特征值", "matrix.eigenvalues"),
     ],
 )
