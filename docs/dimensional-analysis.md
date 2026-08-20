@@ -81,6 +81,34 @@ as valid. Its narrower unit-expression input keeps the known operation
 constructible in one call without duplicating the larger direct-vector schema
 inside Agent tool discovery.
 
+## Copy-paste CLI examples
+
+Check a formula whose dimensions are fully declared:
+
+```bash
+.venv/bin/math-anchor run dimension.check \
+  '{"left":"F","right":"m * a","symbols":{"F":"newton","m":"kilogram","a":"meter / second^2"}}'
+```
+
+Infer acceleration's dimension without choosing an arbitrary preferred unit:
+
+```bash
+.venv/bin/math-anchor run dimension.infer \
+  '{"equations":[{"left":"F","right":"m * a"}],"known":{"F":"newton","m":"kilogram"},"unknown":["a"]}'
+```
+
+Construct one exact dimensionless basis for density, speed, length, and dynamic
+viscosity:
+
+```bash
+.venv/bin/math-anchor run dimension.pi_groups \
+  '{"variables":{"rho":"kilogram / meter^3","v":"meter / second","L":"meter","mu":"pascal * second"}}'
+```
+
+The same `operation` and `arguments` objects can be sent through `math.run`.
+Known dimensional-analysis tasks do not require a preceding `math.search` or
+`math.describe` call.
+
 ## Result boundaries
 
 `dimension.check` returns `status: ok` even when

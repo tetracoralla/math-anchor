@@ -7,6 +7,11 @@ configuration, and release tooling. Generated files under
 `plugins/math-anchor/runtime/`, `.build/`, and `dist/` are intentionally ignored.
 Do not force-add them to source history.
 
+The version on `main` is the current source and Plugin milestone. Merging a
+version bump does not by itself publish or support a downloadable macOS binary.
+Record notable source behavior in `CHANGELOG.md`; create a GitHub Release only
+through the signed, notarized, matching-tag workflow described below.
+
 A clean checkout becomes runnable with:
 
 ```bash

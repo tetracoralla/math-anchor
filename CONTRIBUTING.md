@@ -41,6 +41,8 @@ Do not commit generated output under `.build/`, `dist/`, or
   calculator UI.
 - Update `pyproject.toml` and the Plugin manifest together when changing the
   product version.
+- Update `CHANGELOG.md` for user-visible operations, result semantics, routing,
+  installation, or human-app behavior.
 
 ## Report and repair a wrong calculation
 
