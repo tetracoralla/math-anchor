@@ -1,7 +1,7 @@
 {
   "name": "math-anchor",
-  "version": "0.1.0",
-  "description": "Safe exact, scientific, matrix, statistics, and unit calculations for Codex.",
+  "version": "0.2.0",
+  "description": "Safe exact, scientific, matrix, statistics, unit, and dimensional calculations for Codex.",
   "author": {
     "name": "openAdam",
     "url": "https://github.com/tetracoralla"

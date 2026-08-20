@@ -8,11 +8,14 @@ from math_anchor.runtime import execute_direct
 
 
 def test_catalog_contains_the_explicit_standard_operation_set() -> None:
-    assert len(OPERATIONS) == 31
+    assert len(OPERATIONS) == 34
     assert {
         "expression.equivalent",
         "solution.verify",
         "quantity.evaluate",
+        "dimension.check",
+        "dimension.infer",
+        "dimension.pi_groups",
         "finance.calculate",
         "matrix.solve_approximate",
         "probability.distribution",

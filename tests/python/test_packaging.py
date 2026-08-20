@@ -39,8 +39,10 @@ def test_public_identity_uses_math_anchor_across_distribution_surfaces() -> None
     transport = json.loads((PLUGIN / ".mcp.json").read_text())
 
     assert project["project"]["name"] == "math-anchor"
+    assert Version(project["project"]["version"]) >= Version("0.2.0")
     assert set(project["project"]["scripts"]) == {"math-anchor", "math-anchor-mcp"}
     assert manifest["name"] == "math-anchor"
+    assert manifest["version"] == project["project"]["version"]
     assert manifest["interface"]["displayName"] == "Math Anchor"
     assert set(transport["mcpServers"]) == {"math-anchor"}
 
@@ -79,7 +81,9 @@ def test_calculation_skill_keeps_cost_and_trust_boundaries() -> None:
     assert "A successful tool response proves that the declared operation ran" in skill
     assert "Stop after the first successful call for an ordinary calculation" in skill
     assert "Never call `list_mcp_resources`" in skill
-    assert "dimensional-compatibility checks use `quantity.evaluate`" in skill
+    assert "Use `dimension.check` for symbolic formula consistency" in skill
+    assert "`dimension.pi_groups` for a Buckingham Pi basis" in skill
+    assert "scope: dimensional_consistency_only" in skill
     assert "`precision` is not a top-level `math.run` field" in skill
     assert "at least two guard digits in the first call" in skill
     agent_metadata = (

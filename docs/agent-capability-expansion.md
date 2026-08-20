@@ -18,6 +18,9 @@ runtime can execute and validate all of these operation families:
    estimates, and stability warnings;
 6. common probability distributions and inferential statistics with methods,
    sample constraints, and numeric provenance.
+7. symbolic dimensional checking, exact constraint-based inference, and exact
+   Buckingham Pi bases with localized conflicts, honest classification, and
+   explicit basis non-uniqueness.
 
 ## Shared model
 
@@ -31,8 +34,9 @@ runtime can execute and validate all of these operation families:
   the common result envelope so Agents do not pay for the entire result union
   before each call.
 - Symbolic expressions continue through the explicit AST translator. Unit
-  expressions use their own smaller AST whitelist. Model-generated Python is
-  never executed.
+  expressions and symbolic dimension expressions use separate smaller AST
+  whitelists because a name means a unit in the former and a declared symbol
+  in the latter. Model-generated Python is never executed.
 - Exact values, decimal/binary approximations, error bounds, residuals, and
   method-dependent conclusions remain distinct fields.
 

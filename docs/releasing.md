@@ -7,6 +7,11 @@ configuration, and release tooling. Generated files under
 `plugins/math-anchor/runtime/`, `.build/`, and `dist/` are intentionally ignored.
 Do not force-add them to source history.
 
+The version on `main` is the current source and Plugin milestone. Merging a
+version bump does not by itself publish or support a downloadable macOS binary.
+Record notable source behavior in `CHANGELOG.md`; create a GitHub Release only
+through the signed, notarized, matching-tag workflow described below.
+
 A clean checkout becomes runnable with:
 
 ```bash
@@ -101,7 +106,7 @@ pass its path from `codex plugin add` back to the transport check:
 
 ```bash
 .venv/bin/python script/check_mcp.py \
-  --plugin-root ~/.codex/plugins/cache/openadam/math-anchor/0.1.0
+  --plugin-root ~/.codex/plugins/cache/openadam/math-anchor/0.2.0
 ```
 
 ## Signed macOS artifacts
@@ -115,11 +120,11 @@ identity and a configured `notarytool` keychain profile:
 2. Merge the release commit through the protected `main` branch and wait for
    both architecture jobs to pass.
 3. From a clean checkout of that commit, create an annotated tag such as
-   `git tag -a v0.1.0 -m "Math Anchor 0.1.0"`.
+   `git tag -a v0.2.0 -m "Math Anchor 0.2.0"`.
 4. Run the release command below on the matching architecture.
 
 ```bash
-export MATH_ANCHOR_APP_VERSION=0.1.0
+export MATH_ANCHOR_APP_VERSION=0.2.0
 export MATH_ANCHOR_BUILD_NUMBER=1
 export MATH_ANCHOR_CODESIGN_IDENTITY="Developer ID Application: Example (TEAMID)"
 export MATH_ANCHOR_NOTARY_PROFILE="math-anchor-notary"

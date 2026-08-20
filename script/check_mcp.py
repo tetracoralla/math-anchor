@@ -51,7 +51,7 @@ async def main(plugin_root: Path | None = None) -> None:
             assert all(tool.annotations and tool.annotations.readOnlyHint for tool in listed.tools)
             run_tool = next(tool for tool in listed.tools if tool.name == "math.run")
             batch_tool = next(tool for tool in listed.tools if tool.name == "math.batch")
-            assert len(run_tool.inputSchema["oneOf"]) == 31
+            assert len(run_tool.inputSchema["oneOf"]) == 34
             run_schema_bytes = len(
                 json.dumps(run_tool.inputSchema, ensure_ascii=False, separators=(",", ":")).encode()
             )
@@ -142,6 +142,123 @@ async def main(plugin_root: Path | None = None) -> None:
 
             described = await session.call_tool("math.describe", {"operation": "calculus.integrate"})
             assert described.structuredContent["operation"]["inputSchema"]["required"] == ["expression", "variable"]
+
+            searched_dimension = await session.call_tool(
+                "math.search", {"query": "检查物理公式的量纲一致性"}
+            )
+            assert searched_dimension.structuredContent["operations"][0]["id"] == "dimension.check"
+            described_dimension = await session.call_tool(
+                "math.describe", {"operation": "dimension.infer"}
+            )
+            assert described_dimension.structuredContent["operation"]["inputSchema"]["required"] == [
+                "equations",
+                "unknown",
+            ]
+            searched_pi_groups = await session.call_tool(
+                "math.search", {"query": "生成无量纲组合"}
+            )
+            assert searched_pi_groups.structuredContent["operations"][0]["id"] == "dimension.pi_groups"
+            described_pi_groups = await session.call_tool(
+                "math.describe", {"operation": "dimension.pi_groups"}
+            )
+            assert described_pi_groups.structuredContent["operation"]["inputSchema"]["required"] == [
+                "variables"
+            ]
+
+            dimension_check = await session.call_tool(
+                "math.run",
+                {
+                    "operation": "dimension.check",
+                    "arguments": {
+                        "left": "F",
+                        "right": "m * a",
+                        "symbols": {
+                            "F": "newton",
+                            "m": "kilogram",
+                            "a": "meter / second^2",
+                        },
+                    },
+                },
+            )
+            assert dimension_check.structuredContent["dimensionallyConsistent"] is True
+            assert dimension_check.structuredContent["scope"] == "dimensional_consistency_only"
+
+            dimension_inference = await session.call_tool(
+                "math.run",
+                {
+                    "operation": "dimension.infer",
+                    "arguments": {
+                        "equations": [{"left": "F", "right": "m * a"}],
+                        "known": {"F": "newton", "m": "kilogram"},
+                        "unknown": ["a"],
+                    },
+                },
+            )
+            assert dimension_inference.structuredContent["classification"] == "unique"
+            assert dimension_inference.structuredContent["inferred"]["a"]["dimension"] == {
+                "length": "1",
+                "time": "-2",
+            }
+
+            pi_groups = await session.call_tool(
+                "math.run",
+                {
+                    "operation": "dimension.pi_groups",
+                    "arguments": {
+                        "variables": {
+                            "rho": "kilogram / meter^3",
+                            "v": "meter / second",
+                            "L": "meter",
+                            "mu": "pascal * second",
+                        }
+                    },
+                },
+            )
+            assert pi_groups.structuredContent["scope"] == "dimensionless_basis_only"
+            assert pi_groups.structuredContent["groups"][0]["exponents"] == {
+                "L": "1",
+                "mu": "-1",
+                "rho": "1",
+                "v": "1",
+            }
+            invalid_pi_groups = await session.call_tool(
+                "math.run",
+                {
+                    "operation": "dimension.pi_groups",
+                    "arguments": {"variables": {"x": {"length": 1}}},
+                },
+            )
+            assert invalid_pi_groups.structuredContent["status"] == "error"
+            assert invalid_pi_groups.structuredContent["error"]["code"] == "E_INPUT"
+
+            derived_dimension = await session.call_tool(
+                "math.run",
+                {
+                    "operation": "dimension.check",
+                    "arguments": {
+                        "left": "x^12",
+                        "right": "x^12",
+                        "symbols": {"x": {"length": 999_983}},
+                    },
+                },
+            )
+            assert derived_dimension.structuredContent["leftDimension"] == {
+                "length": "11999796"
+            }
+
+            invalid_dimension_exponent = await session.call_tool(
+                "math.run",
+                {
+                    "operation": "dimension.check",
+                    "arguments": {
+                        "left": "x",
+                        "right": "x",
+                        "symbols": {"x": {"length": "0.5"}},
+                    },
+                },
+            )
+            assert invalid_dimension_exponent.structuredContent["status"] == "error"
+            assert invalid_dimension_exponent.structuredContent["error"]["code"] == "E_INPUT"
 
             evaluated = await session.call_tool(
                 "math.run",
@@ -271,6 +388,38 @@ async def main(plugin_root: Path | None = None) -> None:
                                 "sample": ["10", "12", "9", "11", "13"],
                             },
                         },
+                        {
+                            "operation": "dimension.check",
+                            "arguments": {
+                                "left": "d",
+                                "right": "v + 0.5 * a * t^2",
+                                "symbols": {
+                                    "d": "meter",
+                                    "v": "meter / second",
+                                    "a": "meter / second^2",
+                                    "t": "second",
+                                },
+                            },
+                        },
+                        {
+                            "operation": "dimension.infer",
+                            "arguments": {
+                                "equations": [{"left": "z", "right": "x * y"}],
+                                "known": {"z": "meter"},
+                                "unknown": ["x", "y"],
+                            },
+                        },
+                        {
+                            "operation": "dimension.pi_groups",
+                            "arguments": {
+                                "variables": {
+                                    "rho": "kilogram / meter^3",
+                                    "v": "meter / second",
+                                    "L": "meter",
+                                    "mu": "pascal * second",
+                                }
+                            },
+                        },
                     ]
                 },
             )
@@ -284,6 +433,10 @@ async def main(plugin_root: Path | None = None) -> None:
             assert advanced_results[4]["approx"] == "2.0"
             assert advanced_results[5]["value"]["approx"].startswith("0.975002")
             assert advanced_results[6]["interval"]["lower"]["approx"].startswith("9.0367")
+            assert advanced_results[7]["dimensionallyConsistent"] is False
+            assert advanced_results[7]["issues"][0]["code"] == "DIMENSION_ADD_MISMATCH"
+            assert advanced_results[8]["classification"] == "underdetermined"
+            assert advanced_results[9]["nullity"] == 1
 
             narrow_peak = await session.call_tool(
                 "math.run",
@@ -416,11 +569,11 @@ async def main(plugin_root: Path | None = None) -> None:
 
     print(
         "MCP runtime check passed through plugin transport: one-call typed run, multilingual discovery, "
-        "description, equivalence and solution verification, unit expressions, financial math, stability-aware "
+        "description, equivalence and solution verification, unit expressions, symbolic dimensional analysis and Pi groups, financial math, stability-aware "
         "linear solving, numerical integration, probability, inferential statistics, standard algebra, exact/high-precision results, "
         "schema rejection, domain errors, precision provenance, large integer output, ordered partial batch, cancellation recovery, "
         "and unsafe-input rejection. "
-        f"math.run advertises 31 input variants in {run_schema_bytes} bytes; "
+        f"math.run advertises {len(run_tool.inputSchema['oneOf'])} input variants in {run_schema_bytes} bytes; "
         f"its result contract is {run_output_schema_bytes} bytes; "
         f"compact math.batch input is {batch_schema_bytes} bytes and all four listed tools total {listed_bytes} bytes; "
         f"five warm expression calls completed in {warm_elapsed:.3f}s."
