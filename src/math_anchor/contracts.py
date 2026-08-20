@@ -60,6 +60,7 @@ _TEXT_MATRIX_REF = {"$ref": "#/$defs/textMatrix"}
 _TEXT_MATRIX_OR_NULL_REF = {"$ref": "#/$defs/textMatrixOrNull"}
 _VALUE_VECTOR_REF = {"$ref": "#/$defs/valueVector"}
 _SHAPE_REF = {"$ref": "#/$defs/shape"}
+_DIMENSION_VECTOR_REF = {"$ref": "#/$defs/dimensionVector"}
 
 _TEXT_OR_NULL_DEFINITION = {"oneOf": [{"type": "string"}, {"type": "null"}]}
 _VALUE_DEFINITION = {
@@ -80,6 +81,15 @@ _SHAPE_DEFINITION = {
     "minItems": 2,
     "maxItems": 2,
 }
+_DIMENSION_VECTOR_DEFINITION = {
+    "type": "object",
+    "propertyNames": {"type": "string", "minLength": 1, "maxLength": 64},
+    "additionalProperties": {
+        "type": "string",
+        "pattern": r"^-?(?:0|[1-9]\d*)(?:/[1-9]\d*)?$",
+    },
+    "maxProperties": 16,
+}
 _SCHEMA_DEFINITIONS = {
     "textOrNull": _TEXT_OR_NULL_DEFINITION,
     "value": _VALUE_DEFINITION,
@@ -87,6 +97,7 @@ _SCHEMA_DEFINITIONS = {
     "textMatrixOrNull": _TEXT_MATRIX_OR_NULL_DEFINITION,
     "valueVector": _VALUE_VECTOR_DEFINITION,
     "shape": _SHAPE_DEFINITION,
+    "dimensionVector": _DIMENSION_VECTOR_DEFINITION,
 }
 
 _TEXT_OR_NULL = _TEXT_OR_NULL_REF
@@ -95,6 +106,8 @@ _TEXT_MATRIX = _TEXT_MATRIX_REF
 _TEXT_MATRIX_OR_NULL = _TEXT_MATRIX_OR_NULL_REF
 _VALUE_VECTOR = _VALUE_VECTOR_REF
 _SHAPE = _SHAPE_REF
+_DIMENSION_VECTOR = _DIMENSION_VECTOR_REF
+_DIMENSION_VECTOR_OR_NULL = {"oneOf": [_DIMENSION_VECTOR, {"type": "null"}]}
 _BASE_OK_PROPERTIES = {
     "status": {"const": "ok"},
     "operation": {"type": "string"},
@@ -503,6 +516,177 @@ RUN_RESULT_SCHEMA = {
                 "convertedTo": _TEXT_OR_NULL,
             },
             ["expression", "exact", "approx", "precision", "unit", "dimensionality", "convertedTo"],
+        ),
+        _ok_schema(
+            "dimensional_analysis",
+            {
+                "scope": {"const": "dimensional_consistency_only"},
+                "dimensionallyConsistent": {"type": "boolean"},
+                "leftExpression": {"type": "string"},
+                "rightExpression": {"type": "string"},
+                "leftDimension": _DIMENSION_VECTOR_OR_NULL,
+                "rightDimension": _DIMENSION_VECTOR_OR_NULL,
+                "leftDisplay": _TEXT_OR_NULL,
+                "rightDisplay": _TEXT_OR_NULL,
+                "issues": {
+                    "type": "array",
+                    "items": {
+                        "oneOf": [
+                            {
+                                "type": "object",
+                                "additionalProperties": False,
+                                "properties": {
+                                    "code": {"const": "DIMENSION_ADD_MISMATCH"},
+                                    "expression": {"type": "string"},
+                                    "message": {"type": "string"},
+                                    "left": _DIMENSION_VECTOR,
+                                    "right": _DIMENSION_VECTOR,
+                                },
+                                "required": ["code", "expression", "message", "left", "right"],
+                            },
+                            {
+                                "type": "object",
+                                "additionalProperties": False,
+                                "properties": {
+                                    "code": {"const": "DIMENSION_EQUATION_MISMATCH"},
+                                    "expression": {"type": "string"},
+                                    "message": {"type": "string"},
+                                    "left": _DIMENSION_VECTOR,
+                                    "right": _DIMENSION_VECTOR,
+                                },
+                                "required": ["code", "expression", "message", "left", "right"],
+                            },
+                            {
+                                "type": "object",
+                                "additionalProperties": False,
+                                "properties": {
+                                    "code": {"const": "DIMENSION_FUNCTION_ARGUMENT"},
+                                    "expression": {"type": "string"},
+                                    "message": {"type": "string"},
+                                    "function": {"enum": ["sin", "cos", "tan", "log", "exp"]},
+                                    "actual": _DIMENSION_VECTOR,
+                                },
+                                "required": ["code", "expression", "message", "function", "actual"],
+                            },
+                        ]
+                    },
+                },
+            },
+            [
+                "scope",
+                "dimensionallyConsistent",
+                "leftExpression",
+                "rightExpression",
+                "leftDimension",
+                "rightDimension",
+                "leftDisplay",
+                "rightDisplay",
+                "issues",
+            ],
+        ),
+        _ok_schema(
+            "dimensional_inference",
+            {
+                "scope": {"const": "dimensional_consistency_only"},
+                "classification": {"enum": ["unique", "underdetermined", "inconsistent"]},
+                "unknowns": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "minItems": 1,
+                    "maxItems": 16,
+                    "uniqueItems": True,
+                },
+                "inferred": {
+                    "type": "object",
+                    "propertyNames": {"type": "string", "minLength": 1, "maxLength": 64},
+                    "additionalProperties": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": {
+                            "dimension": _DIMENSION_VECTOR,
+                            "display": {"type": "string"},
+                        },
+                        "required": ["dimension", "display"],
+                    },
+                    "maxProperties": 16,
+                },
+                "unresolved": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "maxItems": 16,
+                    "uniqueItems": True,
+                },
+                "rank": {"type": "integer", "minimum": 0},
+                "constraintCount": {"type": "integer", "minimum": 1},
+                "degreesOfFreedom": {"type": "integer", "minimum": 0},
+                "conflictingDimensions": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "uniqueItems": True,
+                },
+            },
+            [
+                "scope",
+                "classification",
+                "unknowns",
+                "inferred",
+                "unresolved",
+                "rank",
+                "constraintCount",
+                "degreesOfFreedom",
+                "conflictingDimensions",
+            ],
+        ),
+        _ok_schema(
+            "dimensionless_groups",
+            {
+                "scope": {"const": "dimensionless_basis_only"},
+                "basisConvention": {"const": "primitive_integer_exponents"},
+                "variables": {
+                    "type": "array",
+                    "items": {"type": "string", "minLength": 1, "maxLength": 64},
+                    "minItems": 1,
+                    "maxItems": 16,
+                    "uniqueItems": True,
+                },
+                "rank": {"type": "integer", "minimum": 0, "maximum": 16},
+                "nullity": {"type": "integer", "minimum": 0, "maximum": 16},
+                "groups": {
+                    "type": "array",
+                    "maxItems": 16,
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": {
+                            "index": {"type": "integer", "minimum": 1, "maximum": 16},
+                            "exponents": {
+                                "type": "object",
+                                "propertyNames": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 64,
+                                },
+                                "additionalProperties": {
+                                    "type": "string",
+                                    "pattern": r"^-?[1-9]\d*$",
+                                },
+                                "minProperties": 1,
+                                "maxProperties": 16,
+                            },
+                            "expression": {"type": "string", "minLength": 1, "maxLength": 2048},
+                        },
+                        "required": ["index", "exponents", "expression"],
+                    },
+                },
+            },
+            [
+                "scope",
+                "basisConvention",
+                "variables",
+                "rank",
+                "nullity",
+                "groups",
+            ],
         ),
         _ok_schema(
             "numerical_root",

@@ -1,6 +1,6 @@
 ---
 name: calculate
-description: Use Math Anchor for reliability-sensitive mathematics: exact or high-precision evaluation, verification, algebra, calculus, number theory, combinatorics, linear algebra, financial math, probability, statistics, and physical quantities. Its four tools are already registered; for a known operation call math.run directly without listing MCP resources. Do not load it for trivial, low-risk arithmetic the model can immediately verify; trigger when precision, exactness, units, diagnostics, reuse, or consequences justify a deterministic calculation.
+description: "Use Math Anchor for reliability-sensitive mathematics: exact or high-precision evaluation, verification, algebra, calculus, number theory, combinatorics, linear algebra, financial math, probability, statistics, physical quantities, and symbolic dimensional analysis. Its four tools are already registered; for a known operation call math.run directly without listing MCP resources. Do not load it for trivial, low-risk arithmetic the model can immediately verify; trigger when precision, exactness, units, diagnostics, reuse, or consequences justify a deterministic calculation."
 ---
 
 # Calculate
@@ -18,7 +18,7 @@ Let reasoning translate the user's request into mathematics, then use the runtim
 
 - The four Math Anchor tools are already registered. Never call `list_mcp_resources`, inspect a source checkout, or use a shell command to discover them.
 - For an ordinary supported request, call `math.run` directly. Its executable schema contains the stable operation ids and each operation's current arguments.
-- Unit-bearing arithmetic and dimensional-compatibility checks use `quantity.evaluate`; a concrete expression such as `1 * meter + 1 * second` is a known operation and does not require search or describe.
+- Use `quantity.evaluate` for concrete unit-bearing arithmetic such as `3 * meter + 25 * centimeter`. Use `dimension.check` for symbolic formula consistency, `dimension.infer` when declared symbol dimensions are unknown, and `dimension.pi_groups` for a Buckingham Pi basis of dimensionless products. These are known operations and do not require search or describe.
 - Call `math.search` only when the mathematical operation is genuinely unfamiliar or ambiguous. Search using the user's task language.
 - Call `math.describe` only for the selected unfamiliar operation when its contract still needs inspection.
 
@@ -41,6 +41,7 @@ Let reasoning translate the user's request into mathematics, then use the runtim
 
 - Use `solution.verify` to check supplied roots or assignments. Do not describe candidates as exhaustive unless `omissionRisk` is `none_proven`.
 - Write unit arithmetic with explicit multiplication, such as `80 * kg * 9.81 * m / s^2`, and use `toUnit` when a named result unit matters.
+- For symbolic checks and inference, declare every expression symbol with a unit or canonical dimension vector. Preserve `scope: dimensional_consistency_only`: consistency does not prove a physical law or coefficient is correct. `dimension.infer` returns dimensions, not a preferred unit. An `underdetermined` result can still contain parameter-independent entries in `inferred`; treat only `unresolved` symbols as unresolved, and never guess past them or an `inconsistent` classification. For `dimension.pi_groups`, declare each variable with a unit expression; it returns one exact primitive-integer basis, not a unique named physical quantity, so preserve its non-uniqueness warning.
 - For financial work, pass decimal text and preserve the returned period, timing, IRR-bracket, and rounding conventions. The runtime is a calculator, not a transaction quote.
 - If the runtime returns `E_INPUT`, `E_DOMAIN`, or `E_UNIT`, correct the mathematical input or ask for the missing choice. Do not replace the calculation with a mental estimate.
 - If it returns `E_TIMEOUT` or `E_MEMORY`, reduce a genuinely oversized request or explain the execution limit. Do not claim a result.

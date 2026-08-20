@@ -7,6 +7,7 @@ import threading
 import pytest
 from pydantic import ValidationError
 
+from math_anchor.catalog import OPERATIONS
 from math_anchor.contracts import (
     RUN_RESULT_SCHEMA,
     RUN_TOOL_OUTPUT_SCHEMA,
@@ -51,7 +52,7 @@ def test_tool_discovery_keeps_the_full_input_contract_without_republishing_every
         json.dumps(run_tool.output_schema, separators=(",", ":")).encode()
     )
 
-    assert len(run_tool.parameters["oneOf"]) == 31
+    assert len(run_tool.parameters["oneOf"]) == len(OPERATIONS)
     assert all("type" not in variant for variant in run_tool.parameters["oneOf"])
     assert all("required" not in variant for variant in run_tool.parameters["oneOf"])
     assert output_bytes < 2_000

@@ -3,6 +3,11 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from .dimension_expression import (
+    DIMENSION_EXPONENT_PATTERN,
+    DIMENSION_SYMBOL_PATTERN,
+    DIMENSION_VECTOR_NAME_PATTERN,
+)
 from .errors import CalculatorError
 from .models import OperationSpec
 from .operations import (
@@ -10,6 +15,7 @@ from .operations import (
     calculus,
     combinatorics,
     data,
+    dimension,
     expression,
     finance,
     inference,
@@ -39,7 +45,7 @@ _PRECISION = {
 _EXPRESSION = {
     "type": "string",
     "maxLength": 4096,
-    "description": "Safe mathematical expression. Use explicit * for multiplication and ^ or ** for powers.",
+    "description": "Safe expression; use explicit * and ^ or ** for powers.",
 }
 _MATRIX = {
     "type": "array",
@@ -150,6 +156,81 @@ _CANDIDATE = {
     "additionalProperties": {"oneOf": [{"type": "number"}, {"type": "string", "maxLength": 4096}]},
     "minProperties": 1,
     "maxProperties": 8,
+}
+_DIMENSION_EXPONENT = {
+    "oneOf": [
+        {
+            "type": "integer",
+            "minimum": -1_000_000,
+            "maximum": 1_000_000,
+        },
+        {
+            "type": "string",
+            "pattern": DIMENSION_EXPONENT_PATTERN,
+        },
+    ]
+}
+_DIMENSION_SYMBOL_PROPERTY_NAME = {
+    "pattern": DIMENSION_SYMBOL_PATTERN,
+    "maxLength": 64,
+}
+_DIMENSION_SYMBOL_NAME = {
+    "type": "string",
+    **_DIMENSION_SYMBOL_PROPERTY_NAME,
+}
+_DIMENSION_VECTOR = {
+    "type": "object",
+    "propertyNames": {
+        "pattern": DIMENSION_VECTOR_NAME_PATTERN,
+        "minLength": 1,
+        "maxLength": 64,
+    },
+    "additionalProperties": _DIMENSION_EXPONENT,
+    "maxProperties": 16,
+}
+_DIMENSION_DECLARATION = {
+    "oneOf": [
+        {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+        },
+        _DIMENSION_VECTOR,
+    ]
+}
+_DIMENSION_SYMBOLS = {
+    "type": "object",
+    "propertyNames": _DIMENSION_SYMBOL_PROPERTY_NAME,
+    "additionalProperties": _DIMENSION_DECLARATION,
+    "maxProperties": 64,
+}
+_DIMENSION_PI_VARIABLES = {
+    "type": "object",
+    "propertyNames": {
+        "pattern": r"^[A-Za-z_][A-Za-z0-9_]*$",
+        "maxLength": 64,
+    },
+    "additionalProperties": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128,
+    },
+    "minProperties": 1,
+    "maxProperties": 16,
+}
+_DIMENSION_EXPRESSION_TEXT = {
+    "type": "string",
+    "minLength": 1,
+    "maxLength": 2048,
+}
+_DIMENSION_EQUATION = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "left": _DIMENSION_EXPRESSION_TEXT,
+        "right": _DIMENSION_EXPRESSION_TEXT,
+    },
+    "required": ["left", "right"],
 }
 
 
@@ -964,6 +1045,143 @@ _SPECS = (
         ),
         handler=quantity.evaluate,
         keywords=("dimensional analysis", "unit expression", "force", "compound units", "带单位表达式", "带单位的表达式", "量纲分析", "维度单位", "单位运算"),
+    ),
+    OperationSpec(
+        id="dimension.check",
+        category="dimension",
+        summary="Check a symbolic equation for dimensional consistency.",
+        description="Check both sides and additive or function constraints with exact dimension vectors. Consistency does not prove the physical formula.",
+        input_schema=_object(
+            {
+                "left": _DIMENSION_EXPRESSION_TEXT,
+                "right": _DIMENSION_EXPRESSION_TEXT,
+                "symbols": _DIMENSION_SYMBOLS,
+            },
+            ("left", "right", "symbols"),
+        ),
+        examples=(
+            {
+                "left": "F",
+                "right": "m * a",
+                "symbols": {"F": "newton", "m": "kilogram", "a": "meter / second^2"},
+            },
+            {
+                "left": "d",
+                "right": "v * t + 0.5 * a * t^2",
+                "symbols": {
+                    "d": "meter",
+                    "v": "meter / second",
+                    "a": "meter / second^2",
+                    "t": "second",
+                },
+            },
+        ),
+        handler=dimension.check,
+        keywords=(
+            "dimensional consistency",
+            "dimensional analysis",
+            "check formula dimensions",
+            "symbolic units",
+            "physical equation",
+            "量纲检查",
+            "量纲分析",
+            "量纲一致性",
+            "公式维度",
+            "物理公式检查",
+        ),
+    ),
+    OperationSpec(
+        id="dimension.infer",
+        category="dimension",
+        summary="Infer unknown symbol dimensions from equations.",
+        description="Solve exact dimensional constraints and report unique, underdetermined, or inconsistent results. Dimensions are not units.",
+        input_schema=_object(
+            {
+                "equations": {
+                    "type": "array",
+                    "items": _DIMENSION_EQUATION,
+                    "minItems": 1,
+                    "maxItems": 32,
+                },
+                "known": _DIMENSION_SYMBOLS,
+                "unknown": {
+                    "type": "array",
+                    "items": _DIMENSION_SYMBOL_NAME,
+                    "minItems": 1,
+                    "maxItems": 16,
+                    "uniqueItems": True,
+                },
+            },
+            ("equations", "unknown"),
+        ),
+        examples=(
+            {
+                "equations": [{"left": "F", "right": "m * a"}],
+                "known": {"F": "newton", "m": "kilogram"},
+                "unknown": ["a"],
+            },
+            {
+                "equations": [{"left": "z", "right": "x * y"}],
+                "known": {"z": {"length": "1"}},
+                "unknown": ["x", "y"],
+            },
+        ),
+        handler=dimension.infer,
+        keywords=(
+            "infer dimensions",
+            "infer variable dimension",
+            "infer acceleration dimension",
+            "unknown dimension",
+            "dimension constraints",
+            "formula analysis",
+            "推断量纲",
+            "未知维度",
+            "量纲约束",
+            "公式推理",
+        ),
+    ),
+    OperationSpec(
+        id="dimension.pi_groups",
+        category="dimension",
+        summary="Construct a basis of dimensionless Buckingham Pi groups.",
+        description="Return a deterministic primitive-integer basis for the dimensionless products spanned by declared variables. Equivalent bases are possible.",
+        input_schema=_object(
+            {
+                "variables": _DIMENSION_PI_VARIABLES,
+            },
+            ("variables",),
+        ),
+        examples=(
+            {
+                "variables": {
+                    "rho": "kilogram / meter^3",
+                    "v": "meter / second",
+                    "L": "meter",
+                    "mu": "pascal * second",
+                }
+            },
+            {
+                "variables": {
+                    "force": "newton",
+                    "density": "kilogram / meter^3",
+                    "speed": "meter / second",
+                    "length": "meter",
+                }
+            },
+        ),
+        handler=dimension.pi_groups,
+        keywords=(
+            "Buckingham Pi theorem",
+            "Buckingham π theorem",
+            "dimensionless groups",
+            "dimensionless products",
+            "similarity analysis",
+            "Pi groups",
+            "无量纲组合",
+            "白金汉π定理",
+            "白金汉 Pi 定理",
+            "相似性分析",
+        ),
     ),
     OperationSpec(
         id="finance.calculate",

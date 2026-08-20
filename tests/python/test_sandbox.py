@@ -1,4 +1,5 @@
 import json
+import os
 from concurrent.futures import Future
 import threading
 import time
@@ -342,3 +343,226 @@ def test_completed_worker_output_does_not_wait_out_the_supervision_cadence(
     sandbox._wait_for_worker_progress(completed)
 
     assert time.monotonic() - started < 0.1
+
+
+def test_unserializable_arguments_do_not_leak_pool_slots() -> None:
+    # Negative regression: a parent-side failure between acquire and release
+    # previously leaked the reserved slot. MAX_REUSABLE_WORKERS rejections
+    # therefore saturated the pool, and every later operation became a
+    # queue-phase E_TIMEOUT for the rest of the process.
+    sandbox._WORKER_POOL.shutdown()
+    try:
+        for _ in range(sandbox.MAX_REUSABLE_WORKERS):
+            result = run_operation(
+                "expression.evaluate",
+                {"expression": "1+1", "variables": {"x": object()}},
+                timeout_ms=1_000,
+            )
+            assert result["status"] == "error"
+            assert result["error"]["code"] == "E_INPUT"
+            assert "JSON-serializable" in result["error"]["message"]
+
+        recovered = run_operation(
+            "expression.evaluate",
+            {"expression": "6*7"},
+            timeout_ms=2_000,
+        )
+        assert recovered["status"] == "ok"
+        assert recovered["exact"] == "42"
+    finally:
+        sandbox._WORKER_POOL.shutdown()
+
+
+def test_worker_stderr_cannot_block_and_is_reset_between_requests() -> None:
+    # Worker stderr goes to an unlinked file, not a pipe: a pipe fills at
+    # the OS buffer size and then blocks the worker mid-operation. The spill
+    # file is cleared between requests so a long-lived session also cannot
+    # accumulate diagnostics without bound.
+    sandbox._WORKER_POOL.shutdown()
+    try:
+        worker, startup_error = sandbox._start_worker(
+            sandbox.DEFAULT_MEMORY_MB * 1024 * 1024,
+            deadline=time.monotonic() + 5,
+            timeout_ms=5_000,
+            cancel_event=None,
+        )
+        assert worker is not None, startup_error
+        try:
+            os.write(worker.stderr_fd, b"w" * 200_000 + b"\nworker-diagnostics-line\n")
+            tail = worker.stderr_tail()
+            assert len(tail) <= sandbox._STDERR_TAIL_BYTES
+            assert tail.endswith("worker-diagnostics-line\n")
+
+            result, reusable = sandbox._execute_worker(
+                worker,
+                json.dumps(
+                    {
+                        "operation": "expression.evaluate",
+                        "arguments": {"expression": "6*7"},
+                        "timeoutMs": 2_000,
+                        "memoryMb": sandbox.DEFAULT_MEMORY_MB,
+                    },
+                    separators=(",", ":"),
+                )
+                + "\n",
+                deadline=time.monotonic() + 2,
+                timeout_ms=2_000,
+                memory_mb=sandbox.DEFAULT_MEMORY_MB,
+                cancel_event=None,
+            )
+            assert reusable is True
+            assert result["status"] == "ok"
+            assert result["exact"] == "42"
+
+            worker.reset_stderr()
+            assert os.fstat(worker.stderr_fd).st_size == 0
+        finally:
+            worker.terminate()
+    finally:
+        sandbox._WORKER_POOL.shutdown()
+
+
+def test_warm_worker_pool_prestarts_one_reusable_worker() -> None:
+    sandbox._WORKER_POOL.shutdown()
+    try:
+        sandbox.warm_worker_pool()
+        deadline = time.monotonic() + sandbox.WORKER_PREWARM_BUDGET_SECONDS + 5
+        while not sandbox._WORKER_POOL.available and time.monotonic() < deadline:
+            time.sleep(0.02)
+        assert sandbox._WORKER_POOL.total == 1
+        assert len(sandbox._WORKER_POOL.available) == 1
+        prewarmed_pid = sandbox._WORKER_POOL.available[0].process.pid
+
+        result = run_operation("expression.evaluate", {"expression": "6*7"})
+        assert result["exact"] == "42"
+        # The warmed worker was reused, not replaced by a fresh spawn.
+        assert sandbox._WORKER_POOL.available[-1].process.pid == prewarmed_pid
+    finally:
+        sandbox._WORKER_POOL.shutdown()
+
+
+def test_warm_worker_pool_is_idempotent() -> None:
+    sandbox._WORKER_POOL.shutdown()
+    try:
+        for _ in range(sandbox.MAX_REUSABLE_WORKERS + 2):
+            sandbox.warm_worker_pool()
+        deadline = time.monotonic() + sandbox.WORKER_PREWARM_BUDGET_SECONDS + 5
+        while not sandbox._WORKER_POOL.available and time.monotonic() < deadline:
+            time.sleep(0.02)
+
+        assert sandbox._WORKER_POOL.total == 1
+        assert len(sandbox._WORKER_POOL.available) == 1
+    finally:
+        sandbox._WORKER_POOL.shutdown()
+
+
+def test_shutdown_invalidates_an_inflight_prewarm(monkeypatch) -> None:
+    isolated_pool = sandbox._WorkerPool(maximum=1)
+    monkeypatch.setattr(sandbox, "_WORKER_POOL", isolated_pool)
+    startup_entered = threading.Event()
+    allow_startup_to_finish = threading.Event()
+    worker_terminated = threading.Event()
+
+    class FakeWorker:
+        pool_generation: int | None = None
+
+        @property
+        def is_running(self) -> bool:
+            return not worker_terminated.is_set()
+
+        def reset_stderr(self) -> None:
+            pass
+
+        def terminate(self) -> None:
+            worker_terminated.set()
+
+    def delayed_start(*_args, **_kwargs):
+        startup_entered.set()
+        assert allow_startup_to_finish.wait(timeout=2)
+        return FakeWorker(), None
+
+    monkeypatch.setattr(sandbox, "_start_worker", delayed_start)
+    sandbox.warm_worker_pool()
+    assert startup_entered.wait(timeout=1)
+
+    isolated_pool.shutdown()
+    allow_startup_to_finish.set()
+    assert worker_terminated.wait(timeout=1)
+    with isolated_pool.condition:
+        assert isolated_pool.total == 0
+        assert isolated_pool.available == []
+
+
+def test_unserializable_error_obeys_the_output_budget() -> None:
+    oversized_type = type("X" * 200_000, (), {})
+    result = run_operation(
+        "expression.evaluate",
+        {"expression": "1+1", "variables": {"x": oversized_type()}},
+        max_output_bytes=1_024,
+    )
+    encoded = json.dumps(result, ensure_ascii=False, separators=(",", ":")).encode()
+
+    assert result["status"] == "error"
+    assert result["error"]["code"] == "E_OUTPUT_LIMIT"
+    assert len(encoded) <= 1_024
+
+
+def test_worker_startup_exception_does_not_leak_a_pool_slot(monkeypatch) -> None:
+    isolated_pool = sandbox._WorkerPool(maximum=1)
+    monkeypatch.setattr(sandbox, "_WORKER_POOL", isolated_pool)
+    monkeypatch.setattr(
+        sandbox,
+        "_start_worker",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("simulated")),
+    )
+
+    result = run_operation(
+        "expression.evaluate",
+        {"expression": "1+1"},
+        timeout_ms=1_000,
+    )
+
+    assert result["status"] == "error"
+    assert result["error"] == {
+        "code": "E_RUNTIME",
+        "message": "worker startup failed: RuntimeError",
+    }
+    assert isolated_pool.total == 0
+
+
+def test_worker_supervision_exception_is_structured_and_releases_the_slot(
+    monkeypatch,
+) -> None:
+    isolated_pool = sandbox._WorkerPool(maximum=1)
+    monkeypatch.setattr(sandbox, "_WORKER_POOL", isolated_pool)
+    try:
+        real_execute = sandbox._execute_worker
+        monkeypatch.setattr(
+            sandbox,
+            "_execute_worker",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("simulated")),
+        )
+
+        result = run_operation(
+            "expression.evaluate",
+            {"expression": "1+1"},
+            timeout_ms=2_000,
+        )
+
+        assert result["status"] == "error"
+        assert result["error"] == {
+            "code": "E_RUNTIME",
+            "message": "worker supervision failed: RuntimeError",
+        }
+        assert isolated_pool.total == 0
+
+        monkeypatch.setattr(sandbox, "_execute_worker", real_execute)
+        recovered = run_operation(
+            "expression.evaluate",
+            {"expression": "6*7"},
+            timeout_ms=2_000,
+        )
+        assert recovered["status"] == "ok"
+        assert recovered["exact"] == "42"
+    finally:
+        isolated_pool.shutdown()

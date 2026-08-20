@@ -6,6 +6,7 @@ import os
 import psutil
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from concurrent.futures import Future, ThreadPoolExecutor, wait
@@ -27,6 +28,12 @@ DEFAULT_MEMORY_MB = 1024
 STARTUP_TIMEOUT_MS = 5_000
 MAX_REUSABLE_WORKERS = 4
 WORKER_POLL_SECONDS = 0.025
+WORKER_PREWARM_BUDGET_SECONDS = 10.0
+# Worker stderr is redirected to an unlinked file, not a pipe: an undrained
+# pipe can fill (~64 KiB) over a long-lived session and silently block the
+# worker mid-operation. The file has no such bound, and diagnostics read
+# only this bounded tail.
+_STDERR_TAIL_BYTES = 8_192
 _BATCH_ITEM_FIELDS = {
     "operation",
     "arguments",
@@ -45,12 +52,38 @@ def _error(code: str, message: str, details: dict[str, Any] | None = None) -> di
 
 
 class _ReusableWorker:
-    def __init__(self, process: subprocess.Popen[str]) -> None:
+    def __init__(self, process: subprocess.Popen[str], stderr_fd: int) -> None:
         self.process = process
+        self.stderr_fd = stderr_fd
+        self.pool_generation: int | None = None
 
     @property
     def is_running(self) -> bool:
         return self.process.poll() is None
+
+    def stderr_tail(self) -> str:
+        return _stderr_tail(self.stderr_fd)
+
+    def reset_stderr(self) -> None:
+        """Discard completed-request diagnostics before the next lease."""
+        if self.stderr_fd == -1:
+            return
+        try:
+            # The worker is idle when it is returned to the pool. Its stderr
+            # descriptor shares this file offset, so truncation plus seek
+            # starts the next request from a clean diagnostic record. Keeping
+            # an old tail could misreport a prior warning as a later crash.
+            os.ftruncate(self.stderr_fd, 0)
+            os.lseek(self.stderr_fd, 0, os.SEEK_SET)
+        except OSError:
+            # Diagnostic cleanup must not turn a completed calculation into
+            # a failure. A later terminate still closes the descriptor.
+            pass
+
+    def close(self) -> None:
+        if self.stderr_fd != -1:
+            os.close(self.stderr_fd)
+            self.stderr_fd = -1
 
     def terminate(self) -> None:
         if self.process.poll() is None:
@@ -59,6 +92,7 @@ class _ReusableWorker:
             self.process.wait(timeout=1)
         except subprocess.TimeoutExpired:
             pass
+        self.close()
 
 
 class _WorkerPool:
@@ -67,6 +101,8 @@ class _WorkerPool:
         self.condition = threading.Condition()
         self.available: list[_ReusableWorker] = []
         self.total = 0
+        self.generation = 0
+        self.prewarm_generation: int | None = None
 
     def acquire(
         self,
@@ -87,8 +123,19 @@ class _WorkerPool:
                         return worker, None
                     self.total -= 1
                     worker.terminate()
+                if self.prewarm_generation == self.generation:
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        return None, _error(
+                            "E_TIMEOUT",
+                            f"operation exceeded {timeout_ms} ms while waiting for a worker",
+                            {"phase": "queue", "timeoutMs": timeout_ms},
+                        )
+                    self.condition.wait(timeout=min(remaining, WORKER_POLL_SECONDS))
+                    continue
                 if self.total < self.maximum:
                     self.total += 1
+                    generation = self.generation
                     break
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
@@ -99,33 +146,90 @@ class _WorkerPool:
                     )
                 self.condition.wait(timeout=min(remaining, WORKER_POLL_SECONDS))
 
-        worker, error = _start_worker(
-            memory_bytes,
-            deadline=deadline,
-            timeout_ms=timeout_ms,
-            cancel_event=cancel_event,
-        )
+        try:
+            worker, error = _start_worker(
+                memory_bytes,
+                deadline=deadline,
+                timeout_ms=timeout_ms,
+                cancel_event=cancel_event,
+            )
+        except Exception as startup_exception:
+            worker = None
+            error = _error(
+                "E_RUNTIME",
+                f"worker startup failed: {type(startup_exception).__name__}",
+            )
         if worker is None:
             with self.condition:
                 self.total -= 1
                 self.condition.notify()
             return None, error
+        worker.pool_generation = generation
         return worker, None
 
     def release(self, worker: _ReusableWorker, *, reusable: bool) -> None:
+        terminate = False
         with self.condition:
-            if reusable and worker.is_running:
+            if (
+                reusable
+                and worker.is_running
+                and worker.pool_generation == self.generation
+            ):
+                worker.reset_stderr()
                 self.available.append(worker)
             else:
                 self.total -= 1
-                worker.terminate()
+                terminate = True
             self.condition.notify()
+        if terminate:
+            worker.terminate()
+
+    def reserve_prewarm(self) -> int | None:
+        """Reserve exactly one cold-pool slot for asynchronous startup."""
+        with self.condition:
+            if self.total != 0 or self.prewarm_generation is not None:
+                return None
+            generation = self.generation
+            self.total += 1
+            self.prewarm_generation = generation
+            return generation
+
+    def finish_prewarm(
+        self,
+        worker: _ReusableWorker | None,
+        *,
+        generation: int,
+    ) -> None:
+        terminate = worker is not None
+        with self.condition:
+            owns_reservation = self.prewarm_generation == generation
+            if owns_reservation:
+                self.prewarm_generation = None
+            if (
+                owns_reservation
+                and generation == self.generation
+                and worker is not None
+                and worker.is_running
+            ):
+                worker.pool_generation = generation
+                worker.reset_stderr()
+                self.available.append(worker)
+                terminate = False
+            elif owns_reservation:
+                self.total -= 1
+            self.condition.notify_all()
+        if terminate and worker is not None:
+            worker.terminate()
 
     def shutdown(self) -> None:
         with self.condition:
+            self.generation += 1
             workers = self.available
             self.available = []
             self.total -= len(workers)
+            if self.prewarm_generation is not None:
+                self.total -= 1
+                self.prewarm_generation = None
             self.condition.notify_all()
         for worker in workers:
             worker.terminate()
@@ -133,6 +237,37 @@ class _WorkerPool:
 
 _WORKER_POOL = _WorkerPool()
 atexit.register(_WORKER_POOL.shutdown)
+
+
+def warm_worker_pool() -> None:
+    """Pre-start one reusable worker on a background thread.
+
+    A session's first math.run or math.batch call otherwise pays the full
+    worker startup (~200 ms warm-cache, more on a cold cache) after the
+    client is already interactive. Warming overlaps that startup with MCP
+    initialization. Best effort: any failure leaves the pool empty and the
+    first call starts a worker normally.
+    """
+
+    generation = _WORKER_POOL.reserve_prewarm()
+    if generation is None:
+        return
+
+    def warm() -> None:
+        worker: _ReusableWorker | None = None
+        try:
+            worker, _unused = _start_worker(
+                DEFAULT_MEMORY_MB * 1024 * 1024,
+                deadline=time.monotonic() + WORKER_PREWARM_BUDGET_SECONDS,
+                timeout_ms=DEFAULT_TIMEOUT_MS,
+                cancel_event=None,
+            )
+        except Exception:
+            pass
+        finally:
+            _WORKER_POOL.finish_prewarm(worker, generation=generation)
+
+    threading.Thread(target=warm, name="calculator-worker-prewarm", daemon=True).start()
 
 
 def run_operation(
@@ -173,6 +308,18 @@ def run_operation(
         "timeoutMs": timeout_ms,
         "memoryMb": memory_mb,
     }
+    try:
+        request_line = json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n"
+    except (TypeError, ValueError, OverflowError, RecursionError) as error:
+        # Transport payloads are JSON by construction, but direct library
+        # callers can hand over values json cannot encode. Reject before a
+        # worker is acquired so no pool slot is ever tied to a request that
+        # cannot be sent.
+        return apply_output_policy(
+            _error("E_INPUT", f"arguments must be JSON-serializable: {error}"),
+            result_mode=result_mode,
+            max_output_bytes=max_output_bytes,
+        )
     memory_bytes = memory_mb * 1024 * 1024
     worker, startup_error = _WORKER_POOL.acquire(
         memory_bytes,
@@ -192,20 +339,62 @@ def run_operation(
             f"operation exceeded {timeout_ms} ms before execution began",
             {"phase": "startup", "timeoutMs": timeout_ms},
         )
-    result, reusable = _execute_worker(
-        worker,
-        payload,
-        deadline=deadline,
-        timeout_ms=timeout_ms,
-        memory_mb=memory_mb,
-        cancel_event=cancel_event,
-    )
-    _WORKER_POOL.release(worker, reusable=reusable)
+    reusable = False
+    try:
+        result, reusable = _execute_worker(
+            worker,
+            request_line,
+            deadline=deadline,
+            timeout_ms=timeout_ms,
+            memory_mb=memory_mb,
+            cancel_event=cancel_event,
+        )
+    except Exception as execution_error:
+        result = _error(
+            "E_RUNTIME",
+            f"worker supervision failed: {type(execution_error).__name__}",
+        )
+    finally:
+        # An unexpected parent-side exception between acquire and release
+        # previously leaked the slot permanently; four leaks saturated the
+        # pool and every later operation became a queue-phase E_TIMEOUT.
+        # An unwritten worker state is never reusable, so it is destroyed.
+        _WORKER_POOL.release(worker, reusable=reusable)
     return apply_output_policy(
         result,
         result_mode=result_mode,
         max_output_bytes=max_output_bytes,
     )
+
+
+def _worker_stderr_file() -> int:
+    descriptor, path = tempfile.mkstemp(prefix="math-anchor-worker-", suffix=".err")
+    # Unlink immediately: the tail log needs no path, and the space is
+    # reclaimed as soon as the last descriptor closes.
+    try:
+        os.unlink(path)
+    except OSError:
+        os.close(descriptor)
+        raise
+    return descriptor
+
+
+def _stderr_tail(descriptor: int) -> str:
+    # os.pread leaves the shared file offset untouched, so the worker keeps
+    # appending while diagnostics read a stable bounded tail.
+    return _stderr_tail_bytes(descriptor).decode("utf-8", "replace")
+
+
+def _stderr_tail_bytes(descriptor: int) -> bytes:
+    try:
+        size = os.fstat(descriptor).st_size
+        return os.pread(
+            descriptor,
+            min(size, _STDERR_TAIL_BYTES),
+            max(0, size - _STDERR_TAIL_BYTES),
+        )
+    except OSError:
+        return b""
 
 
 def _start_worker(
@@ -225,32 +414,39 @@ def _start_worker(
         else [sys.executable, "-m", "math_anchor.worker", "--persistent"]
     )
     try:
+        stderr_fd = _worker_stderr_file()
+    except OSError as error:
+        return None, _error("E_RUNTIME", f"worker diagnostics could not be created: {error}")
+    try:
         process = subprocess.Popen(
             command,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stderr=stderr_fd,
             text=True,
             bufsize=1,
             env=environment,
         )
     except OSError as error:
+        os.close(stderr_fd)
         return None, _error("E_RUNTIME", f"worker failed to start: {error}")
     startup_error = _await_worker_ready(
         process,
         memory_bytes,
+        stderr_fd=stderr_fd,
         deadline=deadline,
         timeout_ms=timeout_ms,
         cancel_event=cancel_event,
     )
     if startup_error is not None:
+        # _await_worker_ready consumed the descriptor on every failure path.
         return None, startup_error
-    return _ReusableWorker(process), None
+    return _ReusableWorker(process, stderr_fd), None
 
 
 def _execute_worker(
     worker: _ReusableWorker,
-    payload: dict[str, Any],
+    request_line: str,
     *,
     deadline: float,
     timeout_ms: int,
@@ -262,7 +458,7 @@ def _execute_worker(
     if process.stdin is None or process.stdout is None:
         return _error("E_RUNTIME", "worker pipes were unavailable"), False
     try:
-        process.stdin.write(json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n")
+        process.stdin.write(request_line)
         process.stdin.flush()
     except (BrokenPipeError, OSError):
         return _error("E_RUNTIME", "worker input was unavailable"), False
@@ -303,7 +499,7 @@ def _execute_worker(
 
     if not response_line:
         return_code = process.poll()
-        stderr = process.stderr.read().strip() if process.stderr is not None and return_code is not None else ""
+        stderr = worker.stderr_tail().strip() if return_code is not None else ""
         message = stderr.splitlines()[-1] if stderr else "worker terminated"
         details = {"returnCode": return_code} if return_code is not None else None
         return _error("E_RUNTIME", message, details), False
@@ -335,12 +531,14 @@ def _await_worker_ready(
     process: subprocess.Popen[str],
     memory_bytes: int,
     *,
+    stderr_fd: int,
     deadline: float,
     timeout_ms: int,
     cancel_event: threading.Event | None,
 ) -> dict[str, Any] | None:
     if process.stdout is None:
         process.kill()
+        os.close(stderr_fd)
         return _error("E_RUNTIME", "worker output was unavailable")
     with ThreadPoolExecutor(max_workers=1, thread_name_prefix="calculator-worker-startup") as executor:
         readiness = executor.submit(process.stdout.readline)
@@ -349,10 +547,12 @@ def _await_worker_ready(
             if cancel_event is not None and cancel_event.is_set():
                 process.kill()
                 readiness.result()
+                os.close(stderr_fd)
                 return _error("E_CANCELLED", "operation was cancelled")
             if time.monotonic() >= startup_deadline:
                 process.kill()
                 readiness.result()
+                os.close(stderr_fd)
                 if startup_deadline == deadline:
                     return _error(
                         "E_TIMEOUT",
@@ -364,6 +564,7 @@ def _await_worker_ready(
             if resident_bytes is not None and resident_bytes > memory_bytes:
                 process.kill()
                 readiness.result()
+                os.close(stderr_fd)
                 return _error("E_MEMORY", "worker exceeded the memory limit during startup")
             if process.poll() is not None:
                 break
@@ -374,8 +575,9 @@ def _await_worker_ready(
     except json.JSONDecodeError:
         ready = None
     if ready != {"ready": True}:
-        stderr = process.stderr.read().strip() if process.stderr is not None else ""
+        stderr = _stderr_tail(stderr_fd).strip()
         process.kill()
+        os.close(stderr_fd)
         return _error("E_RUNTIME", stderr.splitlines()[-1] if stderr else "worker failed to start")
     return None
 

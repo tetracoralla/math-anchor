@@ -69,6 +69,12 @@ def main() -> None:
         fail("calculate Skill must place precision inside operation arguments")
     if "at least two guard digits in the first call" not in calculate_text:
         fail("calculate Skill must avoid a second call for decimal-place rounding")
+    if "Use `dimension.check` for symbolic formula consistency" not in calculate_text:
+        fail("calculate Skill must route symbolic dimensional checks separately from quantities")
+    if "`dimension.pi_groups` for a Buckingham Pi basis" not in calculate_text:
+        fail("calculate Skill must route dimensionless-group requests directly")
+    if "scope: dimensional_consistency_only" not in calculate_text:
+        fail("calculate Skill must preserve the dimensional-analysis claim boundary")
     agent_metadata = calculate_skill.parent / "agents" / "openai.yaml"
     if not agent_metadata.is_file():
         fail("calculate Skill must declare its Math Anchor MCP dependency")

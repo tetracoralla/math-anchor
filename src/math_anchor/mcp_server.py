@@ -20,7 +20,7 @@ from .catalog import (
 from .contracts import BATCH_RESULT_SCHEMA, RUN_TOOL_OUTPUT_SCHEMA, batch_item_parameters, batch_tool_parameters, run_tool_parameters
 from .errors import CalculatorError
 from .output_policy import DEFAULT_BATCH_MAX_OUTPUT_BYTES, DEFAULT_MAX_OUTPUT_BYTES
-from .sandbox import run_batch, run_operation
+from .sandbox import run_batch, run_operation, warm_worker_pool
 
 
 _READ_ONLY = ToolAnnotations(
@@ -58,39 +58,9 @@ def _caught(callable_: Any, *arguments: Any) -> dict[str, Any]:
 
 
 @mcp.tool(
-    name="math.search",
-    title="Search mathematical operations",
-    description="Search the compact operation catalog by task language and optional category. Use before math.describe when the operation id is not already known.",
-    annotations=_READ_ONLY,
-    structured_output=True,
-)
-def math_search(
-    query: Annotated[str, Field(max_length=MAX_SEARCH_QUERY_LENGTH)] = "",
-    category: Annotated[str | None, Field(max_length=MAX_CATEGORY_LENGTH)] = None,
-) -> dict[str, Any]:
-    return _caught(search_operations, query, category)
-
-
-@mcp.tool(
-    name="math.describe",
-    title="Describe a mathematical operation",
-    description="Return the exact input schema and examples for an unfamiliar operation selected from math.search.",
-    annotations=_READ_ONLY,
-    structured_output=True,
-)
-def math_describe(
-    operation: Annotated[
-        str,
-        Field(min_length=1, max_length=MAX_OPERATION_ID_LENGTH),
-    ],
-) -> dict[str, Any]:
-    return _caught(describe_operation, operation)
-
-
-@mcp.tool(
     name="math.run",
     title="Run a mathematical operation",
-    description="Calculate, solve, differentiate, integrate, convert units, or run another supported mathematical operation in one typed call. Each operation validates its own arguments and returns exact and approximate values separately. One successful ordinary call is sufficient; do not replay identical inputs as validation.",
+    description="Calculate, solve, verify, differentiate, integrate, analyze dimensions, convert units, or run another supported typed operation. Exact and approximate results stay separate. One successful ordinary call is sufficient.",
     annotations=_READ_ONLY,
     structured_output=True,
 )
@@ -117,7 +87,7 @@ async def math_run(
 @mcp.tool(
     name="math.batch",
     title="Run mathematical operations in a batch",
-    description="Run 1 to 32 independent operations in input order. Each item has operation, arguments, and optional timeoutMs or memoryMb.",
+    description="Run 1 to 32 independent operations in order with per-item limits.",
     annotations=_READ_ONLY,
     structured_output=True,
 )
@@ -139,6 +109,36 @@ async def math_batch(
             max_output_bytes=maxOutputBytes,
         )
     )
+
+
+@mcp.tool(
+    name="math.search",
+    title="Search mathematical operations",
+    description="Search operations only when the id is unknown; otherwise use math.run.",
+    annotations=_READ_ONLY,
+    structured_output=True,
+)
+def math_search(
+    query: Annotated[str, Field(max_length=MAX_SEARCH_QUERY_LENGTH)] = "",
+    category: Annotated[str | None, Field(max_length=MAX_CATEGORY_LENGTH)] = None,
+) -> dict[str, Any]:
+    return _caught(search_operations, query, category)
+
+
+@mcp.tool(
+    name="math.describe",
+    title="Describe a mathematical operation",
+    description="Get schema and examples for one operation selected by math.search.",
+    annotations=_READ_ONLY,
+    structured_output=True,
+)
+def math_describe(
+    operation: Annotated[
+        str,
+        Field(min_length=1, max_length=MAX_OPERATION_ID_LENGTH),
+    ],
+) -> dict[str, Any]:
+    return _caught(describe_operation, operation)
 
 
 async def _run_cancellable(callable_: Any, *arguments: Any, **keywords: Any) -> dict[str, Any]:
@@ -206,6 +206,9 @@ _install_generated_tool_contracts()
 
 
 def main() -> None:
+    # Overlap one worker's startup with client initialization so the first
+    # calculation does not pay it once the session is already interactive.
+    warm_worker_pool()
     mcp.run(transport="stdio")
 
 
