@@ -62,6 +62,7 @@ def test_plugin_transport_stays_inside_the_plugin_bundle() -> None:
     cwd = (PLUGIN / server["cwd"]).resolve()
     executable = (cwd / server["command"]).resolve()
 
+    assert server["startup_timeout_sec"] == 30
     assert cwd == PLUGIN.resolve()
     assert executable.is_relative_to(PLUGIN.resolve())
 
