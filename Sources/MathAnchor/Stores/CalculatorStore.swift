@@ -20,10 +20,14 @@ final class CalculatorStore: ObservableObject {
     private var evaluationExpression = ""
     private var memoryEvaluation: String?
     private var lastExact: String?
+    private var lastSubmittedEvaluation = ""
     private var showingResult = false
     private var inputRevision = 0
     private var activeEvaluationID: UUID?
+    private var evaluationTask: Task<Void, Never>?
     private var semanticUndo: [String: ExpressionState] = [:]
+
+    private let maximumOperandDigits = 18
 
     private struct ExpressionState {
         let visible: String
@@ -114,17 +118,6 @@ final class CalculatorStore: ObservableObject {
         transformExpressions(visible: visible, evaluation: evaluation)
     }
 
-    func applyToCurrent(_ function: String) {
-        guard !expression.isEmpty else {
-            appendFunction(function)
-            return
-        }
-        transformExpressions(
-            visible: "\(function)(\(expression))",
-            evaluation: "\(function)(\(evaluationExpression))"
-        )
-    }
-
     func square() {
         raiseCurrentExpression(to: 2)
     }
@@ -134,11 +127,15 @@ final class CalculatorStore: ObservableObject {
     }
 
     func reciprocal() {
-        guard !expression.isEmpty else { return }
-        transformExpressions(
-            visible: "1/(\(expression))",
-            evaluation: "1/(\(evaluationExpression))"
-        )
+        guard !expression.isEmpty, !endsWithOperatorOrOpeningParenthesis(expression) else {
+            appendFunction("1/")
+            return
+        }
+        prepareResultForUnaryEditing()
+        guard let visible = wrappingTrailingOperand(prefix: "1/", in: expression),
+              let evaluation = wrappingTrailingOperand(prefix: "1/", in: evaluationExpression)
+        else { return }
+        transformExpressions(visible: visible, evaluation: evaluation)
     }
 
     func clear() {
@@ -156,7 +153,18 @@ final class CalculatorStore: ObservableObject {
     func backspace() {
         guard !expression.isEmpty else { return }
         if showingResult {
-            clear()
+            // Undo on the result returns to editing the value itself rather
+            // than discarding the whole calculation.
+            invalidatePendingEvaluation()
+            let plain = ExpressionEditing.normalizedForRuntime(display)
+            expression = plain
+            evaluationExpression = plain
+            lastExact = plain
+            lastSubmittedEvaluation = ""
+            showingResult = false
+            distinctExactResult = nil
+            display = expressionForDisplay.isEmpty ? "0" : expressionForDisplay
+            errorMessage = nil
             return
         }
         invalidatePendingEvaluation()
@@ -190,7 +198,7 @@ final class CalculatorStore: ObservableObject {
     }
 
     func percent() {
-        guard !expression.isEmpty else { return }
+        guard !expression.isEmpty, !endsWithOperatorOrOpeningParenthesis(expression) else { return }
         prepareResultForUnaryEditing()
         guard let visibleSplit = ExpressionEditing.trailingOperand(in: expression),
               let evaluationSplit = ExpressionEditing.trailingOperand(in: evaluationExpression),
@@ -203,8 +211,13 @@ final class CalculatorStore: ObservableObject {
            evaluationSplit.operatorToken == "+" || evaluationSplit.operatorToken == "-"
         {
             evaluationReplacement = "((\(left))*(\(evaluationSplit.operand))/100)"
-        } else {
+        } else if evaluationSplit.left != nil {
             evaluationReplacement = "(\(evaluationSplit.operand))/100"
+        } else {
+            // Without a left operand the percent divides the operand itself.
+            // Appending (rather than wrapping) keeps the executable string's
+            // open parentheses in lockstep with the visible suffix notation.
+            evaluationReplacement = "\(evaluationSplit.operand)/100"
         }
         guard let visible = ExpressionEditing.replacingTrailingOperand(
             in: expression,
@@ -219,17 +232,29 @@ final class CalculatorStore: ObservableObject {
 
     func evaluate() {
         guard !isEvaluating, !expression.isEmpty else { return }
-        let submittedExpression = evaluationExpression
+        if showingResult && evaluationExpression == lastSubmittedEvaluation {
+            // Re-pressing equals on the already-shown result is a repeat of
+            // the completed submission, not a new calculation.
+            return
+        }
+        // Familiar calculators close still-open groups at submission instead
+        // of reporting a syntax error for work the machine can finish itself.
+        let openGroups = unmatchedOpeningParentheses(in: evaluationExpression)
+        let submittedExpression =
+            evaluationExpression + String(repeating: ")", count: openGroups)
         let submittedVisibleExpression = expression
         let submittedRevision = inputRevision
         let evaluationID = UUID()
         activeEvaluationID = evaluationID
+        lastSubmittedEvaluation = submittedExpression
         isEvaluating = true
         errorMessage = nil
-        Task {
+        evaluationTask = Task {
+            guard !Task.isCancelled else { return }
             do {
                 let result = try await runtime.evaluate(expression: submittedExpression, precision: 16)
                 guard isCurrentEvaluation(evaluationID, revision: submittedRevision) else { return }
+                evaluationTask = nil
                 activeEvaluationID = nil
                 isEvaluating = false
                 lastExact = result.continuationValue
@@ -249,6 +274,7 @@ final class CalculatorStore: ObservableObject {
                 historyStore.save(history)
             } catch {
                 guard isCurrentEvaluation(evaluationID, revision: submittedRevision) else { return }
+                evaluationTask = nil
                 activeEvaluationID = nil
                 isEvaluating = false
                 errorMessage = error.localizedDescription
@@ -261,6 +287,7 @@ final class CalculatorStore: ObservableObject {
         expression = entry.expression
         evaluationExpression = entry.executionExpression
             ?? ExpressionEditing.evaluationExpression(forVisible: entry.expression)
+        lastSubmittedEvaluation = evaluationExpression
         display = entry.result
         lastExact = entry.exact ?? entry.result
         distinctExactResult = entry.exact == entry.result ? nil : entry.exact
@@ -274,7 +301,13 @@ final class CalculatorStore: ObservableObject {
     }
 
     func copyResult() {
-        clipboard.write(display)
+        if showingResult {
+            clipboard.write(display)
+        } else {
+            // Mid-entry the display carries presentation glyphs (×, ÷, −);
+            // what lands on the pasteboard must stay plain ASCII.
+            clipboard.write(ExpressionEditing.normalizedForRuntime(expression))
+        }
     }
 
     func copyExactResult() {
@@ -371,6 +404,8 @@ final class CalculatorStore: ObservableObject {
     }
 
     private func invalidatePendingEvaluation() {
+        evaluationTask?.cancel()
+        evaluationTask = nil
         runtime.cancelPendingEvaluation()
         inputRevision &+= 1
         activeEvaluationID = nil
@@ -415,8 +450,18 @@ final class CalculatorStore: ObservableObject {
 
         if token == ")" {
             guard unmatchedOpeningParentheses(in: expression) > 0,
-                  !endsWithOperatorOrOpeningParenthesis(expression)
+                  !endsWithOperatorOrOpeningParenthesis(expression),
+                  unmatchedOpeningParentheses(in: evaluationExpression) > 0
             else { return nil }
+        }
+
+        if token.count == 1, token.first?.isNumber == true {
+            if let replacement = replacingLoneLeadingZero(token) {
+                return replacement
+            }
+            if trailingNumberDigitCount(in: expression) >= maximumOperandDigits {
+                return nil
+            }
         }
 
         let tokenStartsNamedValue = token.first?.isLetter == true || token.first == "("
@@ -435,6 +480,83 @@ final class CalculatorStore: ObservableObject {
         guard let split = ExpressionEditing.trailingOperand(in: value) else { return nil }
         let replacement = "\(function)(\(split.operand))"
         return ExpressionEditing.replacingTrailingOperand(in: value, with: replacement)
+    }
+
+    private func wrappingTrailingOperand(prefix: String, in value: String) -> String? {
+        guard let split = ExpressionEditing.trailingOperand(in: value) else { return nil }
+        let replacement = "\(prefix)(\(split.operand))"
+        return ExpressionEditing.replacingTrailingOperand(in: value, with: replacement)
+    }
+
+    /// Range of the number currently being entered, or nil when the entry
+    /// does not end in digits (or ends inside an exponent, which stays
+    /// untouched by familiar-calculator digit rules).
+    private func trailingNumberRange(in value: String) -> Range<String.Index>? {
+        let end = value.endIndex
+        var start = end
+        var sawDigit = false
+        while start > value.startIndex {
+            let candidate = value.index(before: start)
+            let character = value[candidate]
+            if character.isNumber {
+                sawDigit = true
+                start = candidate
+            } else if character == "." && sawDigit {
+                start = candidate
+            } else {
+                break
+            }
+        }
+        guard sawDigit else { return nil }
+        if start > value.startIndex {
+            let before = value[value.index(before: start)]
+            if before == "e" || before == "E" {
+                let beforeBeforeIndex = value.index(before: start)
+                if beforeBeforeIndex > value.startIndex {
+                    let beforeBefore = value[value.index(before: beforeBeforeIndex)]
+                    if beforeBefore.isNumber || beforeBefore == "." {
+                        return nil
+                    }
+                } else {
+                    return nil
+                }
+            }
+        }
+        return start..<end
+    }
+
+    private func trailingNumberDigitCount(in value: String) -> Int {
+        guard let range = trailingNumberRange(in: value) else { return 0 }
+        return value[range].filter(\.isNumber).count
+    }
+
+    /// A digit typed while the current operand is a lone zero replaces that
+    /// zero, so `0` `0` `5` reads `5` instead of forming `005`, which the
+    /// core would reject as a syntax error.
+    private func replacingLoneLeadingZero(_ digit: String) -> ExpressionState? {
+        guard let range = trailingNumberRange(in: expression) else { return nil }
+        let number = String(expression[range])
+        guard number == "0" || number == "-0" || number == "−0" else { return nil }
+        guard let evaluationRange = trailingNumberRange(in: evaluationExpression),
+              evaluationExpression.distance(
+                  from: evaluationRange.lowerBound,
+                  to: evaluationRange.upperBound
+              ) == number.count
+        else { return nil }
+
+        // "-0" keeps its sign; only the zero itself is replaced.
+        let replacementRange = number == "0"
+            ? range
+            : range.lowerBound..<expression.index(before: range.upperBound)
+        let visible = expression.replacingCharacters(in: replacementRange, with: digit)
+        let evaluationReplacementRange = number == "0"
+            ? evaluationRange
+            : evaluationRange.lowerBound..<evaluationExpression.index(before: evaluationRange.upperBound)
+        let evaluation = evaluationExpression.replacingCharacters(
+            in: evaluationReplacementRange,
+            with: digit
+        )
+        return ExpressionState(visible: visible, evaluation: evaluation)
     }
 
     private func endsWithOperatorOrOpeningParenthesis(_ value: String) -> Bool {

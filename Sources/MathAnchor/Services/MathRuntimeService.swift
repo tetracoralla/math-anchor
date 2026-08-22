@@ -26,6 +26,15 @@ final class MathRuntimeService: MathEvaluating, UnitConverting, CurrencyConverti
             forceRefresh: Bool
         )
 
+        var abortsWorkerWhenCancelled: Bool {
+            switch self {
+            case .evaluate:
+                true
+            case .convert, .convertCurrency:
+                false
+            }
+        }
+
         func request(id: String) -> RuntimeRequest {
             switch self {
             case let .evaluate(expression, precision):
@@ -113,13 +122,41 @@ final class MathRuntimeService: MathEvaluating, UnitConverting, CurrencyConverti
         let workingDirectory: URL
     }
 
-    private let queue = DispatchQueue(label: "com.openadam.mathanchor.runtime", qos: .userInitiated)
+    private final class PendingRequest {
+        let continuation: CheckedContinuation<RuntimePayload, Error>
+        let abortsWorkerWhenCancelled: Bool
+
+        init(
+            continuation: CheckedContinuation<RuntimePayload, Error>,
+            abortsWorkerWhenCancelled: Bool
+        ) {
+            self.continuation = continuation
+            self.abortsWorkerWhenCancelled = abortsWorkerWhenCancelled
+        }
+    }
+
+    // Lifecycle (launch, stop, request writes) is serialized on writeQueue.
+    // The reader loop owns stdout. Everything else reaches shared state only
+    // through `lock`, so calculator, unit, and currency requests proceed
+    // concurrently against one warm worker and are matched by request id.
+    private let writeQueue = DispatchQueue(
+        label: "com.openadam.mathanchor.runtime.write",
+        qos: .userInitiated
+    )
+    private let readerQueue = DispatchQueue(
+        label: "com.openadam.mathanchor.runtime.read",
+        qos: .userInitiated
+    )
+    private let lock = NSLock()
     private var process: Process?
     private var inputHandle: FileHandle?
     private var outputHandle: FileHandle?
     private var responseBuffer = Data()
-    private let cancellationLock = NSLock()
-    private var cancellationRevision = 0
+    private var pendingRequests: [String: PendingRequest] = [:]
+    private var startWaiters: [CheckedContinuation<Void, Error>] = []
+    private var currentGeneration = 0
+    private var readerGeneration = 0
+    private var lastLineAt = Date()
     private let requestTimeout: TimeInterval
     private let currencyRequestTimeout: TimeInterval
     private let startupTimeout: TimeInterval
@@ -132,8 +169,8 @@ final class MathRuntimeService: MathEvaluating, UnitConverting, CurrencyConverti
         self.requestTimeout = requestTimeout
         self.currencyRequestTimeout = currencyRequestTimeout
         self.startupTimeout = startupTimeout
-        queue.async { [weak self] in
-            try? self?.startIfNeeded()
+        writeQueue.async { [weak self] in
+            try? self?.launchProcessOnQueue()
         }
     }
 
@@ -240,95 +277,143 @@ final class MathRuntimeService: MathEvaluating, UnitConverting, CurrencyConverti
         )
     }
 
+    // Cheap conversion requests are debounced and may finish harmlessly after
+    // their result becomes stale, so cancelling them must not turn the next
+    // keystroke into a cold start. Expression evaluation is different: it can
+    // occupy the app runtime until its ten-second in-process bound. Abort that
+    // worker so an edited/replaced calculation does not block the next one.
+    func cancelPendingEvaluation() {
+        cancelPendingRequestsThatAbortWorker()
+    }
+    func cancelPendingConversion() {}
+    func cancelPendingCurrencyConversion() {}
+
     private func perform(_ operation: RuntimeOperation) async throws -> RuntimePayload {
-        let revision = currentCancellationRevision()
-        return try await withCheckedThrowingContinuation { continuation in
-            queue.async { [self] in
-                do {
-                    continuation.resume(
-                        returning: try performSynchronously(
-                            operation,
-                            cancellationRevision: revision
-                        )
-                    )
-                } catch let error as MathRuntimeError {
-                    continuation.resume(throwing: error)
-                } catch {
-                    continuation.resume(throwing: MathRuntimeError.invalidResponse)
+        do {
+            try await ensureStarted()
+            return try await send(operation)
+        } catch MathRuntimeError.invalidResponse {
+            // Protocol failure or worker death: rebuild once and retry.
+            stopProcess()
+            try await ensureStarted()
+            return try await send(operation)
+        }
+    }
+
+    private func ensureStarted() async throws {
+        try await withCheckedThrowingContinuation { continuation in
+            writeQueue.async { [self] in
+                lock.lock()
+                let processRunning = process?.isRunning == true
+                lock.unlock()
+
+                if processRunning {
+                    // A launch whose ready handshake is still in flight must
+                    // not be killed and restarted by a concurrent caller;
+                    // share it. (A failed handshake clears the process, and
+                    // the startup timeout bounds the wait.)
+                    lock.lock()
+                    // The handshake may have completed while this waiter
+                    // registered; never park a resolved generation.
+                    if readerGeneration == currentGeneration {
+                        lock.unlock()
+                        continuation.resume()
+                        return
+                    }
+                    startWaiters.append(continuation)
+                    lock.unlock()
+                    return
                 }
+
+                do {
+                    try launchProcessOnQueue()
+                } catch {
+                    continuation.resume(throwing: error)
+                    return
+                }
+                lock.lock()
+                if readerGeneration == currentGeneration {
+                    lock.unlock()
+                    continuation.resume()
+                    return
+                }
+                startWaiters.append(continuation)
+                lock.unlock()
             }
         }
     }
 
-    func cancelPendingEvaluation() {
-        cancelPendingRequest()
-    }
-
-    func cancelPendingConversion() {
-        cancelPendingRequest()
-    }
-
-    func cancelPendingCurrencyConversion() {
-        cancelPendingRequest()
-    }
-
-    private func cancelPendingRequest() {
-        cancellationLock.lock()
-        cancellationRevision &+= 1
-        cancellationLock.unlock()
-    }
-
-    private func performSynchronously(
-        _ operation: RuntimeOperation,
-        cancellationRevision: Int
-    ) throws -> RuntimePayload {
-        do {
-            return try send(
-                operation,
-                cancellationRevision: cancellationRevision
-            )
-        } catch MathRuntimeError.invalidResponse {
-            stopProcess()
-            return try send(
-                operation,
-                cancellationRevision: cancellationRevision
-            )
-        }
-    }
-
-    private func send(
-        _ operation: RuntimeOperation,
-        cancellationRevision: Int
-    ) throws -> RuntimePayload {
-        try requireCurrent(cancellationRevision)
-        try startIfNeeded()
+    private func send(_ operation: RuntimeOperation) async throws -> RuntimePayload {
         let requestID = UUID().uuidString
         let request = operation.request(id: requestID)
-        var requestData = try JSONEncoder().encode(request)
-        requestData.append(0x0A)
-        guard let inputHandle else {
-            throw MathRuntimeError.invalidResponse
-        }
-        do {
-            try inputHandle.write(contentsOf: requestData)
-        } catch {
-            throw MathRuntimeError.invalidResponse
-        }
+        var encodedRequest = try JSONEncoder().encode(request)
+        encodedRequest.append(0x0A)
+        // Capture an immutable value in the concurrent write closure. Swift 6
+        // correctly warns when a mutable local is captured across queues even
+        // if this function never mutates it again.
+        let requestData = encodedRequest
+        let timeout = responseTimeout(for: operation)
 
-        let payload = try JSONDecoder().decode(
-            RuntimePayload.self,
-            from: readLine(
-                timeout: responseTimeout(for: operation),
-                cancellationRevision: cancellationRevision
-            )
-        )
-        guard payload.id == requestID else {
-            throw MathRuntimeError.invalidResponse
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                lock.lock()
+                if Task.isCancelled {
+                    lock.unlock()
+                    continuation.resume(throwing: MathRuntimeError.cancelled)
+                    return
+                }
+                pendingRequests[requestID] = PendingRequest(
+                    continuation: continuation,
+                    abortsWorkerWhenCancelled: operation.abortsWorkerWhenCancelled
+                )
+                let handle = inputHandle
+                lock.unlock()
+
+                writeQueue.async { [self] in
+                    guard let handle else {
+                        failRequest(requestID, error: .invalidResponse)
+                        return
+                    }
+                    do {
+                        try handle.write(contentsOf: requestData)
+                    } catch {
+                        failRequest(requestID, error: .invalidResponse)
+                        return
+                    }
+                    scheduleRequestTimeout(id: requestID, timeout: timeout)
+                }
+            }
+        } onCancel: { [self] in
+            cancelRequest(requestID)
         }
-        guard payload.status == "ok" else {
-            throw MathRuntimeError.fromRuntime(code: payload.error?.code)
+    }
+
+    private func scheduleRequestTimeout(id: String, timeout: TimeInterval) {
+        DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + timeout) { [weak self] in
+            guard let self else { return }
+            lock.lock()
+            guard let pending = pendingRequests.removeValue(forKey: id) else {
+                lock.unlock()
+                return
+            }
+            let lastLine = lastLineAt
+            let remainingPending = !pendingRequests.isEmpty
+            lock.unlock()
+
+            pending.continuation.resume(throwing: MathRuntimeError.timedOut)
+            // A worker that has produced nothing within the whole window is
+            // treated as hung and rebuilt. A worker that is still answering
+            // other requests (for example one left behind by an abandoned
+            // slow call) stays warm; its own in-process bound ends that work.
+            if Date().timeIntervalSince(lastLine) >= timeout {
+                if remainingPending {
+                    // Other requests are still waiting on this reader; let
+                    // their own deadlines decide before tearing it down.
+                    return
+                }
+                stopProcess()
+            }
         }
-        return payload
     }
 
     private func responseTimeout(for operation: RuntimeOperation) -> TimeInterval {
@@ -340,16 +425,23 @@ final class MathRuntimeService: MathEvaluating, UnitConverting, CurrencyConverti
         }
     }
 
+    // ISO8601DateFormatter is documented thread-safe; `nonisolated(unsafe)`
+    // suppresses the Sendable diagnostic for the shared instance.
+    private nonisolated(unsafe) static let isoDateFormatter = ISO8601DateFormatter()
+
     private static func isoDate(_ value: String) -> Date? {
-        ISO8601DateFormatter().date(from: value)
+        isoDateFormatter.date(from: value)
     }
 
-    private func startIfNeeded() throws {
-        if process?.isRunning == true, inputHandle != nil, outputHandle != nil {
-            return
-        }
-        stopProcess()
+    // MARK: Process lifecycle. Must run on writeQueue unless noted.
 
+    /// Lock must be held. True once this generation's reader saw "ready".
+    private var hasResolvedReady: Bool {
+        readerGeneration == currentGeneration
+    }
+
+    private func launchProcessOnQueue() throws {
+        stopProcessOnQueue()
         let launch = try runtimeLaunch()
 
         let process = Process()
@@ -371,81 +463,254 @@ final class MathRuntimeService: MathEvaluating, UnitConverting, CurrencyConverti
         } catch {
             throw MathRuntimeError.runtimeNotInstalled
         }
+
+        lock.lock()
         self.process = process
         inputHandle = inputPipe.fileHandleForWriting
         outputHandle = outputPipe.fileHandleForReading
         responseBuffer.removeAll(keepingCapacity: true)
+        currentGeneration += 1
+        let generation = currentGeneration
+        lastLineAt = Date()
+        lock.unlock()
 
-        let ready = try JSONDecoder().decode(
-            RuntimePayload.self,
-            from: readLine(timeout: startupTimeout, cancellationRevision: nil)
-        )
-        guard ready.status == "ready" else {
+        startReader(generation: generation)
+        scheduleStartupTimeout(generation: generation, timeout: startupTimeout)
+    }
+
+    private func scheduleStartupTimeout(generation: Int, timeout: TimeInterval) {
+        DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + timeout) { [weak self] in
+            guard let self else { return }
+            lock.lock()
+            let stillStarting = currentGeneration == generation && !hasResolvedReady
+            let waiters = stillStarting ? drainStartWaitersLocked() : []
+            lock.unlock()
+            guard stillStarting else { return }
+            resumeWaiters(waiters, error: MathRuntimeError.timedOut)
             stopProcess()
-            throw MathRuntimeError.invalidResponse
         }
     }
 
-    private func readLine(timeout: TimeInterval, cancellationRevision: Int?) throws -> Data {
-        let newline = Data([0x0A])
-        let deadline = Date().addingTimeInterval(timeout)
-        while true {
-            if let cancellationRevision {
-                do {
-                    try requireCurrent(cancellationRevision)
-                } catch {
-                    stopProcess()
-                    throw error
+    private func startReader(generation: Int) {
+        readerQueue.async { [self] in
+            var expectingReady = true
+            while true {
+                lock.lock()
+                let current = currentGeneration
+                let handle = outputHandle
+                let alive = current == generation && process?.isRunning == true
+                lock.unlock()
+
+                guard alive, let handle else {
+                    self.handleReaderTerminated(generation: generation)
+                    return
+                }
+
+                var descriptor = pollfd(
+                    fd: handle.fileDescriptor,
+                    events: Int16(POLLIN | POLLHUP),
+                    revents: 0
+                )
+                let pollResult = Darwin.poll(&descriptor, 1, 25)
+                if pollResult == 0 { continue }
+                guard pollResult > 0 else {
+                    self.handleReaderTerminated(generation: generation)
+                    return
+                }
+                let chunk = handle.availableData
+                guard !chunk.isEmpty else {
+                    self.handleReaderTerminated(generation: generation)
+                    return
+                }
+
+                lock.lock()
+                responseBuffer.append(chunk)
+                lastLineAt = Date()
+                var lines: [Data] = []
+                let newline = Data([0x0A])
+                while let range = responseBuffer.range(of: newline) {
+                    lines.append(responseBuffer.subdata(in: responseBuffer.startIndex..<range.lowerBound))
+                    responseBuffer.removeSubrange(responseBuffer.startIndex...range.lowerBound)
+                }
+                lock.unlock()
+
+                for line in lines {
+                    if expectingReady {
+                        guard let readyPayload = Self.decodePayload(line),
+                              readyPayload.status == "ready"
+                        else {
+                            self.handleStartupProtocolFailure(generation: generation)
+                            return
+                        }
+                        expectingReady = false
+                        self.resolveReady(generation: generation)
+                    } else if let payload = Self.decodePayload(line) {
+                        self.dispatch(payload)
+                    } else {
+                        // A malformed line is a protocol failure, not silence.
+                        // Waiting for every request timer would leave the app
+                        // unusable longer and misreport the failure as timeout.
+                        self.handleRuntimeProtocolFailure(generation: generation)
+                        return
+                    }
                 }
             }
-            if Date() >= deadline {
-                stopProcess()
-                throw MathRuntimeError.timedOut
-            }
-            if let range = responseBuffer.range(of: newline) {
-                let line = responseBuffer.subdata(in: responseBuffer.startIndex..<range.lowerBound)
-                responseBuffer.removeSubrange(responseBuffer.startIndex...range.lowerBound)
-                return line
-            }
-            guard let outputHandle else {
-                throw MathRuntimeError.invalidResponse
-            }
-            var descriptor = pollfd(
-                fd: outputHandle.fileDescriptor,
-                events: Int16(POLLIN | POLLHUP),
-                revents: 0
+        }
+    }
+
+    private func dispatch(_ payload: RuntimePayload) {
+        lock.lock()
+        let pending = payload.id.flatMap { pendingRequests.removeValue(forKey: $0) }
+        lock.unlock()
+        guard let pending else { return }
+        guard payload.status == "ok" else {
+            pending.continuation.resume(
+                throwing: MathRuntimeError.fromRuntime(code: payload.error?.code)
             )
-            let pollResult = Darwin.poll(&descriptor, 1, 25)
-            if pollResult == 0 { continue }
-            guard pollResult > 0 else { throw MathRuntimeError.invalidResponse }
-            let chunk = outputHandle.availableData
-            guard !chunk.isEmpty else { throw MathRuntimeError.invalidResponse }
-            responseBuffer.append(chunk)
+            return
+        }
+        pending.continuation.resume(returning: payload)
+    }
+
+    private func resolveReady(generation: Int) {
+        lock.lock()
+        guard currentGeneration == generation else {
+            lock.unlock()
+            return
+        }
+        readerGeneration = generation
+        let waiters = drainStartWaitersLocked()
+        lock.unlock()
+        resumeWaiters(waiters, error: nil)
+    }
+
+    private func handleStartupProtocolFailure(generation: Int) {
+        lock.lock()
+        let stale = currentGeneration == generation
+        let waiters = stale ? drainStartWaitersLocked() : []
+        lock.unlock()
+        if stale {
+            resumeWaiters(waiters, error: MathRuntimeError.invalidResponse)
+            stopProcess()
         }
     }
 
-    private func currentCancellationRevision() -> Int {
-        cancellationLock.lock()
-        defer { cancellationLock.unlock() }
-        return cancellationRevision
+    private func handleReaderTerminated(generation: Int) {
+        lock.lock()
+        let stale = currentGeneration == generation
+        let waiters = stale ? drainStartWaitersLocked() : []
+        let pending = stale ? drainPendingRequestsLocked() : [:]
+        lock.unlock()
+        guard stale else { return }
+        resumeWaiters(waiters, error: MathRuntimeError.invalidResponse)
+        for request in pending.values {
+            request.continuation.resume(throwing: MathRuntimeError.invalidResponse)
+        }
+        stopProcess()
     }
 
-    private func requireCurrent(_ revision: Int) throws {
-        guard currentCancellationRevision() == revision else {
-            throw MathRuntimeError.cancelled
+    private func handleRuntimeProtocolFailure(generation: Int) {
+        lock.lock()
+        let stale = currentGeneration == generation
+        let pending = stale ? drainPendingRequestsLocked() : [:]
+        lock.unlock()
+        guard stale else { return }
+        for request in pending.values {
+            request.continuation.resume(throwing: MathRuntimeError.invalidResponse)
+        }
+        stopProcess()
+    }
+
+    private func failRequest(_ id: String, error: MathRuntimeError) {
+        lock.lock()
+        let pending = pendingRequests.removeValue(forKey: id)
+        lock.unlock()
+        pending?.continuation.resume(throwing: error)
+    }
+
+    private func cancelRequest(_ id: String) {
+        lock.lock()
+        let pending = pendingRequests.removeValue(forKey: id)
+        lock.unlock()
+        guard let pending else { return }
+        pending.continuation.resume(throwing: MathRuntimeError.cancelled)
+        if pending.abortsWorkerWhenCancelled {
+            stopProcess()
         }
     }
 
+    private func cancelPendingRequestsThatAbortWorker() {
+        lock.lock()
+        let cancelled = pendingRequests.filter { $0.value.abortsWorkerWhenCancelled }
+        for id in cancelled.keys {
+            pendingRequests.removeValue(forKey: id)
+        }
+        lock.unlock()
+        guard !cancelled.isEmpty else { return }
+        for request in cancelled.values {
+            request.continuation.resume(throwing: MathRuntimeError.cancelled)
+        }
+        stopProcess()
+    }
+
+    private func drainStartWaitersLocked() -> [CheckedContinuation<Void, Error>] {
+        let waiters = startWaiters
+        startWaiters.removeAll()
+        return waiters
+    }
+
+    private func drainPendingRequestsLocked() -> [String: PendingRequest] {
+        let pending = pendingRequests
+        pendingRequests.removeAll()
+        return pending
+    }
+
+    private func resumeWaiters(
+        _ waiters: [CheckedContinuation<Void, Error>],
+        error: Error?
+    ) {
+        for waiter in waiters {
+            if let error {
+                waiter.resume(throwing: error)
+            } else {
+                waiter.resume()
+            }
+        }
+    }
+
+    private static func decodePayload(_ data: Data) -> RuntimePayload? {
+        try? JSONDecoder().decode(RuntimePayload.self, from: data)
+    }
+
+    /// Safe to call from any queue: teardown is serialized onto writeQueue.
     private func stopProcess() {
-        try? inputHandle?.close()
-        try? outputHandle?.close()
-        if process?.isRunning == true {
-            process?.terminate()
+        writeQueue.async { [self] in
+            stopProcessOnQueue()
         }
+    }
+
+    private func stopProcessOnQueue() {
+        lock.lock()
+        let input = inputHandle
+        let output = outputHandle
+        let runningProcess = process
         process = nil
         inputHandle = nil
         outputHandle = nil
         responseBuffer.removeAll(keepingCapacity: false)
+        let waiters = drainStartWaitersLocked()
+        let pending = drainPendingRequestsLocked()
+        lock.unlock()
+
+        resumeWaiters(waiters, error: MathRuntimeError.invalidResponse)
+        for request in pending.values {
+            request.continuation.resume(throwing: MathRuntimeError.invalidResponse)
+        }
+        try? input?.close()
+        try? output?.close()
+        if runningProcess?.isRunning == true {
+            runningProcess?.terminate()
+        }
     }
 
     private func runtimeLaunch() throws -> RuntimeLaunch {

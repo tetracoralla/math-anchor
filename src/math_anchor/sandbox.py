@@ -10,6 +10,7 @@ import tempfile
 import threading
 import time
 from concurrent.futures import Future, ThreadPoolExecutor, wait
+from queue import Empty, Queue
 from typing import Any
 
 from .output_policy import (
@@ -56,6 +57,41 @@ class _ReusableWorker:
         self.process = process
         self.stderr_fd = stderr_fd
         self.pool_generation: int | None = None
+        # One daemon reader lives with each persistent worker. The previous
+        # implementation created and joined a new ThreadPoolExecutor for every
+        # operation, which made a cheap warm expression pay thread lifecycle
+        # overhead on every high-frequency call.
+        self._read_requests: Queue[bool] = Queue()
+        self._responses: Queue[tuple[str, BaseException | None]] = Queue()
+        self.output_reader = threading.Thread(
+            target=self._read_output,
+            name=f"calculator-worker-output-{process.pid}",
+            daemon=True,
+        )
+        self.output_reader.start()
+
+    def _read_output(self) -> None:
+        while self._read_requests.get():
+            try:
+                line = _read_response_line(self.process)
+            except BaseException as error:
+                self._responses.put(("", error))
+                return
+            self._responses.put((line, None))
+            if not line:
+                return
+
+    def expect_response(self) -> None:
+        self._read_requests.put(True)
+
+    def take_response(
+        self,
+        *,
+        timeout: float | None = None,
+    ) -> tuple[str, BaseException | None]:
+        if timeout is None:
+            return self._responses.get_nowait()
+        return self._responses.get(timeout=timeout)
 
     @property
     def is_running(self) -> bool:
@@ -92,6 +128,8 @@ class _ReusableWorker:
             self.process.wait(timeout=1)
         except subprocess.TimeoutExpired:
             pass
+        self._read_requests.put(False)
+        self.output_reader.join(timeout=1)
         self.close()
 
 
@@ -307,6 +345,12 @@ def run_operation(
         "arguments": arguments,
         "timeoutMs": timeout_ms,
         "memoryMb": memory_mb,
+        # Apply the public result projection and byte ceiling inside the
+        # supervised worker before it writes to stdout. The parent applies the
+        # policy again to its own supervision errors, but no successful worker
+        # response needs to cross the pipe at its original unbounded size.
+        "resultMode": result_mode,
+        "maxOutputBytes": max_output_bytes,
     }
     try:
         request_line = json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n"
@@ -340,8 +384,9 @@ def run_operation(
             {"phase": "startup", "timeoutMs": timeout_ms},
         )
     reusable = False
+    output_policy_applied = False
     try:
-        result, reusable = _execute_worker(
+        result, reusable, output_policy_applied = _execute_worker(
             worker,
             request_line,
             deadline=deadline,
@@ -360,6 +405,8 @@ def run_operation(
         # pool and every later operation became a queue-phase E_TIMEOUT.
         # An unwritten worker state is never reusable, so it is destroyed.
         _WORKER_POOL.release(worker, reusable=reusable)
+    if output_policy_applied:
+        return result
     return apply_output_policy(
         result,
         result_mode=result_mode,
@@ -452,65 +499,84 @@ def _execute_worker(
     timeout_ms: int,
     memory_mb: int,
     cancel_event: threading.Event | None,
-) -> tuple[dict[str, Any], bool]:
+) -> tuple[dict[str, Any], bool, bool]:
     process = worker.process
     memory_bytes = memory_mb * 1024 * 1024
     if process.stdin is None or process.stdout is None:
-        return _error("E_RUNTIME", "worker pipes were unavailable"), False
+        return _error("E_RUNTIME", "worker pipes were unavailable"), False, False
+    worker.expect_response()
     try:
         process.stdin.write(request_line)
         process.stdin.flush()
     except (BrokenPipeError, OSError):
-        return _error("E_RUNTIME", "worker input was unavailable"), False
+        return _error("E_RUNTIME", "worker input was unavailable"), False, False
 
-    with ThreadPoolExecutor(max_workers=1, thread_name_prefix="calculator-worker-output") as executor:
-        response_read = executor.submit(_read_response_line, process)
-        limit_error: dict[str, Any] | None = None
-        while not response_read.done():
-            if cancel_event is not None and cancel_event.is_set():
-                limit_error = _error("E_CANCELLED", "operation was cancelled")
-                process.kill()
+    response_line = ""
+    reader_error: BaseException | None = None
+    limit_error: dict[str, Any] | None = None
+    while True:
+        try:
+            response_line, reader_error = worker.take_response()
+            break
+        except Empty:
+            pass
+        if cancel_event is not None and cancel_event.is_set():
+            limit_error = _error("E_CANCELLED", "operation was cancelled")
+            process.kill()
+            break
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            # A response already handed to the supervisor is complete even if
+            # this thread resumes slightly after the deadline. If no response
+            # is queued, enforce the deadline instead of accepting a future
+            # that happens to finish after a long polling wait.
+            try:
+                response_line, reader_error = worker.take_response()
                 break
-            if time.monotonic() >= deadline:
+            except Empty:
                 limit_error = _error("E_TIMEOUT", f"operation exceeded {timeout_ms} ms")
                 process.kill()
                 break
-            resident_bytes = _resident_memory_bytes(process.pid)
-            if resident_bytes is not None and resident_bytes > memory_bytes:
-                limit_error = _error("E_MEMORY", f"operation exceeded {memory_mb} MB of resident memory")
-                process.kill()
-                break
-            if process.poll() is not None:
-                break
-            _wait_for_worker_progress(response_read)
-
+        resident_bytes = _resident_memory_bytes(process.pid)
+        if resident_bytes is not None and resident_bytes > memory_bytes:
+            limit_error = _error("E_MEMORY", f"operation exceeded {memory_mb} MB of resident memory")
+            process.kill()
+            break
+        # The reader thread turns process EOF or a decode failure into the
+        # queued response too, so every path gets the same bounded wait.
+        wait_seconds = min(remaining, WORKER_POLL_SECONDS)
         try:
-            response_line, completed_at = response_read.result()
-        except Exception as error:
-            # A reader-thread failure (closed pipe during teardown, decode
-            # error) must surface as a structured error, never propagate.
-            process.kill()
-            return _error("E_RUNTIME", f"worker output reader failed: {error}"), False
-        if limit_error is not None:
-            return limit_error, False
-        if completed_at >= deadline:
-            process.kill()
-            return _error("E_TIMEOUT", f"operation exceeded {timeout_ms} ms"), False
+            response_line, reader_error = worker.take_response(timeout=wait_seconds)
+            break
+        except Empty:
+            continue
+
+    if limit_error is not None:
+        return limit_error, False, False
+    if reader_error is not None:
+        # A reader-thread failure (closed pipe during teardown, decode error)
+        # must surface as a structured error, never propagate.
+        process.kill()
+        return _error("E_RUNTIME", f"worker output reader failed: {reader_error}"), False, False
 
     if not response_line:
         return_code = process.poll()
         stderr = worker.stderr_tail().strip() if return_code is not None else ""
         message = stderr.splitlines()[-1] if stderr else "worker terminated"
         details = {"returnCode": return_code} if return_code is not None else None
-        return _error("E_RUNTIME", message, details), False
+        return _error("E_RUNTIME", message, details), False, False
     try:
         response = json.loads(response_line)
     except json.JSONDecodeError:
-        return _error("E_RUNTIME", "worker returned an invalid response"), False
+        return _error("E_RUNTIME", "worker returned an invalid response"), False, False
     if response.get("ok") is True:
-        return response["result"], True
+        return response["result"], True, True
     error = response.get("error", {"code": "E_RUNTIME", "message": "unknown worker error"})
-    return {"status": "error", "error": error}, error.get("code") != "E_RUNTIME"
+    return (
+        {"status": "error", "error": error},
+        error.get("code") != "E_RUNTIME",
+        True,
+    )
 
 
 def _wait_for_worker_progress(worker_future: Future[Any]) -> None:
@@ -520,11 +586,8 @@ def _wait_for_worker_progress(worker_future: Future[Any]) -> None:
     wait((worker_future,), timeout=WORKER_POLL_SECONDS)
 
 
-def _read_response_line(
-    process: subprocess.Popen[str],
-) -> tuple[str, float]:
-    line = process.stdout.readline() if process.stdout is not None else ""
-    return line, time.monotonic()
+def _read_response_line(process: subprocess.Popen[str]) -> str:
+    return process.stdout.readline() if process.stdout is not None else ""
 
 
 def _await_worker_ready(

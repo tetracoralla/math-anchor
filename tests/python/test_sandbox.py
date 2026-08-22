@@ -1,10 +1,14 @@
 import json
 import os
 from concurrent.futures import Future
+import subprocess
+import sys
 import threading
 import time
 
 import math_anchor.sandbox as sandbox
+from math_anchor import worker
+from math_anchor.errors import CalculatorError
 from math_anchor.sandbox import run_batch, run_operation
 
 
@@ -171,9 +175,18 @@ def test_invalid_input_error_is_concise_and_obeys_the_complete_output_budget() -
 
 
 def test_non_validation_errors_cannot_bypass_the_output_budget(monkeypatch) -> None:
+    # Negative regression in two directions: the byte budget must hold for an
+    # error envelope with unbounded message text, but shrinking it must
+    # preserve the real error code. Replacing the envelope wholesale with
+    # E_OUTPUT_LIMIT masked the actual failure behind an unrelated
+    # "increase maxOutputBytes" instruction.
     oversized_error = {
         "status": "error",
-        "error": {"code": "E_RUNTIME", "message": "failure" * 10_000},
+        "error": {
+            "code": "E_RUNTIME",
+            "message": "failure" * 10_000,
+            "details": {"bytes": 60_000, "maxOutputBytes": 1_024},
+        },
     }
 
     monkeypatch.setattr(
@@ -189,7 +202,9 @@ def test_non_validation_errors_cannot_bypass_the_output_budget(monkeypatch) -> N
     encoded = json.dumps(result, ensure_ascii=False, separators=(",", ":")).encode()
 
     assert result["status"] == "error"
-    assert result["error"]["code"] == "E_OUTPUT_LIMIT"
+    assert result["error"]["code"] == "E_RUNTIME"
+    assert "details" not in result["error"]
+    assert len(result["error"]["message"]) < len(oversized_error["error"]["message"])
     assert len(encoded) <= 1_024
 
 
@@ -305,6 +320,214 @@ def test_worker_reader_failure_returns_a_structured_error(monkeypatch) -> None:
     assert "reader failed" in result["error"]["message"]
 
 
+def test_worker_payload_forwards_the_request_budget_to_the_in_process_bound() -> None:
+    # Negative regression: the worker used to hand only RLIMIT_CPU the
+    # payload's timeoutMs; the in-process SIGALRM stayed at the fixed
+    # ten-second default, so any budget above ten seconds was silently cut.
+    forwarded: list[int | None] = []
+
+    def recording_execute(operation, arguments, *, timeout_ms=None):
+        forwarded.append(timeout_ms)
+        return {"status": "ok", "operation": operation, "kind": "scalar", "exact": "42"}
+
+    response = worker._execute_payload(
+        {
+            "operation": "expression.evaluate",
+            "arguments": {"expression": "6*7"},
+            "timeoutMs": 30_000,
+        },
+        recording_execute,
+        CalculatorError,
+    )
+
+    assert forwarded == [30_000]
+    assert response["ok"] is True
+    assert response["result"]["exact"] == "42"
+
+
+def test_worker_applies_output_budget_before_writing_its_response() -> None:
+    # A huge valid result must be reduced inside the supervised worker instead
+    # of crossing the stdout pipe in full and being rejected only by the parent.
+    def oversized_execute(operation, arguments, *, timeout_ms=None):
+        return {
+            "status": "ok",
+            "operation": operation,
+            "kind": "scalar",
+            "exact": "9" * 200_000,
+        }
+
+    response = worker._execute_payload(
+        {
+            "operation": "expression.evaluate",
+            "arguments": {"expression": "factorial(50000)"},
+            "timeoutMs": 2_000,
+            "resultMode": "auto",
+            "maxOutputBytes": 1_024,
+        },
+        oversized_execute,
+        CalculatorError,
+    )
+
+    assert response["ok"] is True
+    assert response["result"]["status"] == "error"
+    assert response["result"]["error"]["code"] == "E_OUTPUT_LIMIT"
+    assert len(json.dumps(response, separators=(",", ":")).encode()) < 1_200
+
+
+def test_unit_registry_warm_waits_for_a_real_idle_interval(monkeypatch) -> None:
+    from math_anchor.operations import data
+
+    activity = worker._RequestActivity()
+    warmed = threading.Event()
+    monkeypatch.setattr(worker, "UNIT_REGISTRY_WARM_IDLE_SECONDS", 0.05)
+    monkeypatch.setattr(data, "warm_unit_registries", warmed.set)
+
+    worker._warm_unit_registries_in_background(activity)
+    activity.begin()
+    time.sleep(0.08)
+    assert warmed.is_set() is False
+    activity.end()
+    time.sleep(0.02)
+    activity.begin()
+    activity.end()
+    assert warmed.is_set() is False
+    assert warmed.wait(timeout=0.5)
+
+
+def test_completed_response_is_not_rejudged_against_the_deadline(monkeypatch) -> None:
+    # Negative regression: the reader thread used to stamp the response with
+    # time.monotonic() taken after readline() returned; a worker that answered
+    # in budget was killed and its result discarded whenever the reader was
+    # descheduled between those two lines. Skewing only the reader thread's
+    # clock reproduces that race deterministically.
+    class _ReaderSkewedClock:
+        @staticmethod
+        def monotonic() -> float:
+            if threading.current_thread().name.startswith("calculator-worker-output"):
+                return time.monotonic() + 30.0
+            return time.monotonic()
+
+    sandbox._WORKER_POOL.shutdown()
+    try:
+        monkeypatch.setattr(sandbox, "time", _ReaderSkewedClock)
+        warm = run_operation("expression.evaluate", {"expression": "6*7"}, timeout_ms=2_000)
+        assert warm["exact"] == "42"
+        prewarmed_pid = sandbox._WORKER_POOL.available[-1].process.pid
+
+        result = run_operation("expression.evaluate", {"expression": "7*8"}, timeout_ms=2_000)
+
+        assert result["status"] == "ok"
+        assert result["exact"] == "56"
+        # The answered worker survived: the next call reuses it, not a respawn.
+        assert sandbox._WORKER_POOL.available[-1].process.pid == prewarmed_pid
+    finally:
+        sandbox._WORKER_POOL.shutdown()
+
+
+def test_response_arriving_after_the_deadline_is_rejected(monkeypatch) -> None:
+    # Negative regression: a long polling wait used to leave a race where the
+    # future became done after the deadline but before the loop condition was
+    # rechecked, so an over-budget response was accepted as success.
+    monkeypatch.setattr(sandbox, "WORKER_POLL_SECONDS", 1.0)
+    stderr_fd = sandbox._worker_stderr_file()
+    process = subprocess.Popen(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import sys,time; sys.stdin.readline(); time.sleep(0.15); "
+                "sys.stdout.write('{\"ok\":true,\"result\":{\"status\":\"ok\","
+                "\"operation\":\"expression.evaluate\",\"kind\":\"scalar\","
+                "\"exact\":\"42\"}}\\n'); sys.stdout.flush()"
+            ),
+        ],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=stderr_fd,
+        text=True,
+        bufsize=1,
+    )
+    reusable_worker = sandbox._ReusableWorker(process, stderr_fd)
+    try:
+        result, reusable, output_policy_applied = sandbox._execute_worker(
+            reusable_worker,
+            "{}\n",
+            deadline=time.monotonic() + 0.1,
+            timeout_ms=100,
+            memory_mb=sandbox.DEFAULT_MEMORY_MB,
+            cancel_event=None,
+        )
+        assert reusable is False
+        assert output_policy_applied is False
+        assert result["status"] == "error"
+        assert result["error"]["code"] == "E_TIMEOUT"
+    finally:
+        reusable_worker.terminate()
+
+
+def test_reusable_worker_keeps_one_output_reader_across_calls() -> None:
+    # A warm high-frequency call must not create and join a new reader thread.
+    sandbox._WORKER_POOL.shutdown()
+    try:
+        first = run_operation("expression.evaluate", {"expression": "6*7"})
+        assert first["exact"] == "42"
+        pooled = sandbox._WORKER_POOL.available[-1]
+        reader_ident = pooled.output_reader.ident
+        assert reader_ident is not None
+
+        second = run_operation("expression.evaluate", {"expression": "7*8"})
+        assert second["exact"] == "56"
+        reused = sandbox._WORKER_POOL.available[-1]
+        assert reused.process.pid == pooled.process.pid
+        assert reused.output_reader.ident == reader_ident
+        assert reused.output_reader.is_alive()
+    finally:
+        sandbox._WORKER_POOL.shutdown()
+
+
+def test_persistent_worker_serves_the_first_units_call_within_a_short_budget() -> None:
+    # Negative regression: both Pint registries build lazily (~150 ms each),
+    # so the first units.convert spent its own deadline parsing the unit
+    # definition file. Persistent workers now build them on a background
+    # thread right after readiness.
+    sandbox._WORKER_POOL.shutdown()
+    try:
+        worker_process, startup_error = sandbox._start_worker(
+            sandbox.DEFAULT_MEMORY_MB * 1024 * 1024,
+            deadline=time.monotonic() + 5,
+            timeout_ms=5_000,
+            cancel_event=None,
+        )
+        assert worker_process is not None, startup_error
+        try:
+            time.sleep(1.0)  # allow the background registry warm to finish
+            result, reusable, output_policy_applied = sandbox._execute_worker(
+                worker_process,
+                json.dumps(
+                    {
+                        "operation": "units.convert",
+                        "arguments": {"value": 1, "fromUnit": "m", "toUnit": "cm"},
+                        "timeoutMs": 100,
+                        "memoryMb": sandbox.DEFAULT_MEMORY_MB,
+                    },
+                    separators=(",", ":"),
+                )
+                + "\n",
+                deadline=time.monotonic() + 2,
+                timeout_ms=100,
+                memory_mb=sandbox.DEFAULT_MEMORY_MB,
+                cancel_event=None,
+            )
+            assert reusable is True
+            assert output_policy_applied is True
+            assert result["status"] == "ok"
+            assert result["exact"] == "100"
+        finally:
+            worker_process.terminate()
+    finally:
+        sandbox._WORKER_POOL.shutdown()
+
+
 def test_cancellation_terminates_the_active_worker_and_the_pool_recovers() -> None:
     cancel_event = threading.Event()
     outcome: list[dict] = []
@@ -393,7 +616,7 @@ def test_worker_stderr_cannot_block_and_is_reset_between_requests() -> None:
             assert len(tail) <= sandbox._STDERR_TAIL_BYTES
             assert tail.endswith("worker-diagnostics-line\n")
 
-            result, reusable = sandbox._execute_worker(
+            result, reusable, output_policy_applied = sandbox._execute_worker(
                 worker,
                 json.dumps(
                     {
@@ -411,6 +634,7 @@ def test_worker_stderr_cannot_block_and_is_reset_between_requests() -> None:
                 cancel_event=None,
             )
             assert reusable is True
+            assert output_policy_applied is True
             assert result["status"] == "ok"
             assert result["exact"] == "42"
 
@@ -494,6 +718,9 @@ def test_shutdown_invalidates_an_inflight_prewarm(monkeypatch) -> None:
 
 
 def test_unserializable_error_obeys_the_output_budget() -> None:
+    # The json TypeError message embeds the 200 000-character class name, so
+    # the E_INPUT envelope exceeds the budget. The real cause survives with a
+    # truncated message instead of being masked as E_OUTPUT_LIMIT.
     oversized_type = type("X" * 200_000, (), {})
     result = run_operation(
         "expression.evaluate",
@@ -503,7 +730,8 @@ def test_unserializable_error_obeys_the_output_budget() -> None:
     encoded = json.dumps(result, ensure_ascii=False, separators=(",", ":")).encode()
 
     assert result["status"] == "error"
-    assert result["error"]["code"] == "E_OUTPUT_LIMIT"
+    assert result["error"]["code"] == "E_INPUT"
+    assert len(result["error"]["message"]) < 200_000
     assert len(encoded) <= 1_024
 
 

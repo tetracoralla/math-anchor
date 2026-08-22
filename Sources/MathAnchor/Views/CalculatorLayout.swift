@@ -2,7 +2,10 @@ import SwiftUI
 
 enum CalculatorLayout {
     static let basicWidth: CGFloat = 292
-    static let scientificWidth: CGFloat = 668
+    // 6 columns of 59 pt + 5 gaps, one 8 pt seam, then the basic face's
+    // 4 columns of 59 pt + 3 gaps, plus content insets: one aligned
+    // ten-column face (6 × 59 + 5 × 8 + 8 + 4 × 59 + 3 × 8 + 2 × 16).
+    static let scientificWidth: CGFloat = 694
     static let historyWidth: CGFloat = 248
     static let windowHeight: CGFloat = 486
     static let conversionWindowHeight: CGFloat = 532
@@ -16,7 +19,8 @@ enum CalculatorLayout {
     static let contentInset: CGFloat = 16
     static let basicKeyWidth: CGFloat = 59
     static let conversionKeyWidth: CGFloat = 81.3333333333
-    static let scientificKeyWidth: CGFloat = 54
+    static let scientificKeyWidth: CGFloat = 59
     static let keyCornerRadius: CGFloat = 15
     static let compactKeyCornerRadius: CGFloat = 13
+    static let modeTransitionDuration: TimeInterval = 0.2
 }

@@ -14,7 +14,7 @@ from math_anchor.contracts import (
     _LIMIT_PROPERTIES,
     batch_tool_parameters,
 )
-from math_anchor.mcp_server import _run_cancellable, mcp
+from math_anchor.mcp_server import _run_cancellable, _tool_result, mcp
 from math_anchor.output_policy import (
     DEFAULT_BATCH_MAX_OUTPUT_BYTES,
     DEFAULT_MAX_OUTPUT_BYTES,
@@ -112,6 +112,26 @@ def test_advertised_result_envelope_stays_a_projection_of_the_result_union() -> 
     )
     missing = common_required - set(RUN_TOOL_OUTPUT_SCHEMA["properties"])
     assert not missing, f"envelope dropped common result fields: {sorted(missing)}"
+
+
+def test_tool_results_signal_error_envelopes_through_is_error() -> None:
+    # Negative regression: MCP reports tool execution errors (including
+    # domain and input errors) through isError; host frameworks that branch
+    # on it previously received every in-band error as a successful call.
+    failure = _tool_result(
+        {"status": "error", "error": {"code": "E_DOMAIN", "message": "division by zero"}}
+    )
+    assert failure.isError is True
+
+    success = _tool_result(
+        {"status": "ok", "operation": "expression.evaluate", "kind": "scalar", "exact": "42"}
+    )
+    assert success.isError is False
+
+    # A partial batch is a valid batch result; per-item envelopes carry
+    # their own statuses.
+    partial = _tool_result({"status": "partial", "count": 1, "results": []})
+    assert partial.isError is False
 
 
 def test_async_mcp_boundary_signals_cancellation_to_blocking_execution() -> None:

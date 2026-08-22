@@ -37,6 +37,10 @@ def apply_output_policy(
 
     if size <= max_output_bytes:
         return selected
+    if result.get("status") == "error":
+        trimmed = _trim_error_envelope(selected, max_output_bytes)
+        if trimmed is not None:
+            return trimmed
     return {
         "status": "error",
         "error": {
@@ -52,6 +56,34 @@ def apply_output_policy(
             },
         },
     }
+
+
+def _trim_error_envelope(
+    selected: dict[str, Any],
+    max_output_bytes: int,
+) -> dict[str, Any] | None:
+    """Shrink an oversized error envelope in place, preserving its code.
+
+    Error messages can embed original exception text (an E_RUNTIME echoing
+    long input), so an error envelope can exceed the byte budget. Replacing
+    it wholesale with E_OUTPUT_LIMIT hid the real failure behind an unrelated
+    "increase maxOutputBytes" instruction. Drop details first, then shorten
+    the message, and keep the envelope only once it fits.
+    """
+    error = selected.get("error")
+    if not isinstance(error, dict):
+        return None
+    error.pop("details", None)
+    if _encoded_size(selected) <= max_output_bytes:
+        return selected
+    message = error.get("message")
+    if not isinstance(message, str) or not message:
+        return None
+    for limit in (512, 256, 128, 64, 32, 16, 8, 0):
+        error["message"] = message[:limit] + ("…" if limit else "")
+        if _encoded_size(selected) <= max_output_bytes:
+            return selected
+    return None
 
 
 def _drop_redundant(value: Any, *, field: str, counterpart: str) -> None:

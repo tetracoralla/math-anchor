@@ -231,6 +231,7 @@ async def main(plugin_root: Path | None = None) -> None:
                     "arguments": {"variables": {"x": {"length": 1}}},
                 },
             )
+            assert invalid_pi_groups.isError is True
             assert invalid_pi_groups.structuredContent["status"] == "error"
             assert invalid_pi_groups.structuredContent["error"]["code"] == "E_INPUT"
 
@@ -475,6 +476,7 @@ async def main(plugin_root: Path | None = None) -> None:
                     ]
                 },
             )
+            assert partial.isError is False
             assert partial.structuredContent["status"] == "partial"
             assert partial.structuredContent["results"][0]["index"] == 0
             assert partial.structuredContent["results"][0]["error"]["code"] == "E_INPUT"
@@ -562,6 +564,7 @@ async def main(plugin_root: Path | None = None) -> None:
                 "math.run",
                 {"operation": "expression.evaluate", "arguments": {"expression": "__import__('os').system('id')"}},
             )
+            assert blocked.isError is True
             assert blocked.structuredContent["status"] == "error"
             assert blocked.structuredContent["error"]["code"] in {"E_AST_BLOCK", "E_NAME"}
 
@@ -575,7 +578,7 @@ async def main(plugin_root: Path | None = None) -> None:
         "MCP runtime check passed through plugin transport: one-call typed run, multilingual discovery, "
         "description, equivalence and solution verification, unit expressions, symbolic dimensional analysis and Pi groups, financial math, stability-aware "
         "linear solving, numerical integration, probability, inferential statistics, standard algebra, exact/high-precision results, "
-        "schema rejection, domain errors, precision provenance, large integer output, ordered partial batch, cancellation recovery, "
+        "schema rejection, MCP tool-error signaling, domain errors, precision provenance, large integer output, ordered partial batch, cancellation recovery, "
         "and unsafe-input rejection. "
         f"math.run advertises {len(run_tool.inputSchema['oneOf'])} input variants in {run_schema_bytes} bytes; "
         f"its result contract is {run_output_schema_bytes} bytes; "

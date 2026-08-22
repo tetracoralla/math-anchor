@@ -40,6 +40,13 @@ final class CalculatorKeyboardMonitor {
                 return event
             }
 
+            // Any calculator keystroke closes an open popover so digits and
+            // operators never edit the value invisibly behind it.
+            if store.isModePopoverPresented || conversionStore.activePopover != nil {
+                store.isModePopoverPresented = false
+                conversionStore.dismissActivePopover()
+            }
+
             switch event.keyCode {
             case 36, 76:
                 if store.mode == .conversion {

@@ -14,10 +14,6 @@ struct UnitConversionResult: Equatable, Sendable {
         return approximate ?? exact
     }
 
-    var continuationValue: String {
-        approximate ?? exact ?? "0"
-    }
-
     var distinctExactValue: String? {
         guard let exact, approximate != nil, displayValue != exact else { return nil }
         return exact

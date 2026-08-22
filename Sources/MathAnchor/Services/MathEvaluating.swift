@@ -38,7 +38,7 @@ enum MathRuntimeError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .runtimeNotInstalled:
-            "The local calculation runtime is not installed. Run script/bootstrap.sh."
+            "The calculation engine could not be started."
         case .invalidResponse:
             "The calculation runtime returned an invalid response."
         case .cancelled:

@@ -19,6 +19,7 @@ final class UnitConversionStore: ObservableObject {
     @Published private(set) var rateMetadata: CurrencyRateMetadata?
     @Published private(set) var rateMessage: String?
     @Published private(set) var activePopover: ConversionPopover?
+    @Published private(set) var isShowingDelayedProgress = false
 
     private let runtime: any UnitConverting
     private let currencyRuntime: (any CurrencyConverting)?
@@ -26,7 +27,10 @@ final class UnitConversionStore: ObservableObject {
     private var revision = 0
     private var activeRequestID: UUID?
     private var scheduledTask: Task<Void, Never>?
+    private var progressTask: Task<Void, Never>?
     private var inputComesFromResult = false
+    private var completedSourceUnit: UnitDefinition?
+    private var completedTargetUnit: UnitDefinition?
 
     init(
         runtime: any UnitConverting,
@@ -47,9 +51,15 @@ final class UnitConversionStore: ObservableObject {
     }
 
     var resultForDisplay: String {
-        isConverting && output == "—"
+        isShowingDelayedProgress || (isConverting && output == "—")
             ? "…"
             : ConversionDisplayFormatting.value(output)
+    }
+
+    /// True only while the first result for the current units is still
+    /// pending; value-only refreshes keep the previous result visible.
+    var isAwaitingFirstResult: Bool {
+        isConverting && output == "—"
     }
 
     var isCurrencyConversion: Bool {
@@ -182,21 +192,44 @@ final class UnitConversionStore: ObservableObject {
         forceCurrencyRefresh: Bool = false
     ) {
         scheduledTask?.cancel()
-        runtime.cancelPendingConversion()
-        currencyRuntime?.cancelPendingCurrencyConversion()
+        progressTask?.cancel()
+        isShowingDelayedProgress = false
         revision &+= 1
         let submittedRevision = revision
         let requestID = UUID()
         activeRequestID = requestID
         isConverting = true
         errorMessage = nil
-        distinctExactResult = nil
-        output = "—"
-        rateMetadata = nil
-        rateMessage = nil
-        let submittedInput = normalizedInput
         let submittedSource = sourceUnit
         let submittedTarget = targetUnit
+        // A value-only edit keeps the previous result, exact value, and rate
+        // metadata on screen until the replacement lands; wiping them per
+        // keystroke turned every key into an old-value → "…" → new-value
+        // flash and churned the currency footer through UPDATING.
+        let keepsPriorResult =
+            output != "—"
+            && submittedSource == completedSourceUnit
+            && submittedTarget == completedTargetUnit
+            && !forceCurrencyRefresh
+        if !keepsPriorResult {
+            distinctExactResult = nil
+            output = "—"
+            rateMetadata = nil
+            rateMessage = nil
+        } else {
+            // Preserve a warm-path result without flashing, but never leave a
+            // new input paired with an old output indefinitely. Once the
+            // replacement takes longer than a few frames, surface progress.
+            progressTask = Task { [weak self] in
+                try? await Task.sleep(for: .milliseconds(180))
+                guard !Task.isCancelled, let self,
+                      self.isCurrent(requestID, revision: submittedRevision)
+                else { return }
+                self.isShowingDelayedProgress = true
+            }
+        }
+        let submittedInput = normalizedInput
+        let submittedForCurrency = submittedSource.isCurrency
 
         scheduledTask = Task { [weak self] in
             if !immediate {
@@ -204,7 +237,7 @@ final class UnitConversionStore: ObservableObject {
             }
             guard !Task.isCancelled, let self else { return }
             do {
-                if submittedSource.isCurrency {
+                if submittedForCurrency {
                     guard let currencyRuntime = self.currencyRuntime else {
                         throw MathRuntimeError.operation("Currency rates are unavailable.")
                     }
@@ -218,6 +251,7 @@ final class UnitConversionStore: ObservableObject {
                     guard self.isCurrent(requestID, revision: submittedRevision) else { return }
                     self.activeRequestID = nil
                     self.isConverting = false
+                    self.finishProgress()
                     self.output = result.displayValue
                     self.rateMetadata = result.rate
                     if result.rate.refreshFailed {
@@ -228,7 +262,7 @@ final class UnitConversionStore: ObservableObject {
                         self.rateMessage = nil
                     }
                 } else {
-                    let result = try await runtime.convert(
+                    let result = try await self.runtime.convert(
                         value: submittedInput,
                         fromUnit: submittedSource.runtimeUnit,
                         toUnit: submittedTarget.runtimeUnit,
@@ -237,20 +271,26 @@ final class UnitConversionStore: ObservableObject {
                     guard self.isCurrent(requestID, revision: submittedRevision) else { return }
                     self.activeRequestID = nil
                     self.isConverting = false
+                    self.finishProgress()
                     self.output = result.displayValue
                     self.distinctExactResult = result.distinctExactValue
                 }
+                self.completedSourceUnit = submittedSource
+                self.completedTargetUnit = submittedTarget
             } catch {
                 guard self.isCurrent(requestID, revision: submittedRevision) else { return }
                 self.activeRequestID = nil
                 self.isConverting = false
+                self.finishProgress()
                 self.output = "—"
-                if submittedSource.isCurrency {
+                self.completedSourceUnit = nil
+                self.completedTargetUnit = nil
+                if submittedForCurrency {
                     self.rateMetadata = nil
                     self.rateMessage = nil
                 }
                 if error as? MathRuntimeError != .cancelled {
-                    self.errorMessage = submittedSource.isCurrency
+                    self.errorMessage = submittedForCurrency
                         ? "Rates unavailable"
                         : "Conversion unavailable"
                 }
@@ -270,5 +310,11 @@ final class UnitConversionStore: ObservableObject {
 
     private func isCurrent(_ id: UUID, revision: Int) -> Bool {
         activeRequestID == id && self.revision == revision
+    }
+
+    private func finishProgress() {
+        progressTask?.cancel()
+        progressTask = nil
+        isShowingDelayedProgress = false
     }
 }

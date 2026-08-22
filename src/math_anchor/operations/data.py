@@ -43,6 +43,12 @@ def _float_unit_registry() -> pint.UnitRegistry:
     return _FLOAT_UNIT_REGISTRY
 
 
+def warm_unit_registries() -> None:
+    """Build both lazy registries now rather than inside a request budget."""
+    _exact_unit_registry()
+    _float_unit_registry()
+
+
 def statistics_describe(arguments: dict[str, Any]) -> dict[str, Any]:
     values = list_arg(arguments, "values", maximum=100_000)
     precision = integer_arg(arguments, "precision", default=16, minimum=2, maximum=200)

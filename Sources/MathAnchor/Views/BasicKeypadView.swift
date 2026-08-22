@@ -79,7 +79,6 @@ struct BasicKeypadView: View {
     private func digit(_ value: String) -> some View {
         key(value, shortcut: KeyEquivalent(Character(value))) { store.append(value) }
     }
-
     private func key(
         _ title: String,
         systemImage: String? = nil,
@@ -123,5 +122,11 @@ struct BasicKeypadView: View {
             symbolSize: 22,
             action: action
         )
+    }
+}
+
+extension BasicKeypadView: Equatable {
+    nonisolated static func == (lhs: BasicKeypadView, rhs: BasicKeypadView) -> Bool {
+        lhs.store === rhs.store
     }
 }

@@ -177,8 +177,10 @@ def _tool_result(result: dict[str, Any]) -> CallToolResult:
     return CallToolResult(
         content=[TextContent(type="text", text=summary)],
         structuredContent=result,
-        # MCP execution errors must not be mistaken for successful provider
-        # results by a host that preserves the transport error boundary.
+        # MCP reports tool execution errors — including domain and input
+        # errors — through isError so host frameworks cannot mistake a failed
+        # call for a successful one. A partial batch is a valid batch result;
+        # its per-item envelopes carry their own statuses.
         isError=failed,
     )
 

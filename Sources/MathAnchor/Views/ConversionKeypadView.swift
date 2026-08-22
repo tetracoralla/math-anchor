@@ -69,3 +69,9 @@ struct ConversionKeypadView: View {
         )
     }
 }
+
+extension ConversionKeypadView: Equatable {
+    nonisolated static func == (lhs: ConversionKeypadView, rhs: ConversionKeypadView) -> Bool {
+        lhs.store === rhs.store
+    }
+}

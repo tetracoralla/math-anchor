@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import signal
 import threading
+import time
 
 import pytest
 
@@ -90,3 +91,71 @@ def test_guard_is_skipped_off_the_main_thread() -> None:
     thread.start()
     thread.join()
     assert outcomes == ["ran"]
+
+
+def test_guard_reports_the_budget_it_actually_armed() -> None:
+    # Negative regression: the timeout handler used a process-global default,
+    # so direct context-manager callers received a false 10000 ms detail even
+    # when they had armed a much smaller bound.
+    with pytest.raises(CalculatorError) as raised:
+        with in_process_evaluation_timeout(0.02):
+            time.sleep(0.1)
+    assert raised.value.code == "E_TIMEOUT"
+    assert raised.value.details == {"timeoutMs": 20}
+
+
+def test_nested_guard_does_not_postpone_or_replace_an_outer_deadline() -> None:
+    class OuterDeadline(Exception):
+        pass
+
+    def outer_handler(signum, frame):
+        raise OuterDeadline
+
+    previous_handler = signal.getsignal(signal.SIGALRM)
+    previous_timer = signal.getitimer(signal.ITIMER_REAL)
+    signal.signal(signal.SIGALRM, outer_handler)
+    signal.setitimer(signal.ITIMER_REAL, 0.05)
+    try:
+        with pytest.raises(OuterDeadline):
+            with in_process_evaluation_timeout(0.5):
+                time.sleep(0.2)
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0.0)
+        signal.signal(signal.SIGALRM, previous_handler)
+        if previous_timer[0] > 0:
+            signal.setitimer(signal.ITIMER_REAL, *previous_timer)
+
+
+def test_execute_direct_honors_an_explicit_caller_budget() -> None:
+    with pytest.raises(CalculatorError) as raised:
+        execute_direct(
+            "expression.evaluate",
+            {"expression": "floor(gamma(exp(7)))", "precision": 16},
+            timeout_ms=200,
+        )
+    assert raised.value.code == "E_TIMEOUT"
+    assert raised.value.details == {"timeoutMs": 200}
+
+
+@pytest.mark.parametrize("timeout_ms", [True, 99, 30_001, "1000"])
+def test_execute_direct_rejects_invalid_explicit_budgets(timeout_ms) -> None:
+    with pytest.raises(CalculatorError) as raised:
+        execute_direct(
+            "expression.evaluate",
+            {"expression": "6*7"},
+            timeout_ms=timeout_ms,
+        )
+    assert raised.value.code == "E_LIMIT"
+
+
+def test_explicit_caller_budget_replaces_the_default_constant(monkeypatch) -> None:
+    # Negative regression: the sandboxed worker forwards each request's
+    # timeoutMs here. If the explicit budget stopped overriding the default
+    # constant, every budget above ten seconds would be silently cut at it.
+    monkeypatch.setattr(runtime, "EVALUATION_TIMEOUT_SECONDS", 0.2)
+    result = execute_direct(
+        "expression.evaluate",
+        {"expression": "floor(gamma(exp(7)))", "precision": 16},
+        timeout_ms=30_000,
+    )
+    assert result["status"] == "ok"

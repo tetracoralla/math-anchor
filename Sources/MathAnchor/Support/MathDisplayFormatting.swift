@@ -7,6 +7,7 @@ enum MathDisplayFormatting {
             .replacingOccurrences(of: "*", with: "×")
             .replacingOccurrences(of: "/", with: "÷")
             .replacingOccurrences(of: "-", with: "−")
+            .replacingOccurrences(of: "pi", with: "π")
     }
 
 }

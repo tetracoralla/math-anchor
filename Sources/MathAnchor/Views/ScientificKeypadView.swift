@@ -28,31 +28,27 @@ struct ScientificKeypadView: View {
                 function("log")
             }
             GridRow {
-                applied("factorial", title: "n!")
+                function("factorial", title: "n!")
                 function("asin", title: "sin⁻¹")
                 function("acos", title: "cos⁻¹")
                 function("atan", title: "tan⁻¹")
                 function("exp", title: "eˣ")
-                applied("abs", title: "|x|")
+                function("abs", title: "|x|")
             }
             GridRow {
                 function("sinh")
                 function("cosh")
                 function("tanh")
-                applied("floor", title: "floor")
-                applied("ceil", title: "ceil")
+                function("floor", title: "floor")
+                function("ceil", title: "ceil")
                 key("i") { store.append("i") }
             }
         }
-        .frame(width: 364)
+        .frame(width: 394)
     }
 
     private func function(_ name: String, title: String? = nil) -> some View {
         key(title ?? name) { store.applyFunction(name) }
-    }
-
-    private func applied(_ name: String, title: String) -> some View {
-        key(title) { store.applyToCurrent(name) }
     }
 
     private func key(
@@ -67,5 +63,11 @@ struct ScientificKeypadView: View {
             width: CalculatorLayout.scientificKeyWidth,
             action: action
         )
+    }
+}
+
+extension ScientificKeypadView: Equatable {
+    nonisolated static func == (lhs: ScientificKeypadView, rhs: ScientificKeypadView) -> Bool {
+        lhs.store === rhs.store
     }
 }

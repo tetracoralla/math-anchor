@@ -8,6 +8,7 @@ struct UnitPickerView: View {
     let onSelect: (UnitDefinition) -> Void
 
     @State private var query = ""
+    @FocusState private var searchFocused: Bool
 
     private var filteredUnits: [UnitDefinition] {
         let search = query.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -60,7 +61,11 @@ struct UnitPickerView: View {
         VStack(spacing: 8) {
             TextField("Search units", text: $query)
                 .textFieldStyle(.roundedBorder)
+                .focused($searchFocused)
                 .accessibilityLabel("Search units")
+                .onAppear {
+                    searchFocused = true
+                }
 
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 3) {

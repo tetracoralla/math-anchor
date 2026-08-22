@@ -68,10 +68,14 @@ enum ExpressionEditing {
 
     static func trailingOperand(in expression: String) -> TrailingOperand? {
         guard !expression.isEmpty else { return nil }
+        // Operator binding stops at the innermost still-open group, so edits
+        // inside "(5+3" address the pending `3` exactly as they would at the
+        // top level instead of swallowing the whole open parenthetical.
+        let scanStart = innermostGroupStart(in: expression)
         var depth = 0
         var lastOperatorRange: Range<String.Index>?
         var lastOperatorToken: String?
-        var index = expression.startIndex
+        var index = scanStart
 
         while index < expression.endIndex {
             let character = expression[index]
@@ -131,6 +135,27 @@ enum ExpressionEditing {
             return replacement
         }
         return left + operatorToken + replacement
+    }
+
+    /// Index just past the last "(" with no matching ")". Scanning backward,
+    /// the first "(" that nothing closes is the innermost still-open group.
+    private static func innermostGroupStart(in expression: String) -> String.Index {
+        var depthFromEnd = 0
+        var index = expression.endIndex
+        while index > expression.startIndex {
+            index = expression.index(before: index)
+            let character = expression[index]
+            if character == ")" {
+                depthFromEnd += 1
+            } else if character == "(" {
+                if depthFromEnd > 0 {
+                    depthFromEnd -= 1
+                } else {
+                    return expression.index(after: index)
+                }
+            }
+        }
+        return expression.startIndex
     }
 
     private static func isBinaryOperator(
