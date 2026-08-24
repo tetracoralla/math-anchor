@@ -59,8 +59,19 @@ struct CalculatorWindowConfigurator: NSViewRepresentable {
     }
 
     private static func resize(_ window: NSWindow, to contentSize: CGSize, animated: Bool) {
-        let targetContentRect = NSRect(origin: .zero, size: contentSize)
-        let targetWindowSize = window.frameRect(forContentRect: targetContentRect).size
+        // `fullSizeContentView` makes AppKit's frame/content conversion report
+        // the whole frame as content, while SwiftUI still lays this view out
+        // below `contentLayoutRect`'s titlebar safe area.  Using
+        // frameRect(forContentRect:) here therefore removed that inset on the
+        // first mode switch: the 492 pt basic layout was forced into a 492 pt
+        // frame instead of the 524 pt frame it needs, clipping the keypad's
+        // bottom clearance. Preserve the live chrome inset explicitly so the
+        // requested size always remains the usable SwiftUI layout area.
+        let chromeHeight = max(0, window.frame.height - window.contentLayoutRect.height)
+        let targetWindowSize = CGSize(
+            width: contentSize.width,
+            height: contentSize.height + chromeHeight
+        )
         var targetFrame = window.frame
         targetFrame.origin.y += targetFrame.height - targetWindowSize.height
         targetFrame.size = targetWindowSize
@@ -75,8 +86,10 @@ struct CalculatorWindowConfigurator: NSViewRepresentable {
                 targetFrame.origin.y = visibleFrame.minY
             }
         }
-        window.contentMinSize = contentSize
-        window.contentMaxSize = contentSize
+        // The calculator is non-resizable. Frame limits avoid reinterpreting
+        // the usable content size through full-size-titlebar semantics.
+        window.minSize = targetWindowSize
+        window.maxSize = targetWindowSize
 
         // One controllable timeline shared with the SwiftUI content
         // animation, instead of AppKit's fixed-duration setFrame animation

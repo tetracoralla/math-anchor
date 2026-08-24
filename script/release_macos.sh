@@ -13,6 +13,7 @@ ARCHIVE="$ROOT_DIR/dist/Math-Anchor-$VERSION-$EXPECTED_ARCH.zip"
 NOTARY_ARCHIVE="$ROOT_DIR/dist/.Math-Anchor-$VERSION-$EXPECTED_ARCH-notary.zip"
 CHECKSUM="$ARCHIVE.sha256"
 SBOM="$ROOT_DIR/dist/Math-Anchor-$VERSION-$EXPECTED_ARCH.spdx.json"
+SBOM_CHECKSUM="$SBOM.sha256"
 APP_RUNTIME_BUNDLE="$APP_BUNDLE/Contents/Resources/Runtime/math-anchor-runtime"
 APP_RUNTIME="$APP_RUNTIME_BUNDLE/math-anchor-runtime"
 
@@ -34,7 +35,8 @@ fi
   "$ARCHIVE" \
   "$NOTARY_ARCHIVE" \
   "$CHECKSUM" \
-  "$SBOM"
+  "$SBOM" \
+  "$SBOM_CHECKSUM"
 
 MATH_ANCHOR_BUILD_CONFIGURATION=release \
 MATH_ANCHOR_APP_VERSION="$VERSION" \
@@ -84,7 +86,7 @@ done < <(find "$APP_BUNDLE/Contents" -type f -print0)
 codesign --force --timestamp --options runtime --sign "$SIGNING_IDENTITY" "$APP_BUNDLE"
 codesign --verify --deep --strict --verbose=2 "$APP_BUNDLE"
 
-rm -f "$NOTARY_ARCHIVE" "$ARCHIVE" "$CHECKSUM" "$SBOM"
+rm -f "$NOTARY_ARCHIVE" "$ARCHIVE" "$CHECKSUM" "$SBOM" "$SBOM_CHECKSUM"
 ditto -c -k --keepParent "$APP_BUNDLE" "$NOTARY_ARCHIVE"
 NOTARY_ARGUMENTS=(--keychain-profile "$NOTARY_PROFILE" --wait)
 if [[ -n "$NOTARY_KEYCHAIN" ]]; then
@@ -99,6 +101,7 @@ cp "$APP_RUNTIME_BUNDLE/sbom.spdx.json" "$SBOM"
 (
   cd "$ROOT_DIR/dist"
   shasum -a 256 "${ARCHIVE##*/}" > "${CHECKSUM##*/}"
+  shasum -a 256 "${SBOM##*/}" > "${SBOM_CHECKSUM##*/}"
 )
 rm -f "$NOTARY_ARCHIVE"
-printf '%s\n%s\n%s\n' "$ARCHIVE" "$CHECKSUM" "$SBOM"
+printf '%s\n%s\n%s\n%s\n' "$ARCHIVE" "$CHECKSUM" "$SBOM" "$SBOM_CHECKSUM"

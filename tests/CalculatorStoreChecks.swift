@@ -650,11 +650,174 @@ struct CalculatorStoreChecks {
             "percent inside a group stores a balanced executable expression"
         )
 
+        // Unary edits after a percent must stay faithful to the visible
+        // notation: the executable string is re-derived from the edited
+        // visible expression, never spliced onto the stale percent expansion.
+        let unaryPercentStore = CalculatorStore(
+            runtime: SuccessfulRuntime(result: EvaluationResult(exact: "0", approximate: "0")),
+            historyStore: history,
+            clipboard: clipboard
+        )
+        unaryPercentStore.replaceExpression("50")
+        unaryPercentStore.percent()
+        unaryPercentStore.applyFunction("sin")
+        check(
+            unaryPercentStore.expression == "sin(50%)",
+            "function after percent keeps the visible percent notation"
+        )
+        unaryPercentStore.evaluate()
+        await waitForEvaluation(unaryPercentStore)
+        check(
+            unaryPercentStore.history.first?.executionExpression == "sin((50)/100)",
+            "function after percent stores a faithful executable expression"
+        )
+        unaryPercentStore.clear()
+        unaryPercentStore.replaceExpression("50")
+        unaryPercentStore.percent()
+        unaryPercentStore.reciprocal()
+        check(
+            unaryPercentStore.expression == "1/(50%)",
+            "reciprocal after percent wraps the percent operand"
+        )
+        unaryPercentStore.evaluate()
+        await waitForEvaluation(unaryPercentStore)
+        check(
+            unaryPercentStore.history.first?.executionExpression == "1/((50)/100)",
+            "reciprocal after percent stores a faithful executable expression"
+        )
+        unaryPercentStore.clear()
+        unaryPercentStore.replaceExpression("200+10")
+        unaryPercentStore.percent()
+        unaryPercentStore.applyFunction("sin")
+        check(
+            unaryPercentStore.expression == "200+sin(10%)",
+            "function after an additive percent wraps only the percent operand"
+        )
+        unaryPercentStore.evaluate()
+        await waitForEvaluation(unaryPercentStore)
+        check(
+            unaryPercentStore.history.first?.executionExpression == "200+sin((10)/100)",
+            "function after an additive percent keeps the expansion on the correct operand"
+        )
+        unaryPercentStore.clear()
+        unaryPercentStore.replaceExpression("200+10")
+        unaryPercentStore.percent()
+        unaryPercentStore.toggleSign()
+        check(
+            unaryPercentStore.expression == "200-10%",
+            "sign change after percent stays human-readable"
+        )
+        unaryPercentStore.evaluate()
+        await waitForEvaluation(unaryPercentStore)
+        check(
+            unaryPercentStore.history.first?.executionExpression == "200-((200)*(10)/100)",
+            "sign change after percent keeps the additive expansion on the flipped operator"
+        )
+
+        let liveUnaryPercentStore = CalculatorStore(runtime: liveRuntime, historyStore: history, clipboard: clipboard)
+        liveUnaryPercentStore.replaceExpression("50")
+        liveUnaryPercentStore.percent()
+        liveUnaryPercentStore.applyFunction("sin")
+        liveUnaryPercentStore.evaluate()
+        await waitForEvaluation(liveUnaryPercentStore)
+        check(
+            liveUnaryPercentStore.display == "0.479425538604203",
+            "function after percent evaluates the displayed operand"
+        )
+        liveUnaryPercentStore.clear()
+        liveUnaryPercentStore.replaceExpression("50")
+        liveUnaryPercentStore.percent()
+        liveUnaryPercentStore.reciprocal()
+        liveUnaryPercentStore.evaluate()
+        await waitForEvaluation(liveUnaryPercentStore)
+        check(
+            liveUnaryPercentStore.display == "2",
+            "reciprocal after percent evaluates the displayed operand"
+        )
+        liveUnaryPercentStore.clear()
+        liveUnaryPercentStore.replaceExpression("200*10")
+        liveUnaryPercentStore.percent()
+        liveUnaryPercentStore.evaluate()
+        await waitForEvaluation(liveUnaryPercentStore)
+        check(liveUnaryPercentStore.display == "20", "multiplicative percent scales the operand")
+        check(
+            liveUnaryPercentStore.history.first?.executionExpression == "200*(10)/100",
+            "multiplicative percent stores the operand-scaled executable expansion"
+        )
+        liveUnaryPercentStore.clear()
+        liveUnaryPercentStore.replaceExpression("200+10")
+        liveUnaryPercentStore.percent()
+        liveUnaryPercentStore.append("+")
+        liveUnaryPercentStore.append("5")
+        liveUnaryPercentStore.percent()
+        liveUnaryPercentStore.evaluate()
+        await waitForEvaluation(liveUnaryPercentStore)
+        check(liveUnaryPercentStore.display == "231", "chained percent compounds on the accumulated value")
+
+        let liveLogStore = CalculatorStore(runtime: liveRuntime, historyStore: history, clipboard: clipboard)
+        liveLogStore.appendFunction("log")
+        liveLogStore.append("1")
+        liveLogStore.append("0")
+        liveLogStore.append("0")
+        liveLogStore.evaluate()
+        await waitForEvaluation(liveLogStore)
+        check(liveLogStore.display == "2", "the log key computes the familiar base-10 logarithm")
+        check(
+            liveLogStore.history.first?.executionExpression == "log10(100)",
+            "the log key submits the explicit base-10 executable name"
+        )
+        liveLogStore.clear()
+        liveLogStore.appendFunction("log")
+        liveLogStore.append("1")
+        liveLogStore.append("0")
+        liveLogStore.append("0")
+        liveLogStore.backspace()
+        check(
+            liveLogStore.expression == "log(10",
+            "backspace edits the still-open visible log argument"
+        )
+        liveLogStore.evaluate()
+        await waitForEvaluation(liveLogStore)
+        check(
+            liveLogStore.display == "1",
+            "backspace preserves base-10 semantics in a still-open log call"
+        )
+        check(
+            liveLogStore.history.first?.executionExpression == "log10(10)",
+            "re-derived log input keeps the explicit base-10 runtime spelling"
+        )
+        liveLogStore.clear()
+        liveLogStore.appendFunction("ln")
+        liveLogStore.append("1")
+        liveLogStore.append("0")
+        liveLogStore.append("0")
+        liveLogStore.evaluate()
+        await waitForEvaluation(liveLogStore)
+        check(liveLogStore.display == "4.605170185988091", "the ln key keeps the natural logarithm")
+
+        // The visible `log(` token is longer in the executable form (`log10(`).
+        // Clearing it one character at a time must not leave hidden runtime
+        // input that corrupts the next number.
+        liveLogStore.clear()
+        liveLogStore.appendFunction("log")
+        for _ in 0..<4 {
+            liveLogStore.backspace()
+        }
+        check(liveLogStore.expression.isEmpty, "backspace clears the visible log token")
+        liveLogStore.append("2")
+        liveLogStore.evaluate()
+        await waitForEvaluation(liveLogStore)
+        check(liveLogStore.display == "2", "backspace clears the hidden log10 spelling too")
+
         let liveAutocloseStore = CalculatorStore(runtime: liveRuntime, historyStore: history, clipboard: clipboard)
         liveAutocloseStore.replaceExpression("2*(3+4")
         liveAutocloseStore.evaluate()
         await waitForEvaluation(liveAutocloseStore)
         check(liveAutocloseStore.display == "14", "an unmatched opening parenthesis closes at submission")
+        check(
+            liveAutocloseStore.history.first?.expression == "2*(3+4)",
+            "the submitted expression closes open groups in history too"
+        )
 
         let repeatEqualsStore = CalculatorStore(runtime: liveRuntime, historyStore: history, clipboard: clipboard)
         repeatEqualsStore.replaceExpression("6*7")
@@ -747,7 +910,8 @@ struct CalculatorStoreChecks {
         check(warmElapsed < 1.0, "live runtime stays warm between evaluations")
 
         print(
-            "Swift store checks passed: visible/executable expression separation, unary scope, real domain errors, "
+            "Swift store checks passed: visible/executable expression separation, unary scope, unary edits after percent, "
+                + "multiplicative and chained percent, familiar log key semantics, real domain errors, "
                 + "large factorial output, stale-result rejection, isolated clipboard, warm runtime reuse "
                 + "(20 evaluations in \(Int(warmElapsed * 1_000)) ms), physical conversion, history, memory, "
                 + "and failure preservation."

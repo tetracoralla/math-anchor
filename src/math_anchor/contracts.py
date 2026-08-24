@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from collections import Counter
 from copy import deepcopy
+import json
 from typing import Any
 
 from jsonschema import Draft202012Validator
@@ -57,10 +59,16 @@ _LIMIT_PROPERTIES = {
 _TEXT_OR_NULL_REF = {"$ref": "#/$defs/textOrNull"}
 _VALUE_REF = {"$ref": "#/$defs/value"}
 _TEXT_MATRIX_REF = {"$ref": "#/$defs/textMatrix"}
+_TEXT_VECTOR_REF = {"$ref": "#/$defs/textVector"}
 _TEXT_MATRIX_OR_NULL_REF = {"$ref": "#/$defs/textMatrixOrNull"}
 _VALUE_VECTOR_REF = {"$ref": "#/$defs/valueVector"}
 _SHAPE_REF = {"$ref": "#/$defs/shape"}
 _DIMENSION_VECTOR_REF = {"$ref": "#/$defs/dimensionVector"}
+_PROGRAMMER_REPRESENTATION_REF = {"$ref": "#/$defs/programmerRepresentation"}
+_PROGRAMMER_REPRESENTATION_OR_NULL_REF = {"$ref": "#/$defs/programmerRepresentationOrNull"}
+_IEEE_PROJECTION_REF = {"$ref": "#/$defs/ieeeProjection"}
+_IEEE_PROJECTION_OR_NULL_REF = {"$ref": "#/$defs/ieeeProjectionOrNull"}
+_RATIONAL_DECIMAL_OR_NULL_REF = {"$ref": "#/$defs/rationalDecimalOrNull"}
 
 _TEXT_OR_NULL_DEFINITION = {"oneOf": [{"type": "string"}, {"type": "null"}]}
 _VALUE_DEFINITION = {
@@ -73,6 +81,7 @@ _VALUE_DEFINITION = {
     "required": ["exact", "approx"],
 }
 _TEXT_MATRIX_DEFINITION = {"type": "array", "items": {"type": "array", "items": {"type": "string"}}}
+_TEXT_VECTOR_DEFINITION = {"type": "array", "items": {"type": "string"}}
 _TEXT_MATRIX_OR_NULL_DEFINITION = {"oneOf": [_TEXT_MATRIX_REF, {"type": "null"}]}
 _VALUE_VECTOR_DEFINITION = {"type": "array", "items": _VALUE_REF}
 _SHAPE_DEFINITION = {
@@ -90,19 +99,132 @@ _DIMENSION_VECTOR_DEFINITION = {
     },
     "maxProperties": 16,
 }
+_PROGRAMMER_REPRESENTATION_DEFINITION = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "unsignedDecimal": {"type": "string"},
+        "signedDecimal": {"type": "string"},
+        "decimal": {"type": "string"},
+        "binary": {"type": "string", "pattern": r"^[01]+$"},
+        "octal": {"type": "string", "pattern": r"^[0-7]+$"},
+        "hexadecimal": {"type": "string", "pattern": r"^[0-9A-F]+$"},
+        "character": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "validUnicodeScalar": {"type": "boolean"},
+                "unicodeScalar": _TEXT_OR_NULL_REF,
+                "unicodeName": _TEXT_OR_NULL_REF,
+                "character": _TEXT_OR_NULL_REF,
+                "ascii": {"type": "boolean"},
+                "printable": {"type": "boolean"},
+            },
+            "required": [
+                "validUnicodeScalar",
+                "unicodeScalar",
+                "unicodeName",
+                "character",
+                "ascii",
+                "printable",
+            ],
+        },
+    },
+    "required": [
+        "unsignedDecimal",
+        "signedDecimal",
+        "decimal",
+        "binary",
+        "octal",
+        "hexadecimal",
+        "character",
+    ],
+}
+_PROGRAMMER_REPRESENTATION_OR_NULL_DEFINITION = {
+    "oneOf": [_PROGRAMMER_REPRESENTATION_REF, {"type": "null"}]
+}
+_RATIONAL_DECIMAL_DEFINITION = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "rational": {"type": "string"},
+        "decimal": {"type": "string"},
+    },
+    "required": ["rational", "decimal"],
+}
+_RATIONAL_DECIMAL_OR_NULL_DEFINITION = {
+    "oneOf": [{"$ref": "#/$defs/rationalDecimal"}, {"type": "null"}]
+}
+_IEEE_NEIGHBOR_DEFINITION = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "rawHex": {"type": "string"},
+        "roundTripDecimal": {"type": "string"},
+    },
+    "required": ["rawHex", "roundTripDecimal"],
+}
+_IEEE_PROJECTION_DEFINITION = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "classification": {"enum": ["zero", "subnormal", "normal", "infinity", "nan"]},
+        "sign": {"enum": [0, 1]},
+        "negativeZero": {"type": "boolean"},
+        "rawHex": {"type": "string"},
+        "exponentBits": {"type": "string", "pattern": "^[01]+$"},
+        "fractionBits": {"type": "string", "pattern": "^[01]+$"},
+        "unbiasedExponent": {"oneOf": [{"type": "integer"}, {"type": "null"}]},
+        "exactValue": _RATIONAL_DECIMAL_OR_NULL_REF,
+        "roundTripDecimal": {"type": "string"},
+        "ulp": _RATIONAL_DECIMAL_OR_NULL_REF,
+        "previous": {"oneOf": [{"$ref": "#/$defs/ieeeNeighbor"}, {"type": "null"}]},
+        "next": {"oneOf": [{"$ref": "#/$defs/ieeeNeighbor"}, {"type": "null"}]},
+        "inputRounded": {"type": "boolean"},
+        "roundingDirection": {"enum": ["exact", "up", "down", "overflow"]},
+    },
+    "required": [
+        "classification",
+        "sign",
+        "negativeZero",
+        "rawHex",
+        "exponentBits",
+        "fractionBits",
+        "unbiasedExponent",
+        "exactValue",
+        "roundTripDecimal",
+        "ulp",
+        "previous",
+        "next",
+        "inputRounded",
+        "roundingDirection",
+    ],
+}
+_IEEE_PROJECTION_OR_NULL_DEFINITION = {
+    "oneOf": [_IEEE_PROJECTION_REF, {"type": "null"}]
+}
 _SCHEMA_DEFINITIONS = {
     "textOrNull": _TEXT_OR_NULL_DEFINITION,
     "value": _VALUE_DEFINITION,
     "textMatrix": _TEXT_MATRIX_DEFINITION,
+    "textVector": _TEXT_VECTOR_DEFINITION,
     "textMatrixOrNull": _TEXT_MATRIX_OR_NULL_DEFINITION,
     "valueVector": _VALUE_VECTOR_DEFINITION,
     "shape": _SHAPE_DEFINITION,
     "dimensionVector": _DIMENSION_VECTOR_DEFINITION,
+    "programmerRepresentation": _PROGRAMMER_REPRESENTATION_DEFINITION,
+    "programmerRepresentationOrNull": _PROGRAMMER_REPRESENTATION_OR_NULL_DEFINITION,
+    "rationalDecimal": _RATIONAL_DECIMAL_DEFINITION,
+    "rationalDecimalOrNull": _RATIONAL_DECIMAL_OR_NULL_DEFINITION,
+    "ieeeNeighbor": _IEEE_NEIGHBOR_DEFINITION,
+    "ieeeProjection": _IEEE_PROJECTION_DEFINITION,
+    "ieeeProjectionOrNull": _IEEE_PROJECTION_OR_NULL_DEFINITION,
 }
 
 _TEXT_OR_NULL = _TEXT_OR_NULL_REF
 _VALUE = _VALUE_REF
 _TEXT_MATRIX = _TEXT_MATRIX_REF
+_TEXT_VECTOR = _TEXT_VECTOR_REF
 _TEXT_MATRIX_OR_NULL = _TEXT_MATRIX_OR_NULL_REF
 _VALUE_VECTOR = _VALUE_VECTOR_REF
 _SHAPE = _SHAPE_REF
@@ -139,6 +261,38 @@ def _ok_schema(
     }
 
 
+def _numeric_linear_algebra_schema(
+    action: str,
+    properties: dict[str, Any],
+    required: list[str],
+) -> dict[str, Any]:
+    return _ok_schema(
+        "numeric_linear_algebra",
+        {
+            "action": {"const": action},
+            "inputShape": _SHAPE,
+            "rank": {"type": "integer", "minimum": 0},
+            "conditionNumber": {"type": "string"},
+            "singularValues": _TEXT_VECTOR,
+            "tolerance": {"type": "string"},
+            "precision": {"type": "integer", "minimum": 2, "maximum": 15},
+            "numericFormat": {"const": "binary64"},
+            **properties,
+        },
+        [
+            "action",
+            "inputShape",
+            "rank",
+            "conditionNumber",
+            "singularValues",
+            "tolerance",
+            "precision",
+            "numericFormat",
+            *required,
+        ],
+    )
+
+
 ERROR_RESULT_SCHEMA = {
     "type": "object",
     "additionalProperties": False,
@@ -150,9 +304,33 @@ ERROR_RESULT_SCHEMA = {
             "properties": {
                 "code": {"type": "string"},
                 "message": {"type": "string"},
+                "retryable": {"type": "boolean"},
+                "phase": {
+                    "enum": [
+                        "input",
+                        "admission",
+                        "queue",
+                        "startup",
+                        "execution",
+                        "output",
+                        "batch",
+                        "cancellation",
+                    ]
+                },
+                "retryAfterMs": {"type": "integer", "minimum": 1},
+                "suggestedAction": {
+                    "enum": [
+                        "correct_input",
+                        "search_operation",
+                        "reduce_request",
+                        "split_or_reduce",
+                        "retry",
+                        "stop",
+                    ]
+                },
                 "details": {"type": "object"},
             },
-            "required": ["code", "message"],
+            "required": ["code", "message", "retryable", "phase", "suggestedAction"],
         },
     },
     "required": ["status", "error"],
@@ -181,6 +359,37 @@ RUN_RESULT_SCHEMA = {
                 "precision": {"type": "integer", "minimum": 2},
             },
             ["action", "exact", "approx", "precision"],
+        ),
+        _ok_schema(
+            "decimal_quantization",
+            {
+                "action": {"enum": ["decimal_places", "significant_digits", "increment"]},
+                "input": {"type": "string"},
+                "result": {"type": "string"},
+                "quantum": {"type": "string"},
+                "roundingMode": {
+                    "enum": ["half_even", "half_up", "half_down", "toward_zero", "away_from_zero", "ceiling", "floor"]
+                },
+                "changed": {"type": "boolean"},
+                "direction": {"enum": ["up", "down", "unchanged"]},
+                "negativeZero": {"type": "boolean"},
+                "decimalPlaces": {"oneOf": [{"type": "integer"}, {"type": "null"}]},
+                "significantDigits": {"oneOf": [{"type": "integer", "minimum": 1}, {"type": "null"}]},
+                "increment": _TEXT_OR_NULL,
+            },
+            [
+                "action",
+                "input",
+                "result",
+                "quantum",
+                "roundingMode",
+                "changed",
+                "direction",
+                "negativeZero",
+                "decimalPlaces",
+                "significantDigits",
+                "increment",
+            ],
         ),
         _ok_schema(
             "function_table",
@@ -234,6 +443,27 @@ RUN_RESULT_SCHEMA = {
             ["count", "gcd", "lcm"],
         ),
         _ok_schema(
+            "integer_division",
+            {
+                "divisionMode": {"enum": ["truncating", "floor", "euclidean"]},
+                "dividend": {"type": "string"},
+                "divisor": {"type": "string"},
+                "quotient": {"type": "string"},
+                "remainder": {"type": "string"},
+                "remainderNonnegative": {"type": "boolean"},
+                "remainderMagnitudeLessThanDivisor": {"type": "boolean"},
+            },
+            [
+                "divisionMode",
+                "dividend",
+                "divisor",
+                "quotient",
+                "remainder",
+                "remainderNonnegative",
+                "remainderMagnitudeLessThanDivisor",
+            ],
+        ),
+        _ok_schema(
             "modular",
             {
                 "action": {"enum": ["remainder", "power", "inverse"]},
@@ -243,6 +473,149 @@ RUN_RESULT_SCHEMA = {
                 "precision": {"type": "integer", "minimum": 2},
             },
             ["action", "modulus", "exact", "approx", "precision"],
+        ),
+        _ok_schema(
+            "programmer_integer",
+            {
+                "action": {
+                    "enum": [
+                        "represent",
+                        "and",
+                        "or",
+                        "xor",
+                        "nor",
+                        "not",
+                        "negate",
+                        "shift_left",
+                        "logical_shift_right",
+                        "arithmetic_shift_right",
+                        "rotate_left",
+                        "rotate_right",
+                        "reverse_bytes",
+                        "reverse_words",
+                        "count_ones",
+                        "leading_zeros",
+                        "trailing_zeros",
+                        "reverse_bits",
+                        "extract",
+                        "insert",
+                        "align_up",
+                        "align_down",
+                    ]
+                },
+                "bitWidth": {"enum": [8, 16, 32, 64, 128, 256]},
+                "signedness": {"enum": ["unsigned", "twos_complement"]},
+                "inputMode": {"enum": ["value", "bits"]},
+                "operands": {
+                    "type": "array",
+                    "items": _PROGRAMMER_REPRESENTATION_REF,
+                    "minItems": 1,
+                    "maxItems": 2,
+                },
+                "result": _PROGRAMMER_REPRESENTATION_REF,
+                "overflow": {"type": "boolean"},
+                "wrapped": {"type": "boolean"},
+                "truncated": {"type": "boolean"},
+                "discardedBits": _TEXT_OR_NULL,
+                "count": {"oneOf": [{"type": "integer", "minimum": 0}, {"type": "null"}]},
+                "effectiveCount": {"oneOf": [{"type": "integer", "minimum": 0}, {"type": "null"}]},
+                "offset": {"type": "integer", "minimum": 0},
+                "fieldWidth": {"type": "integer", "minimum": 1},
+                "alignment": {"type": "string"},
+            },
+            [
+                "action",
+                "bitWidth",
+                "signedness",
+                "inputMode",
+                "operands",
+                "result",
+                "overflow",
+                "wrapped",
+                "truncated",
+                "discardedBits",
+                "count",
+                "effectiveCount",
+            ],
+        ),
+        _ok_schema(
+            "machine_integer_arithmetic",
+            {
+                "action": {"enum": ["add", "subtract", "multiply", "divide", "remainder"]},
+                "bitWidth": {"enum": [8, 16, 32, 64, 128, 256]},
+                "signedness": {"enum": ["unsigned", "twos_complement"]},
+                "inputMode": {"enum": ["value", "bits"]},
+                "overflowBehavior": {"enum": ["checked", "wrapping", "saturating"]},
+                "divisionMode": {
+                    "oneOf": [
+                        {"enum": ["truncating", "floor", "euclidean"]},
+                        {"type": "null"},
+                    ]
+                },
+                "operands": {
+                    "type": "array",
+                    "items": _PROGRAMMER_REPRESENTATION_REF,
+                    "minItems": 2,
+                    "maxItems": 2,
+                },
+                "mathematicalResult": {"type": "string"},
+                "mathematicalRemainder": _TEXT_OR_NULL_REF,
+                "outcome": {"enum": ["value", "overflow"]},
+                "overflow": {"type": "boolean"},
+                "wrapped": {"type": "boolean"},
+                "saturated": {"type": "boolean"},
+                "result": _PROGRAMMER_REPRESENTATION_OR_NULL_REF,
+                "remainder": _PROGRAMMER_REPRESENTATION_OR_NULL_REF,
+            },
+            [
+                "action",
+                "bitWidth",
+                "signedness",
+                "inputMode",
+                "overflowBehavior",
+                "divisionMode",
+                "operands",
+                "mathematicalResult",
+                "mathematicalRemainder",
+                "outcome",
+                "overflow",
+                "wrapped",
+                "saturated",
+                "result",
+                "remainder",
+            ],
+        ),
+        _ok_schema(
+            "ieee754",
+            {
+                "action": {"enum": ["inspect", "compare"]},
+                "format": {"enum": ["binary32", "binary64"]},
+                "inputMode": {"enum": ["decimal", "bits"]},
+                "value": _IEEE_PROJECTION_REF,
+                "right": _IEEE_PROJECTION_OR_NULL_REF,
+                "comparison": {
+                    "oneOf": [
+                        {"enum": ["less", "equal", "greater", "unordered"]},
+                        {"type": "null"},
+                    ]
+                },
+                "numericEqual": {"oneOf": [{"type": "boolean"}, {"type": "null"}]},
+                "bitsEqual": {"oneOf": [{"type": "boolean"}, {"type": "null"}]},
+                "ulpDistance": _TEXT_OR_NULL_REF,
+                "absoluteDifference": _RATIONAL_DECIMAL_OR_NULL_REF,
+            },
+            [
+                "action",
+                "format",
+                "inputMode",
+                "value",
+                "right",
+                "comparison",
+                "numericEqual",
+                "bitsEqual",
+                "ulpDistance",
+                "absoluteDifference",
+            ],
         ),
         _ok_schema(
             "integer_count",
@@ -308,6 +681,105 @@ RUN_RESULT_SCHEMA = {
                 "precision": {"type": "integer", "minimum": 2},
             },
             ["action", "basis", "dimension", "vectorSize", "precision"],
+        ),
+        _ok_schema(
+            "exact_matrix_algebra",
+            {
+                "action": {"enum": ["matrix_multiply", "transpose"]},
+                "exact": _TEXT_MATRIX,
+                "approx": _TEXT_MATRIX,
+                "precision": {"type": "integer", "minimum": 2},
+                "shape": _SHAPE,
+            },
+            ["action", "exact", "approx", "precision", "shape"],
+        ),
+        _ok_schema(
+            "exact_vector_algebra",
+            {
+                "action": {"enum": ["dot", "norm", "norm_squared"]},
+                "dimension": {"type": "integer", "minimum": 1},
+                "result": _VALUE,
+                "precision": {"type": "integer", "minimum": 2},
+            },
+            ["action", "dimension", "result", "precision"],
+        ),
+        _ok_schema(
+            "exact_vector_algebra",
+            {
+                "action": {"enum": ["cross", "projection"]},
+                "dimension": {"type": "integer", "minimum": 1},
+                "result": _VALUE_VECTOR,
+                "precision": {"type": "integer", "minimum": 2},
+            },
+            ["action", "dimension", "result", "precision"],
+        ),
+        _numeric_linear_algebra_schema(
+            "least_squares",
+            {
+                "classification": {"enum": ["full_rank", "rank_deficient"]},
+                "solutionUnique": {"type": "boolean"},
+                "solutionConvention": {
+                    "enum": [
+                        "unique_least_squares_minimizer",
+                        "minimum_euclidean_norm",
+                    ]
+                },
+                "solution": _TEXT_VECTOR,
+                "residualNorm": {"type": "string"},
+                "relativeResidualNorm": {"type": "string"},
+            },
+            [
+                "classification",
+                "solutionUnique",
+                "solutionConvention",
+                "solution",
+                "residualNorm",
+                "relativeResidualNorm",
+            ],
+        ),
+        _numeric_linear_algebra_schema(
+            "qr",
+            {
+                "mode": {"enum": ["reduced", "complete"]},
+                "q": _TEXT_MATRIX,
+                "r": _TEXT_MATRIX,
+                "reconstructionError": {"type": "string"},
+                "orthogonalityError": {"type": "string"},
+            },
+            ["mode", "q", "r", "reconstructionError", "orthogonalityError"],
+        ),
+        _numeric_linear_algebra_schema(
+            "svd",
+            {
+                "fullMatrices": {"type": "boolean"},
+                "u": _TEXT_MATRIX,
+                "vTranspose": _TEXT_MATRIX,
+                "reconstructionError": {"type": "string"},
+            },
+            ["fullMatrices", "u", "vTranspose", "reconstructionError"],
+        ),
+        _numeric_linear_algebra_schema(
+            "pseudoinverse",
+            {
+                "pseudoinverse": _TEXT_MATRIX,
+                "penroseResiduals": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "aAaMinusA": {"type": "string"},
+                        "aPlusAaPlusMinusAPlus": {"type": "string"},
+                        "aAaSymmetry": {"type": "string"},
+                        "aPlusASymmetry": {"type": "string"},
+                    },
+                    "required": [
+                        "aAaMinusA",
+                        "aPlusAaPlusMinusAPlus",
+                        "aAaSymmetry",
+                        "aPlusASymmetry",
+                    ],
+                },
+            },
+            ["pseudoinverse", "penroseResiduals"],
         ),
         _ok_schema(
             "series",
@@ -390,6 +862,31 @@ RUN_RESULT_SCHEMA = {
                 "precision",
                 "ddof",
             ],
+        ),
+        _ok_schema(
+            "unit_catalog",
+            {
+                "query": {"type": "string"},
+                "category": _TEXT_OR_NULL,
+                "count": {"type": "integer", "minimum": 0},
+                "units": {
+                    "type": "array",
+                    "maxItems": 50,
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": {
+                            "id": {"type": "string"},
+                            "category": {"type": "string"},
+                            "name": {"type": "string"},
+                            "symbol": {"type": "string"},
+                            "runtimeUnit": {"type": "string"},
+                        },
+                        "required": ["id", "category", "name", "symbol", "runtimeUnit"],
+                    },
+                },
+            },
+            ["query", "category", "count", "units"],
         ),
         _ok_schema(
             "quantity",
@@ -935,7 +1432,7 @@ RUN_RESULT_SCHEMA = {
         _ok_schema(
             "probability",
             {
-                "distribution": {"enum": ["normal", "binomial", "poisson"]},
+                "distribution": {"enum": ["normal", "binomial", "poisson", "beta", "gamma", "lognormal"]},
                 "function": {"enum": ["pdf", "cdf", "quantile", "pmf"]},
                 "value": _VALUE,
                 "parameters": {
@@ -954,9 +1451,62 @@ RUN_RESULT_SCHEMA = {
             ["distribution", "function", "value", "parameters", "method", "support", "precision"],
         ),
         _ok_schema(
+            "uncertainty_propagation",
+            {
+                "expression": {"type": "string"},
+                "variableOrder": {"type": "array", "items": {"type": "string"}},
+                "nominal": _VALUE,
+                "combinedStandardUncertainty": _VALUE,
+                "expandedUncertainty": _VALUE,
+                "coverageFactor": {"type": "string"},
+                "sensitivityCoefficients": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": {
+                            "variable": {"type": "string"},
+                            "value": _VALUE,
+                        },
+                        "required": ["variable", "value"],
+                    },
+                },
+                "covarianceMatrix": _TEXT_MATRIX,
+                "correlationsApplied": {"type": "integer", "minimum": 0},
+                "linearModel": {"type": "boolean"},
+                "method": {"const": "first_order_taylor_covariance"},
+                "coordinateSystem": {"const": "coherent_input_units"},
+                "precision": {"type": "integer", "minimum": 16},
+            },
+            [
+                "expression",
+                "variableOrder",
+                "nominal",
+                "combinedStandardUncertainty",
+                "expandedUncertainty",
+                "coverageFactor",
+                "sensitivityCoefficients",
+                "covarianceMatrix",
+                "correlationsApplied",
+                "linearModel",
+                "method",
+                "coordinateSystem",
+                "precision",
+            ],
+        ),
+        _ok_schema(
             "inference",
             {
-                "action": {"enum": ["mean_confidence_interval", "one_sample_t_test", "linear_regression"]},
+                "action": {
+                    "enum": [
+                        "mean_confidence_interval",
+                        "one_sample_t_test",
+                        "linear_regression",
+                        "paired_t_test",
+                        "two_sample_t_test",
+                        "chi_square_goodness_of_fit",
+                    ]
+                },
                 "sampleSize": {"type": "integer", "minimum": 2},
                 "estimates": {
                     "type": "array",
@@ -990,7 +1540,12 @@ RUN_RESULT_SCHEMA = {
                             "additionalProperties": False,
                             "properties": {
                                 "statistic": _VALUE,
-                                "degreesOfFreedom": {"type": "integer", "minimum": 1},
+                                "degreesOfFreedom": {
+                                    "oneOf": [
+                                        {"type": "integer", "minimum": 1},
+                                        {"type": "string"},
+                                    ]
+                                },
                                 "pValue": _VALUE,
                                 "alternative": {"enum": ["two_sided", "less", "greater"]},
                             },
@@ -1137,15 +1692,151 @@ def operation_request_variants(
     return variants
 
 
+def _compress_schema_references(schema: dict[str, Any]) -> dict[str, Any]:
+    """Deduplicate repeated input-schema fragments for MCP discovery.
+
+    Runtime validation and math.describe keep the registry's expanded schemas.
+    Only the combined math.run discovery schema uses local JSON Schema refs, so
+    adding typed operations does not linearly repeat shared decimal, matrix,
+    expression, and limit shapes in every tool listing.
+    """
+
+    def fingerprint(value: dict[str, Any]) -> str:
+        return json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+
+    def child_schemas(value: dict[str, Any]) -> list[dict[str, Any]]:
+        children: list[dict[str, Any]] = []
+        for container_name in ("properties", "$defs"):
+            container = value.get(container_name)
+            if isinstance(container, dict):
+                children.extend(item for item in container.values() if isinstance(item, dict))
+        for child_name in (
+            "items",
+            "additionalProperties",
+            "propertyNames",
+            "contains",
+            "not",
+            "if",
+            "then",
+            "else",
+        ):
+            child = value.get(child_name)
+            if isinstance(child, dict):
+                children.append(child)
+        for list_name in ("oneOf", "anyOf", "allOf", "prefixItems"):
+            items = value.get(list_name)
+            if isinstance(items, list):
+                children.extend(item for item in items if isinstance(item, dict))
+        return children
+
+    counts: Counter[str] = Counter()
+    originals: dict[str, dict[str, Any]] = {}
+
+    def count(value: dict[str, Any]) -> None:
+        serialized = fingerprint(value)
+        counts[serialized] += 1
+        originals.setdefault(serialized, value)
+        for child in child_schemas(value):
+            count(child)
+
+    count(schema)
+    selected = set()
+    for serialized, occurrences in counts.items():
+        if occurrences < 2 or '"$ref"' in serialized:
+            continue
+        size = len(serialized.encode("utf-8"))
+        # A local reference currently costs at most 28 bytes and its compact
+        # definition key at most 8. Select a fragment only when replacing every
+        # duplicate has a real serialized saving plus a small safety margin.
+        # This retains small schemas inline while allowing highly repeated
+        # 40–79 byte programmer/limit fragments to earn their way into $defs.
+        estimated_saving = (occurrences - 1) * size - occurrences * 28 - 8
+        if estimated_saving >= 0:
+            selected.add(serialized)
+    # These definitions live only inside one generated schema, so compact,
+    # deterministic ordinal names carry the same semantics as long hashes and
+    # save every Agent from paying for repeated 12-character suffixes.
+    names = {
+        serialized: f"s{index}"
+        for index, serialized in enumerate(sorted(selected))
+    }
+
+    def replace(value: dict[str, Any], *, skip: str | None = None) -> dict[str, Any]:
+        serialized = fingerprint(value)
+        if serialized in selected and serialized != skip:
+            return {"$ref": f"#/$defs/{names[serialized]}"}
+        output = deepcopy(value)
+        for container_name in ("properties", "$defs"):
+            container = output.get(container_name)
+            if isinstance(container, dict):
+                output[container_name] = {
+                    key: replace(item, skip=skip) if isinstance(item, dict) else item
+                    for key, item in container.items()
+                }
+        for child_name in (
+            "items",
+            "additionalProperties",
+            "propertyNames",
+            "contains",
+            "not",
+            "if",
+            "then",
+            "else",
+        ):
+            child = output.get(child_name)
+            if isinstance(child, dict):
+                output[child_name] = replace(child, skip=skip)
+        for list_name in ("oneOf", "anyOf", "allOf", "prefixItems"):
+            items = output.get(list_name)
+            if isinstance(items, list):
+                output[list_name] = [
+                    replace(item, skip=skip) if isinstance(item, dict) else item
+                    for item in items
+                ]
+        return output
+
+    compressed = replace(schema)
+    definitions = {
+        names[serialized]: replace(originals[serialized], skip=serialized)
+        for serialized in selected
+    }
+    referenced: set[str] = set()
+
+    def collect_references(value: Any) -> None:
+        if isinstance(value, dict):
+            reference = value.get("$ref")
+            if isinstance(reference, str) and reference.startswith("#/$defs/"):
+                referenced.add(reference.rsplit("/", 1)[-1])
+            for child in value.values():
+                collect_references(child)
+        elif isinstance(value, list):
+            for child in value:
+                collect_references(child)
+
+    collect_references(compressed)
+    while True:
+        previous = set(referenced)
+        for name in previous:
+            collect_references(definitions[name])
+        if referenced == previous:
+            break
+    compressed["$defs"] = {
+        name: definitions[name]
+        for name in sorted(referenced)
+    }
+    return compressed
+
+
 def run_tool_parameters(operation_schemas: list[tuple[str, dict[str, Any]]]) -> dict[str, Any]:
-    return {
+    expanded = {
         "title": "math_runArguments",
         "type": "object",
         "additionalProperties": False,
         "properties": {
             "operation": {
                 "type": "string",
-                "enum": [operation for operation, _ in operation_schemas],
+                "maxLength": 128,
+                "description": "Operation ID; each oneOf branch below fixes the allowed value and its typed arguments.",
             },
             "arguments": {"type": "object"},
             **deepcopy(_LIMIT_PROPERTIES),
@@ -1158,6 +1849,23 @@ def run_tool_parameters(operation_schemas: list[tuple[str, dict[str, Any]]]) -> 
             inherit_root_contract=True,
         ),
     }
+    # Operation descriptions remain available from math.search/math.describe.
+    # Repeating them in the always-advertised union makes every Agent pay for
+    # prose it usually does not need and leaves very little carrier headroom as
+    # the registry grows. Keep every structural constraint, default, and enum;
+    # remove only non-validating annotations from this discovery projection.
+    def strip_annotations(value: Any) -> None:
+        if isinstance(value, dict):
+            value.pop("description", None)
+            value.pop("title", None)
+            for child in value.values():
+                strip_annotations(child)
+        elif isinstance(value, list):
+            for child in value:
+                strip_annotations(child)
+
+    strip_annotations(expanded)
+    return _compress_schema_references(expanded)
 
 
 def batch_item_parameters() -> dict[str, Any]:

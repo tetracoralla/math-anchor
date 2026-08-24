@@ -1,10 +1,13 @@
 # Agent mathematical capability expansion
 
-## Current objective
+## Status
 
-Extend the existing four-tool Agent surface through the operation registry. The
-human calculator remains unchanged. The work is complete only when the current
-runtime can execute and validate all of these operation families:
+Current-source design record: every family listed below is implemented,
+reachable through the four-tool Agent surface, and covered by the operation
+registry, generated schemas, and current packaged-runtime checks. This is a
+development-state claim, not a signed-release claim. The human calculator keeps
+its focused interaction model while its existing Convert picker gains the
+additional curated physical categories listed below.
 
 1. semantic expression equivalence with an explicit domain and definedness
    check;
@@ -21,6 +24,19 @@ runtime can execute and validate all of these operation families:
 7. symbolic dimensional checking, exact constraint-based inference, and exact
    Buckingham Pi bases with localized conflicts, honest classification, and
    explicit basis non-uniqueness.
+8. fixed-width programmer integers, explicit bit operations, decimal
+   quantization, and truncating/floor/Euclidean integer division;
+9. stable unit discovery plus data quantity/rate, frequency, force,
+   acceleration, torque, and density conversions, with civil month/year
+   averages rejected unless explicitly selected;
+10. exact vector and matrix operations separated from binary64 least squares,
+    QR, SVD, and pseudoinverse diagnostics;
+11. Beta, Gamma, and lognormal distributions; paired and two-sample t tests;
+    chi-square goodness-of-fit; and first-order covariance propagation of
+    measurement uncertainty.
+12. fixed-width checked/wrapping/saturating machine arithmetic, width-bound
+    bit-field and alignment operations, and IEEE-754 binary32/binary64
+    inspection and comparison.
 
 ## Shared model
 
@@ -39,6 +55,9 @@ runtime can execute and validate all of these operation families:
   in the latter. Model-generated Python is never executed.
 - Exact values, decimal/binary approximations, error bounds, residuals, and
   method-dependent conclusions remain distinct fields.
+- The current catalog contains 44 operations, but the public surface remains
+  four tools. The complete listing stays below the enforced 40,000-byte schema
+  budget through deterministic local references rather than weaker validation.
 
 ## Sequencing and acceptance
 
@@ -53,8 +72,9 @@ Acceptance is separated into:
   numerical edge cases, full Python checks, Swift checks, and packaging checks;
 - Agent/runtime flow: direct calls plus isolated `math.run` and ordered batch
   calls from the packaged four-tool surface;
-- human experience: the existing macOS calculator must build and launch without
-  showing Agent capability or changing its interaction model.
+- human experience: the macOS calculator must build and launch without showing
+  Agent capability; its Convert picker may expose the new curated categories
+  without adding a new mode or diagnostic surface.
 
 No historical screenshot, report, or aggregate green result substitutes for a
 fresh execution of these lanes against the current source.

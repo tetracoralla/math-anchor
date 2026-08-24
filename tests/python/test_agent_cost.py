@@ -14,6 +14,7 @@ from math_anchor.contracts import (
     _LIMIT_PROPERTIES,
     batch_tool_parameters,
 )
+from math_anchor import mcp_server
 from math_anchor.mcp_server import _run_cancellable, _tool_result, mcp
 from math_anchor.output_policy import (
     DEFAULT_BATCH_MAX_OUTPUT_BYTES,
@@ -53,6 +54,11 @@ def test_tool_discovery_keeps_the_full_input_contract_without_republishing_every
     )
 
     assert len(run_tool.parameters["oneOf"]) == len(OPERATIONS)
+    assert "enum" not in run_tool.parameters["properties"]["operation"]
+    assert {
+        variant["properties"]["operation"]["const"]
+        for variant in run_tool.parameters["oneOf"]
+    } == set(OPERATIONS)
     assert all("type" not in variant for variant in run_tool.parameters["oneOf"])
     assert all("required" not in variant for variant in run_tool.parameters["oneOf"])
     assert output_bytes < 2_000
@@ -149,5 +155,66 @@ def test_async_mcp_boundary_signals_cancellation_to_blocking_execution() -> None
         with pytest.raises(asyncio.CancelledError):
             await task
         assert await asyncio.to_thread(execution_stopped.wait, 1)
+
+    asyncio.run(scenario())
+
+
+def test_mcp_ingress_fails_fast_before_the_executor_queue_can_grow(monkeypatch) -> None:
+    monkeypatch.setattr(mcp_server, "_MCP_INGRESS_LIMIT", 4)
+    monkeypatch.setattr(mcp_server, "_MCP_INGRESS", threading.BoundedSemaphore(4))
+    release = threading.Event()
+    entered = 0
+    entered_lock = threading.Lock()
+
+    def blocking(*, cancel_event: threading.Event) -> dict:
+        nonlocal entered
+        with entered_lock:
+            entered += 1
+        release.wait(timeout=2)
+        return {"status": "ok"}
+
+    async def scenario() -> None:
+        tasks = [asyncio.create_task(_run_cancellable(blocking)) for _ in range(4)]
+        deadline = asyncio.get_running_loop().time() + 1
+        while entered < 4 and asyncio.get_running_loop().time() < deadline:
+            await asyncio.sleep(0.005)
+        assert entered == 4
+        overloaded = await _run_cancellable(blocking)
+        assert overloaded["error"]["code"] == "E_OVERLOADED"
+        assert overloaded["error"]["retryable"] is True
+        assert overloaded["error"]["phase"] == "admission"
+        release.set()
+        assert all(result["status"] == "ok" for result in await asyncio.gather(*tasks))
+
+    asyncio.run(scenario())
+
+
+def test_cancelled_mcp_call_holds_ingress_until_its_thread_drains(monkeypatch) -> None:
+    monkeypatch.setattr(mcp_server, "_MCP_INGRESS_LIMIT", 1)
+    monkeypatch.setattr(mcp_server, "_MCP_INGRESS", threading.BoundedSemaphore(1))
+    allow_drain = threading.Event()
+    drained = threading.Event()
+
+    def slow_cancel(*, cancel_event: threading.Event) -> dict:
+        cancel_event.wait(timeout=1)
+        allow_drain.wait(timeout=1)
+        drained.set()
+        return {"status": "error"}
+
+    def immediate(*, cancel_event: threading.Event) -> dict:
+        return {"status": "ok"}
+
+    async def scenario() -> None:
+        task = asyncio.create_task(_run_cancellable(slow_cancel))
+        await asyncio.sleep(0.02)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        still_full = await _run_cancellable(immediate)
+        assert still_full["error"]["code"] == "E_OVERLOADED"
+        allow_drain.set()
+        assert await asyncio.to_thread(drained.wait, 1)
+        await asyncio.sleep(0)
+        assert await _run_cancellable(immediate) == {"status": "ok"}
 
     asyncio.run(scenario())

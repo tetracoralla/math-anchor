@@ -4,7 +4,7 @@ struct CurrencyRateStatusView: View {
     @ObservedObject var store: UnitConversionStore
 
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 60)) { context in
+        TimelineView(.periodic(from: .now, by: 15)) { context in
             Button {
                 store.setPopover(.rateDetails, presented: true)
             } label: {

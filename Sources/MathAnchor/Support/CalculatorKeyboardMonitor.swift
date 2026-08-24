@@ -23,6 +23,10 @@ final class CalculatorKeyboardMonitor {
                 if conversionStore.dismissActivePopover() {
                     return nil
                 }
+                if store.isHistoryPresented {
+                    store.isHistoryPresented = false
+                    return nil
+                }
                 if Self.shouldDeferToFocusedTextInput(focusedResponder) {
                     return event
                 }

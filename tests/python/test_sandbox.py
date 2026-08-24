@@ -46,6 +46,22 @@ def test_batch_preserves_order_and_partial_failure() -> None:
     assert result["results"][1]["error"]["code"] == "E_OPERATION"
 
 
+def test_batch_output_budget_aborts_once_the_response_provably_cannot_fit() -> None:
+    # Negative regression: once the charged prefix of completed items already
+    # exceeds the aggregate budget, the batch must stop there instead of
+    # computing every remaining item and reporting the full envelope size
+    # (32 ok items of ~10 KB each serialize to ~330 KB).
+    items = [
+        {"operation": "expression.evaluate", "arguments": {"expression": "10**10000"}}
+        for _ in range(32)
+    ]
+    result = run_batch(items)
+    assert result["status"] == "error"
+    assert result["error"]["code"] == "E_OUTPUT_LIMIT"
+    assert result["error"]["details"]["bytes"] < 200_000
+    assert "at least" in result["error"]["message"]
+
+
 def test_timeout_is_enforced() -> None:
     result = run_operation(
         "matrix.inverse",
@@ -301,7 +317,9 @@ def test_batch_uses_bounded_parallel_workers_and_preserves_order(monkeypatch) ->
         ]
     )
 
-    assert maximum_active == 4
+    # Batches deliberately use only three of four worker lanes so a normal
+    # math.run can still be admitted during sustained batch traffic.
+    assert maximum_active == 3
     assert [item["exact"] for item in result["results"]] == [str(index) for index in range(6)]
 
 
@@ -751,10 +769,10 @@ def test_worker_startup_exception_does_not_leak_a_pool_slot(monkeypatch) -> None
     )
 
     assert result["status"] == "error"
-    assert result["error"] == {
-        "code": "E_RUNTIME",
-        "message": "worker startup failed: RuntimeError",
-    }
+    assert result["error"]["code"] == "E_RUNTIME"
+    assert result["error"]["message"] == "worker startup failed: RuntimeError"
+    assert result["error"]["retryable"] is True
+    assert result["error"]["suggestedAction"] == "retry"
     assert isolated_pool.total == 0
 
 
@@ -778,11 +796,14 @@ def test_worker_supervision_exception_is_structured_and_releases_the_slot(
         )
 
         assert result["status"] == "error"
-        assert result["error"] == {
-            "code": "E_RUNTIME",
-            "message": "worker supervision failed: RuntimeError",
-        }
-        assert isolated_pool.total == 0
+        assert result["error"]["code"] == "E_RUNTIME"
+        assert result["error"]["message"] == "worker supervision failed: RuntimeError"
+        assert result["error"]["retryable"] is True
+        assert result["error"]["suggestedAction"] == "retry"
+        # The failed slot is released. The adaptive warmer may already have
+        # reserved exactly one replacement, but capacity cannot leak past the
+        # pool's configured maximum.
+        assert isolated_pool.total <= isolated_pool.maximum
 
         monkeypatch.setattr(sandbox, "_execute_worker", real_execute)
         recovered = run_operation(

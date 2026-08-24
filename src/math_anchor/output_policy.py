@@ -4,6 +4,8 @@ from copy import deepcopy
 import json
 from typing import Any
 
+from .errors import error_payload
+
 
 DEFAULT_RESULT_MODE = "auto"
 DEFAULT_MAX_OUTPUT_BYTES = 64 * 1024
@@ -43,18 +45,18 @@ def apply_output_policy(
             return trimmed
     return {
         "status": "error",
-        "error": {
-            "code": "E_OUTPUT_LIMIT",
-            "message": (
+        "error": error_payload(
+            "E_OUTPUT_LIMIT",
+            (
                 f"result requires {size} bytes after applying resultMode={result_mode}; "
                 f"increase maxOutputBytes or request a smaller result"
             ),
-            "details": {
+            {
                 "bytes": size,
                 "maxOutputBytes": max_output_bytes,
                 "resultMode": result_mode,
             },
-        },
+        ),
     }
 
 

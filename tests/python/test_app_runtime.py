@@ -33,6 +33,24 @@ def test_unit_conversion_uses_the_existing_units_core() -> None:
     assert response["unit"] == "ft"
 
 
+def test_unit_conversion_accepts_stable_engineering_unit_ids() -> None:
+    response = app_runtime._handle(
+        {
+            "id": "conversion-data-rate",
+            "operation": "units.convert",
+            "value": "100",
+            "fromUnit": "megabit-per-second",
+            "toUnit": "megabyte-per-second",
+            "precision": 12,
+        }
+    )
+
+    assert response["id"] == "conversion-data-rate"
+    assert response["status"] == "ok"
+    assert response["exact"] == "25/2"
+    assert response["unit"] == "MB / s"
+
+
 def test_incompatible_unit_conversion_is_a_bounded_error() -> None:
     response = app_runtime._handle(
         {

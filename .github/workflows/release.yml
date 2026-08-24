@@ -14,9 +14,12 @@ concurrency:
 jobs:
   signed-macos:
     name: signed macOS (${{ matrix.architecture }})
-    timeout-minutes: 45
+    # CI may legitimately still be running when a tag is pushed. Leave enough
+    # time for the bounded wait plus two-architecture build and notarization.
+    timeout-minutes: 90
     permissions:
       contents: read
+      actions: read
     strategy:
       fail-fast: false
       matrix:
@@ -31,6 +34,50 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: Require green CI on the tagged commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          default_branch="${{ github.event.repository.default_branch }}"
+          relationship="$(gh api \
+            "repos/${GITHUB_REPOSITORY}/compare/${GITHUB_SHA}...${default_branch}" \
+            --jq '.status')"
+          if [[ "$relationship" != "identical" && "$relationship" != "ahead" ]]; then
+            echo "Tagged commit ${GITHUB_SHA} is not contained in ${default_branch}; refusing to sign." >&2
+            exit 1
+          fi
+          # A tag can be pushed while the commit's CI run is still in flight,
+          # so wait for it; fail closed unless every CI run of that SHA is
+          # green before any signing secret is touched. Matching the workflow
+          # file path rather than its display name keeps this gate working if
+          # the CI workflow is ever renamed.
+          for attempt in $(seq 1 30); do
+            runs="$(gh api --paginate \
+              "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${GITHUB_SHA}" \
+              --jq '.workflow_runs[] | select(.path == ".github/workflows/ci.yml") | "\(.status) \(.conclusion // "-")"')"
+            if [[ -z "$runs" ]]; then
+              state="absent"
+            elif grep -qv '^completed ' <<<"$runs"; then
+              state="pending"
+            elif grep -qv '^completed success$' <<<"$runs"; then
+              echo "CI run(s) for ${GITHUB_SHA} are not green:" >&2
+              printf '%s\n' "$runs" >&2
+              exit 1
+            else
+              state="green"
+            fi
+            if [[ "$state" == "green" ]]; then
+              echo "CI is green on ${GITHUB_SHA}."
+              break
+            fi
+            if [[ "$attempt" == "30" ]]; then
+              echo "CI on ${GITHUB_SHA} is still ${state} after waiting; refusing to sign." >&2
+              exit 1
+            fi
+            echo "CI on ${GITHUB_SHA} is ${state}; waiting for it to finish (attempt ${attempt}/30)."
+            sleep 60
+          done
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11.9"
@@ -121,6 +168,7 @@ jobs:
             dist/Math-Anchor-*-${{ matrix.architecture }}.zip
             dist/Math-Anchor-*-${{ matrix.architecture }}.zip.sha256
             dist/Math-Anchor-*-${{ matrix.architecture }}.spdx.json
+            dist/Math-Anchor-*-${{ matrix.architecture }}.spdx.json.sha256
           if-no-files-found: error
           compression-level: 0
 
@@ -143,7 +191,9 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          for checksum in release-assets/*.zip.sha256; do
+          # Every detached checksum travels beside its asset, so one loop
+          # verifies both the zips and the SPDX SBOMs before publication.
+          for checksum in release-assets/*.sha256; do
             (cd release-assets && sha256sum --check "${checksum##*/}")
           done
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then

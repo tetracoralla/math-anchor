@@ -18,13 +18,24 @@ from mcp.types import (
 )
 
 from math_anchor import __version__
+from math_anchor.catalog import OPERATIONS
 from plugin_server import plugin_server_parameters, tools_listing_bytes
 
 
-def schema_is_closed(schema: dict) -> bool:
+def schema_is_closed(schema: dict | bool, root: dict) -> bool:
+    if isinstance(schema, bool):
+        return schema is False
+    reference = schema.get("$ref")
+    if isinstance(reference, str) and reference.startswith("#/$defs/"):
+        schema = root["$defs"][reference.rsplit("/", 1)[-1]]
+    # A closed outer object remains closed when oneOf adds conditional field
+    # constraints. Those nested branches are not independent object surfaces
+    # and therefore do not need their own additionalProperties keyword.
+    if schema.get("additionalProperties") is False:
+        return True
     if "oneOf" in schema:
-        return all(schema_is_closed(variant) for variant in schema["oneOf"])
-    return schema.get("additionalProperties") is False
+        return all(schema_is_closed(variant, root) for variant in schema["oneOf"])
+    return False
 
 
 def persistent_worker_cpu_seconds() -> dict[int, float]:
@@ -53,7 +64,7 @@ async def main(plugin_root: Path | None = None) -> None:
             assert all(tool.annotations and tool.annotations.readOnlyHint for tool in listed.tools)
             run_tool = next(tool for tool in listed.tools if tool.name == "math.run")
             batch_tool = next(tool for tool in listed.tools if tool.name == "math.batch")
-            assert len(run_tool.inputSchema["oneOf"]) == 34
+            assert len(run_tool.inputSchema["oneOf"]) == len(OPERATIONS)
             run_schema_bytes = len(
                 json.dumps(run_tool.inputSchema, ensure_ascii=False, separators=(",", ":")).encode()
             )
@@ -70,7 +81,7 @@ async def main(plugin_root: Path | None = None) -> None:
             assert listed_bytes < 40_000
             assert run_tool.inputSchema["additionalProperties"] is False
             assert all(
-                schema_is_closed(variant["properties"]["arguments"])
+                schema_is_closed(variant["properties"]["arguments"], run_tool.inputSchema)
                 for variant in run_tool.inputSchema["oneOf"]
             )
             assert run_output_schema_bytes < 2_000
@@ -85,6 +96,91 @@ async def main(plugin_root: Path | None = None) -> None:
             )
             assert direct.isError is False
             assert direct.structuredContent["exact"] == "42"
+
+            represented = await session.call_tool(
+                "math.run",
+                {
+                    "operation": "integer.represent",
+                    "arguments": {
+                        "value": "0xFF",
+                        "bitWidth": 8,
+                        "signedness": "twos_complement",
+                        "inputMode": "bits",
+                    },
+                },
+            )
+            assert represented.structuredContent["result"]["decimal"] == "-1"
+            rotated = await session.call_tool(
+                "math.run",
+                {
+                    "operation": "integer.bitwise",
+                    "arguments": {
+                        "action": "rotate_left",
+                        "value": "0x81",
+                        "count": 1,
+                        "bitWidth": 8,
+                        "inputMode": "bits",
+                    },
+                },
+            )
+            assert rotated.structuredContent["result"]["hexadecimal"] == "03"
+            machine = await session.call_tool(
+                "math.run",
+                {
+                    "operation": "integer.machine_arithmetic",
+                    "arguments": {
+                        "action": "add",
+                        "left": "127",
+                        "right": "1",
+                        "bitWidth": 8,
+                        "signedness": "twos_complement",
+                        "overflowBehavior": "wrapping",
+                    },
+                },
+            )
+            assert machine.structuredContent["mathematicalResult"] == "128"
+            assert machine.structuredContent["result"]["decimal"] == "-128"
+            assert machine.structuredContent["wrapped"] is True
+            ieee = await session.call_tool(
+                "math.run",
+                {
+                    "operation": "float.ieee754",
+                    "arguments": {
+                        "action": "inspect",
+                        "value": "0.1",
+                        "format": "binary64",
+                    },
+                },
+            )
+            assert ieee.structuredContent["value"]["rawHex"] == "3FB999999999999A"
+            assert ieee.structuredContent["value"]["roundTripDecimal"] == "0.1"
+            assert ieee.structuredContent["value"]["inputRounded"] is True
+            quantized = await session.call_tool(
+                "math.run",
+                {
+                    "operation": "decimal.quantize",
+                    "arguments": {
+                        "action": "increment",
+                        "value": "1.23",
+                        "increment": "0.05",
+                        "roundingMode": "half_up",
+                    },
+                },
+            )
+            assert quantized.structuredContent["result"] == "1.25"
+            divided = await session.call_tool(
+                "math.run",
+                {
+                    "operation": "integer.divide",
+                    "arguments": {
+                        "dividend": "-7",
+                        "divisor": "3",
+                        "divisionMode": "euclidean",
+                    },
+                },
+            )
+            assert divided.structuredContent["quotient"] == "-3"
+            assert divided.structuredContent["remainder"] == "2"
 
             rejected_outer = await session.call_tool(
                 "math.search",
@@ -234,6 +330,9 @@ async def main(plugin_root: Path | None = None) -> None:
             assert invalid_pi_groups.isError is True
             assert invalid_pi_groups.structuredContent["status"] == "error"
             assert invalid_pi_groups.structuredContent["error"]["code"] == "E_INPUT"
+            assert invalid_pi_groups.structuredContent["error"]["retryable"] is False
+            assert invalid_pi_groups.structuredContent["error"]["phase"] == "input"
+            assert invalid_pi_groups.structuredContent["error"]["suggestedAction"] == "correct_input"
 
             derived_dimension = await session.call_tool(
                 "math.run",
@@ -332,6 +431,130 @@ async def main(plugin_root: Path | None = None) -> None:
             assert batched.structuredContent["status"] == "ok"
             assert batched.structuredContent["results"][0]["exact"] == "-2"
             assert batched.structuredContent["results"][1]["exact"] == "3600"
+
+            unit_catalog = await session.call_tool(
+                "math.run",
+                {
+                    "operation": "units.search",
+                    "arguments": {"query": "Mbps"},
+                },
+            )
+            assert unit_catalog.structuredContent["count"] == 1
+            assert unit_catalog.structuredContent["units"][0]["id"] == "megabit-per-second"
+
+            stable_unit_conversion = await session.call_tool(
+                "math.run",
+                {
+                    "operation": "units.convert",
+                    "arguments": {
+                        "value": "100",
+                        "fromUnit": "megabit-per-second",
+                        "toUnit": "megabyte-per-second",
+                    },
+                },
+            )
+            assert stable_unit_conversion.structuredContent["exact"] == "25/2"
+
+            implicit_calendar_average = await session.call_tool(
+                "math.run",
+                {
+                    "operation": "units.convert",
+                    "arguments": {"value": 1, "fromUnit": "month", "toUnit": "day"},
+                },
+            )
+            assert implicit_calendar_average.isError is True
+            assert implicit_calendar_average.structuredContent["error"]["code"] == "E_UNIT"
+
+            explicit_calendar_average = await session.call_tool(
+                "math.run",
+                {
+                    "operation": "units.convert",
+                    "arguments": {
+                        "value": 1,
+                        "fromUnit": "month",
+                        "toUnit": "day",
+                        "calendarPolicy": "average_duration",
+                    },
+                },
+            )
+            assert explicit_calendar_average.structuredContent["exact"] == "487/16"
+            assert "not date or time-zone arithmetic" in explicit_calendar_average.structuredContent["warnings"][0]
+
+            exact_vector = await session.call_tool(
+                "math.run",
+                {
+                    "operation": "linear_algebra.exact",
+                    "arguments": {
+                        "action": "projection",
+                        "left": [2, 2],
+                        "onto": [1, 0],
+                    },
+                },
+            )
+            assert [value["exact"] for value in exact_vector.structuredContent["result"]] == ["2", "0"]
+
+            numerical_svd = await session.call_tool(
+                "math.run",
+                {
+                    "operation": "linear_algebra.numeric",
+                    "arguments": {
+                        "action": "svd",
+                        "matrix": [["3", "0"], ["0", "2"]],
+                    },
+                },
+            )
+            assert numerical_svd.structuredContent["singularValues"] == ["3", "2"]
+            assert numerical_svd.structuredContent["numericFormat"] == "binary64"
+            assert numerical_svd.structuredContent["warnings"]
+
+            extended_probability = await session.call_tool(
+                "math.run",
+                {
+                    "operation": "probability.distribution",
+                    "arguments": {
+                        "distribution": "beta",
+                        "function": "quantile",
+                        "probability": "0.5",
+                        "alpha": "2",
+                        "beta": "2",
+                    },
+                },
+            )
+            assert extended_probability.structuredContent["value"]["approx"] == "0.5"
+
+            two_sample_inference = await session.call_tool(
+                "math.run",
+                {
+                    "operation": "statistics.infer",
+                    "arguments": {
+                        "action": "two_sample_t_test",
+                        "sampleA": ["10", "12", "9", "11", "13"],
+                        "sampleB": ["7", "8", "9", "8", "10"],
+                    },
+                },
+            )
+            assert two_sample_inference.structuredContent["method"] == "welch_two_sample_t_test"
+            assert isinstance(two_sample_inference.structuredContent["test"]["degreesOfFreedom"], str)
+
+            uncertainty = await session.call_tool(
+                "math.run",
+                {
+                    "operation": "measurement.propagate",
+                    "arguments": {
+                        "expression": "x * y",
+                        "inputs": {
+                            "x": {"value": "2", "standardUncertainty": "0.1"},
+                            "y": {"value": "3", "standardUncertainty": "0.2"},
+                        },
+                        "correlations": [
+                            {"left": "x", "right": "y", "coefficient": "0.5"}
+                        ],
+                    },
+                },
+            )
+            assert uncertainty.structuredContent["nominal"]["exact"] == "6"
+            assert uncertainty.structuredContent["combinedStandardUncertainty"]["exact"] == "sqrt(37)/10"
+            assert uncertainty.structuredContent["linearModel"] is False
 
             advanced_batch = await session.call_tool(
                 "math.batch",
@@ -576,8 +799,8 @@ async def main(plugin_root: Path | None = None) -> None:
 
     print(
         "MCP runtime check passed through plugin transport: one-call typed run, multilingual discovery, "
-        "description, equivalence and solution verification, unit expressions, symbolic dimensional analysis and Pi groups, financial math, stability-aware "
-        "linear solving, numerical integration, probability, inferential statistics, standard algebra, exact/high-precision results, "
+        "description, equivalence and solution verification, stable unit discovery, calendar-safe conversions, unit expressions, symbolic dimensional analysis and Pi groups, financial math, stability-aware "
+        "linear solving, exact vector algebra, diagnostic SVD, numerical integration, extended probability distributions, comparative inference, covariance uncertainty propagation, standard algebra, exact/high-precision results, "
         "schema rejection, MCP tool-error signaling, domain errors, precision provenance, large integer output, ordered partial batch, cancellation recovery, "
         "and unsafe-input rejection. "
         f"math.run advertises {len(run_tool.inputSchema['oneOf'])} input variants in {run_schema_bytes} bytes; "

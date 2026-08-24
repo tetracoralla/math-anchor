@@ -19,8 +19,10 @@ from .catalog import (
     search_operations,
 )
 from .contracts import BATCH_RESULT_SCHEMA, RUN_TOOL_OUTPUT_SCHEMA, batch_item_parameters, batch_tool_parameters, run_tool_parameters
-from .errors import CalculatorError
+from .errors import CalculatorError, error_payload
 from .output_policy import DEFAULT_BATCH_MAX_OUTPUT_BYTES, DEFAULT_MAX_OUTPUT_BYTES
+from .runtime_control import MAX_ACTIVE_REQUESTS, MAX_QUEUED_REQUESTS
+from .runtime_telemetry import RUNTIME_TELEMETRY
 from .sandbox import run_batch, run_operation, warm_worker_pool
 
 
@@ -30,6 +32,8 @@ _READ_ONLY = ToolAnnotations(
     idempotentHint=True,
     openWorldHint=False,
 )
+_MCP_INGRESS_LIMIT = MAX_ACTIVE_REQUESTS + MAX_QUEUED_REQUESTS
+_MCP_INGRESS = threading.BoundedSemaphore(_MCP_INGRESS_LIMIT)
 
 # PyInstaller freezes the postponed annotations used by FastMCP's Settings
 # model before pydantic-settings can always resolve them itself. Rebuild with
@@ -146,17 +150,43 @@ def math_describe(
 
 
 async def _run_cancellable(callable_: Any, *arguments: Any, **keywords: Any) -> dict[str, Any]:
+    if not _MCP_INGRESS.acquire(blocking=False):
+        RUNTIME_TELEMETRY.increment("mcp.ingressOverloaded")
+        return {
+            "status": "error",
+            "error": error_payload(
+                "E_OVERLOADED",
+                "MCP calculation ingress is full; retry after the current burst",
+                {"inflightLimit": _MCP_INGRESS_LIMIT},
+                phase="admission",
+                retry_after_ms=100,
+            ),
+        }
     cancel_event = threading.Event()
-    worker = asyncio.create_task(
-        asyncio.to_thread(
-            callable_,
-            *arguments,
-            cancel_event=cancel_event,
-            **keywords,
-        )
-    )
+    released = False
+
+    def release_ingress(_completed: asyncio.Task[dict[str, Any]] | None = None) -> None:
+        nonlocal released
+        if not released:
+            released = True
+            _MCP_INGRESS.release()
+
     try:
-        return await asyncio.shield(worker)
+        worker = asyncio.create_task(
+            asyncio.to_thread(
+                callable_,
+                *arguments,
+                cancel_event=cancel_event,
+                **keywords,
+            )
+        )
+    except BaseException:
+        release_ingress()
+        raise
+    try:
+        result = await asyncio.shield(worker)
+        release_ingress()
+        return result
     except asyncio.CancelledError:
         # The request was cancelled at the transport. Cleanup — killing the
         # active child and returning the pool worker — continues on the
@@ -164,6 +194,13 @@ async def _run_cancellable(callable_: Any, *arguments: Any, **keywords: Any) -> 
         # runtime) every await inside this handler is immediately
         # re-cancelled, so deliberately do not wait for the drain here.
         cancel_event.set()
+        # Do not free ingress while the executor thread still owns its worker;
+        # otherwise a cancellation storm can exceed the advertised in-flight
+        # bound even though every request appears cancelled to its caller.
+        worker.add_done_callback(release_ingress)
+        raise
+    except BaseException:
+        release_ingress()
         raise
 
 

@@ -12,6 +12,13 @@ enum UnitCategory: String, CaseIterable, Identifiable, Sendable {
     case energy
     case power
     case angle
+    case data
+    case dataRate = "data rate"
+    case frequency
+    case force
+    case acceleration
+    case torque
+    case density
     case currency
 
     var id: Self { self }
@@ -98,6 +105,91 @@ enum HumanUnitCatalog {
 
         unit("degree", "Degree", "°", .angle),
         unit("radian", "Radian", "rad", .angle),
+
+        unit("bit", "Bit", "bit", .data),
+        unit("byte", "Byte", "B", .data),
+        unit("kilobit", "Kilobit", "kbit", .data),
+        unit("kilobyte", "Kilobyte", "kB", .data),
+        unit("megabit", "Megabit", "Mbit", .data),
+        unit("megabyte", "Megabyte", "MB", .data),
+        unit("gigabit", "Gigabit", "Gbit", .data),
+        unit("gigabyte", "Gigabyte", "GB", .data),
+        unit("kibibit", "Kibibit", "Kibit", .data),
+        unit("kibibyte", "Kibibyte", "KiB", .data),
+        unit("mebibit", "Mebibit", "Mibit", .data),
+        unit("mebibyte", "Mebibyte", "MiB", .data),
+        unit("gibibit", "Gibibit", "Gibit", .data),
+        unit("gibibyte", "Gibibyte", "GiB", .data),
+
+        unit("bit-per-second", "Bits per second", "bit/s", .dataRate, runtimeUnit: "bit / second"),
+        unit("kilobit-per-second", "Kilobits per second", "kbit/s", .dataRate, runtimeUnit: "kilobit / second"),
+        unit("megabit-per-second", "Megabits per second", "Mbit/s", .dataRate, runtimeUnit: "megabit / second"),
+        unit("gigabit-per-second", "Gigabits per second", "Gbit/s", .dataRate, runtimeUnit: "gigabit / second"),
+        unit("byte-per-second", "Bytes per second", "B/s", .dataRate, runtimeUnit: "byte / second"),
+        unit("megabyte-per-second", "Megabytes per second", "MB/s", .dataRate, runtimeUnit: "megabyte / second"),
+        unit("mebibyte-per-second", "Mebibytes per second", "MiB/s", .dataRate, runtimeUnit: "mebibyte / second"),
+
+        unit("hertz", "Hertz", "Hz", .frequency),
+        unit("kilohertz", "Kilohertz", "kHz", .frequency),
+        unit("megahertz", "Megahertz", "MHz", .frequency),
+        unit("gigahertz", "Gigahertz", "GHz", .frequency),
+
+        unit("newton", "Newton", "N", .force),
+        unit("kilonewton", "Kilonewton", "kN", .force),
+        unit("pound-force", "Pound-force", "lbf", .force, runtimeUnit: "pound_force"),
+
+        unit(
+            "meter-per-second-squared",
+            "Meters per second squared",
+            "m/s²",
+            .acceleration,
+            runtimeUnit: "meter / second ** 2"
+        ),
+        unit(
+            "foot-per-second-squared",
+            "Feet per second squared",
+            "ft/s²",
+            .acceleration,
+            runtimeUnit: "foot / second ** 2"
+        ),
+        unit(
+            "standard-gravity",
+            "Standard gravity",
+            "g₀",
+            .acceleration,
+            runtimeUnit: "standard_gravity"
+        ),
+
+        unit("newton-meter", "Newton-meter", "N·m", .torque, runtimeUnit: "newton * meter"),
+        unit(
+            "pound-force-foot",
+            "Pound-force foot",
+            "lbf·ft",
+            .torque,
+            runtimeUnit: "pound_force * foot"
+        ),
+
+        unit(
+            "kilogram-per-cubic-meter",
+            "Kilograms per cubic meter",
+            "kg/m³",
+            .density,
+            runtimeUnit: "kilogram / meter ** 3"
+        ),
+        unit(
+            "gram-per-cubic-centimeter",
+            "Grams per cubic centimeter",
+            "g/cm³",
+            .density,
+            runtimeUnit: "gram / centimeter ** 3"
+        ),
+        unit(
+            "pound-per-cubic-foot",
+            "Pounds per cubic foot",
+            "lb/ft³",
+            .density,
+            runtimeUnit: "pound / foot ** 3"
+        ),
 
         unit("currency-eur", "Euro", "EUR", .currency, runtimeUnit: "EUR"),
         unit("currency-usd", "US dollar", "USD", .currency, runtimeUnit: "USD"),

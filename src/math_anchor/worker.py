@@ -9,6 +9,8 @@ import threading
 import time
 from typing import Any
 
+from .errors import error_payload
+
 from .output_policy import (
     DEFAULT_MAX_OUTPUT_BYTES,
     DEFAULT_RESULT_MODE,
@@ -108,7 +110,7 @@ def _execute_payload(
             payload,
             {
                 "status": "error",
-                "error": {"code": "E_RUNTIME", "message": f"worker failed: {error}"},
+                "error": error_payload("E_RUNTIME", f"worker failed: {error}"),
             },
         )
         return {"ok": False, "error": error_result["error"]}

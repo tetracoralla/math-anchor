@@ -517,11 +517,22 @@ final class MathRuntimeService: MathEvaluating, UnitConverting, CurrencyConverti
                     self.handleReaderTerminated(generation: generation)
                     return
                 }
-                let chunk = handle.availableData
-                guard !chunk.isEmpty else {
+                // Read through POSIX read(2), not FileHandle.availableData:
+                // stopProcess may close this descriptor between the poll and
+                // the read, and availableData raises an uncatchable
+                // NSFileHandleOperationException on a closed descriptor. A
+                // raw read simply returns -1, joining the normal termination
+                // path below.
+                var readBuffer = [UInt8](repeating: 0, count: 65_536)
+                let capacity = readBuffer.count
+                let byteCount = readBuffer.withUnsafeMutableBytes { raw in
+                    Darwin.read(handle.fileDescriptor, raw.baseAddress, capacity)
+                }
+                guard byteCount > 0 else {
                     self.handleReaderTerminated(generation: generation)
                     return
                 }
+                let chunk = Data(readBuffer[0..<byteCount])
 
                 lock.lock()
                 responseBuffer.append(chunk)

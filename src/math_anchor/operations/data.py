@@ -12,6 +12,7 @@ import sympy as sp
 from ..errors import CalculatorError, require
 from ..formatting import effective_precision, value_result
 from ..validation import enum_arg, integer_arg, list_arg, string_arg
+from . import units
 
 
 # Constructing a pint registry parses the complete unit definition file
@@ -119,9 +120,18 @@ def units_convert(arguments: dict[str, Any]) -> dict[str, Any]:
     )
     from_unit = string_arg(arguments, "fromUnit", max_length=128)
     to_unit = string_arg(arguments, "toUnit", max_length=128)
+    calendar_policy = enum_arg(
+        arguments,
+        "calendarPolicy",
+        units.CALENDAR_POLICIES,
+        default="reject",
+    )
     precision = integer_arg(arguments, "precision", default=16, minimum=2, maximum=200)
     warnings: list[str] = []
     exact_source = isinstance(value, (int, str))
+    resolved_from = units.resolve_unit_text(from_unit)
+    resolved_to = units.resolve_unit_text(to_unit)
+    uses_calendar_average = False
     try:
         registry: pint.UnitRegistry
         source_value: Fraction | float
@@ -131,17 +141,25 @@ def units_convert(arguments: dict[str, Any]) -> dict[str, Any]:
         else:
             registry = _float_unit_registry()
             source_value = float(value)
-        parsed_from = registry.parse_units(from_unit)
-        parsed_to = registry.parse_units(to_unit)
+        parsed_from = registry.parse_units(resolved_from)
+        parsed_to = registry.parse_units(resolved_to)
+        uses_calendar_average = units.require_calendar_policy(
+            units.calendar_unit_names(parsed_from) | units.calendar_unit_names(parsed_to),
+            calendar_policy,
+        )
         converted = registry.Quantity(source_value, parsed_from).to(parsed_to)
     except TypeError:
         exact_source = False
         warnings.append("This unit conversion uses an approximate floating-point conversion factor.")
         try:
             registry = _float_unit_registry()
-            converted = registry.Quantity(float(value), registry.parse_units(from_unit)).to(
-                registry.parse_units(to_unit)
+            parsed_from = registry.parse_units(resolved_from)
+            parsed_to = registry.parse_units(resolved_to)
+            uses_calendar_average = units.require_calendar_policy(
+                units.calendar_unit_names(parsed_from) | units.calendar_unit_names(parsed_to),
+                calendar_policy,
             )
+            converted = registry.Quantity(float(value), parsed_from).to(parsed_to)
         except (pint.PintError, TypeError, ValueError) as error:
             raise CalculatorError("E_UNIT", f"unit conversion failed: {error}") from error
     except (InvalidOperation, pint.PintError, ValueError) as error:
@@ -170,11 +188,13 @@ def units_convert(arguments: dict[str, Any]) -> dict[str, Any]:
                     "JSON floating-point input is approximate; send the value as decimal text for exact decimal provenance."
                 )
     formatted = value_result(result_value, reported_precision)
+    if uses_calendar_average:
+        warnings.insert(0, units.CALENDAR_AVERAGE_WARNING)
     # Pint's Fraction-backed registry also stores integral unit exponents as
     # Fractions, which its compact formatter cannot render for squared/cubed
     # units. Reparse only the already-validated target unit in a conventional
     # registry for its human-facing compact symbol.
-    display_unit = f"{_float_unit_registry().parse_units(to_unit):~}"
+    display_unit = f"{_float_unit_registry().parse_units(resolved_to):~}"
     return {
         "status": "ok",
         "operation": "units.convert",

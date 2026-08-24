@@ -22,5 +22,6 @@ MATH_ANCHOR_VERIFY_PACKAGED_RUNTIME=1 "$ROOT_DIR/.venv/bin/python" -m pytest
 "$ROOT_DIR/script/check_swift_store.sh"
 swift build --package-path "$ROOT_DIR"
 "$ROOT_DIR/.venv/bin/python" "$ROOT_DIR/script/check_mcp.py"
+"$ROOT_DIR/.venv/bin/python" "$ROOT_DIR/script/load_check.py" --calls 1000
 "$ROOT_DIR/.venv/bin/python" "$ROOT_DIR/script/check_plugin.py"
 "$ROOT_DIR/script/check_release_hygiene.sh"

@@ -17,9 +17,9 @@ PYTHON="$RESOLVED_MATH_ANCHOR_PYTHON"
 
 if [[ ! -x "$VENV_DIR/bin/python" ]]; then
   "$PYTHON" -m venv "$VENV_DIR"
-elif ! "$VENV_DIR/bin/python" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)'; then
-  echo "The existing .venv uses Python older than 3.11. Recreate it with script/bootstrap.sh." >&2
-  exit 1
+elif ! "$VENV_DIR/bin/python" -c 'import encodings, sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)' >/dev/null 2>&1; then
+  echo "Rebuilding the unusable or outdated generated .venv with $PYTHON." >&2
+  "$PYTHON" -m venv --clear "$VENV_DIR"
 fi
 
 "$VENV_DIR/bin/python" -m pip install \

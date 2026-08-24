@@ -11,8 +11,9 @@ import sympy as sp
 
 from ..errors import CalculatorError, require
 from ..formatting import effective_precision, value_result
-from ..validation import integer_arg, string_arg
+from ..validation import enum_arg, integer_arg, string_arg
 from .data import _exact_unit_registry, _float_unit_registry, _sympy_fraction, _unit_path_is_rational
+from . import units
 
 
 def evaluate(arguments: dict[str, Any]) -> dict[str, Any]:
@@ -23,16 +24,26 @@ def evaluate(arguments: dict[str, Any]) -> dict[str, Any]:
         target_unit = target_unit.strip()
         require(bool(target_unit), "E_INPUT", "toUnit must not be empty")
         require(len(target_unit) <= 128, "E_LIMIT", "toUnit is too long")
+    calendar_policy = enum_arg(
+        arguments,
+        "calendarPolicy",
+        units.CALENDAR_POLICIES,
+        default="reject",
+    )
     precision = integer_arg(arguments, "precision", default=30, minimum=2, maximum=200)
     warnings: list[str] = []
+    resolved_target = units.resolve_unit_text(target_unit) if target_unit is not None else None
+    uses_calendar_average = False
 
     exact = True
     try:
         exact_registry = _exact_unit_registry()
         translator = _QuantityTranslator(exact_registry, exact=True)
         quantity = translator.translate(expression)
-        if target_unit is not None:
-            parsed_target = exact_registry.parse_units(target_unit)
+        calendar_names = set(translator.calendar_units_used)
+        if resolved_target is not None:
+            parsed_target = exact_registry.parse_units(resolved_target)
+            calendar_names.update(units.calendar_unit_names(parsed_target))
             exact = (
                 translator.conversions_are_rational
                 and _unit_path_is_rational(exact_registry, quantity.units)
@@ -41,14 +52,20 @@ def evaluate(arguments: dict[str, Any]) -> dict[str, Any]:
             quantity = quantity.to(parsed_target)
         else:
             exact = translator.conversions_are_rational
+        uses_calendar_average = units.require_calendar_policy(calendar_names, calendar_policy)
     except TypeError:
         exact = False
         warnings.append("This quantity expression uses an approximate or irrational unit conversion path.")
         try:
             float_registry = _float_unit_registry()
-            quantity = _QuantityTranslator(float_registry, exact=False).translate(expression)
-            if target_unit is not None:
-                quantity = quantity.to(float_registry.parse_units(target_unit))
+            translator = _QuantityTranslator(float_registry, exact=False)
+            quantity = translator.translate(expression)
+            calendar_names = set(translator.calendar_units_used)
+            if resolved_target is not None:
+                parsed_target = float_registry.parse_units(resolved_target)
+                calendar_names.update(units.calendar_unit_names(parsed_target))
+                quantity = quantity.to(parsed_target)
+            uses_calendar_average = units.require_calendar_policy(calendar_names, calendar_policy)
         except (pint.PintError, TypeError, ValueError, ZeroDivisionError) as error:
             raise CalculatorError("E_UNIT", f"quantity expression failed: {error}") from error
     except (InvalidOperation, pint.PintError, ValueError, ZeroDivisionError) as error:
@@ -71,6 +88,8 @@ def evaluate(arguments: dict[str, Any]) -> dict[str, Any]:
             warnings.append("The reported magnitude follows floating-point unit arithmetic and is approximate.")
 
     formatted = value_result(result_value, reported_precision)
+    if uses_calendar_average:
+        warnings.insert(0, units.CALENDAR_AVERAGE_WARNING)
     display_units = UnitsContainer(
         {
             name: int(exponent) if isinstance(exponent, Fraction) and exponent.denominator == 1 else float(exponent)
@@ -101,6 +120,7 @@ class _QuantityTranslator(ast.NodeVisitor):
         self.source = ""
         self.node_count = 0
         self.conversions_are_rational = True
+        self.calendar_units_used: set[str] = set()
 
     def translate(self, source: str) -> pint.Quantity:
         normalized = (
@@ -150,6 +170,7 @@ class _QuantityTranslator(ast.NodeVisitor):
             unit = self.registry.parse_units(node.id)
         except (pint.PintError, TypeError, ValueError) as error:
             raise CalculatorError("E_UNIT", f"unknown unit: {node.id}") from error
+        self.calendar_units_used.update(units.calendar_unit_names(unit))
         return self.registry.Quantity(Fraction(1) if self.exact else 1.0, unit)
 
     def visit_UnaryOp(self, node: ast.UnaryOp) -> pint.Quantity:

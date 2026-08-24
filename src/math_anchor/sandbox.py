@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import atexit
+from copy import deepcopy
 import json
 import os
 import psutil
@@ -9,9 +10,11 @@ import sys
 import tempfile
 import threading
 import time
-from concurrent.futures import Future, ThreadPoolExecutor, wait
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed, wait
 from queue import Empty, Queue
 from typing import Any
+
+from .errors import error_payload
 
 from .output_policy import (
     DEFAULT_BATCH_MAX_OUTPUT_BYTES,
@@ -22,6 +25,8 @@ from .output_policy import (
     RESULT_MODES,
     apply_output_policy,
 )
+from .runtime_control import AdmissionController, CircuitBreaker
+from .runtime_telemetry import RUNTIME_TELEMETRY
 
 
 DEFAULT_TIMEOUT_MS = 10_000
@@ -30,6 +35,8 @@ STARTUP_TIMEOUT_MS = 5_000
 MAX_REUSABLE_WORKERS = 4
 WORKER_POLL_SECONDS = 0.025
 WORKER_PREWARM_BUDGET_SECONDS = 10.0
+MAX_REQUESTS_PER_WORKER = 1_000
+WORKER_RECYCLE_RSS_MB = 768
 # Worker stderr is redirected to an unlinked file, not a pipe: an undrained
 # pipe can fill (~64 KiB) over a long-lived session and silently block the
 # worker mid-operation. The file has no such bound, and diagnostics read
@@ -45,11 +52,34 @@ _BATCH_ITEM_FIELDS = {
 }
 
 
-def _error(code: str, message: str, details: dict[str, Any] | None = None) -> dict[str, Any]:
-    error: dict[str, Any] = {"code": code, "message": message}
-    if details:
-        error["details"] = details
-    return {"status": "error", "error": error}
+def _error(
+    code: str,
+    message: str,
+    details: dict[str, Any] | None = None,
+    *,
+    phase: str | None = None,
+    retry_after_ms: int | None = None,
+    suggested_action: str | None = None,
+) -> dict[str, Any]:
+    return {
+        "status": "error",
+        "error": error_payload(
+            code,
+            message,
+            details,
+            phase=phase,
+            retry_after_ms=retry_after_ms,
+            suggested_action=suggested_action,
+        ),
+    }
+
+
+class _CombinedCancelEvent:
+    def __init__(self, *events: threading.Event | None) -> None:
+        self.events = tuple(event for event in events if event is not None)
+
+    def is_set(self) -> bool:
+        return any(event.is_set() for event in self.events)
 
 
 class _ReusableWorker:
@@ -57,6 +87,8 @@ class _ReusableWorker:
         self.process = process
         self.stderr_fd = stderr_fd
         self.pool_generation: int | None = None
+        self.created_at = time.monotonic()
+        self.requests_completed = 0
         # One daemon reader lives with each persistent worker. The previous
         # implementation created and joined a new ThreadPoolExecutor for every
         # operation, which made a cheap warm expression pay thread lifecycle
@@ -141,6 +173,11 @@ class _WorkerPool:
         self.total = 0
         self.generation = 0
         self.prewarm_generation: int | None = None
+        # Start conservatively with one warm process. Real concurrent demand
+        # raises this target, so later recycling restores observed capacity
+        # without prestarting four heavyweight symbolic runtimes for a client
+        # that only ever makes serial calls.
+        self.desired_warm = 1
 
     def acquire(
         self,
@@ -151,38 +188,61 @@ class _WorkerPool:
         cancel_event: threading.Event | None = None,
     ) -> tuple[_ReusableWorker | None, dict[str, Any] | None]:
         while True:
-            with self.condition:
-                if cancel_event is not None and cancel_event.is_set():
-                    return None, _error("E_CANCELLED", "operation was cancelled")
-                while self.available:
-                    worker = self.available.pop()
-                    resident = _resident_memory_bytes(worker.process.pid)
-                    if worker.is_running and (resident is None or resident <= memory_bytes):
-                        return worker, None
-                    self.total -= 1
-                    worker.terminate()
-                if self.prewarm_generation == self.generation:
-                    remaining = deadline - time.monotonic()
-                    if remaining <= 0:
-                        return None, _error(
-                            "E_TIMEOUT",
-                            f"operation exceeded {timeout_ms} ms while waiting for a worker",
-                            {"phase": "queue", "timeoutMs": timeout_ms},
-                        )
-                    self.condition.wait(timeout=min(remaining, WORKER_POLL_SECONDS))
-                    continue
-                if self.total < self.maximum:
-                    self.total += 1
-                    generation = self.generation
-                    break
-                remaining = deadline - time.monotonic()
-                if remaining <= 0:
-                    return None, _error(
-                        "E_TIMEOUT",
-                        f"operation exceeded {timeout_ms} ms while waiting for a worker",
-                        {"phase": "queue", "timeoutMs": timeout_ms},
-                    )
-                self.condition.wait(timeout=min(remaining, WORKER_POLL_SECONDS))
+            # Evicted workers terminate outside the pool lock: terminate()
+            # blocks in kill/wait/join for up to ~2 s per worker, and holding
+            # the condition during that stalls every other acquire/release.
+            discarded: list[_ReusableWorker] = []
+            selected: _ReusableWorker | None = None
+            under_warm = False
+            try:
+                with self.condition:
+                    if cancel_event is not None and cancel_event.is_set():
+                        return None, _error("E_CANCELLED", "operation was cancelled")
+                    while self.available:
+                        worker = self.available.pop()
+                        resident = _resident_memory_bytes(worker.process.pid)
+                        if worker.is_running and (resident is None or resident <= memory_bytes):
+                            selected = worker
+                            # Handing out a pooled worker is often the last
+                            # observation of the pool before it goes quiet;
+                            # re-check the warm target here so capacity lost
+                            # to earlier evictions is replaced instead of
+                            # silently decaying until the next busy spell.
+                            under_warm = self._should_replenish(self.generation)
+                            break
+                        self.total -= 1
+                        discarded.append(worker)
+                    if selected is None:
+                        if self.prewarm_generation == self.generation:
+                            remaining = deadline - time.monotonic()
+                            if remaining <= 0:
+                                return None, _error(
+                                    "E_TIMEOUT",
+                                    f"operation exceeded {timeout_ms} ms while waiting for a worker",
+                                    {"phase": "queue", "timeoutMs": timeout_ms},
+                                )
+                            self.condition.wait(timeout=min(remaining, WORKER_POLL_SECONDS))
+                            continue
+                        if self.total < self.maximum:
+                            self.total += 1
+                            self.desired_warm = max(self.desired_warm, self.total)
+                            generation = self.generation
+                            break
+                        remaining = deadline - time.monotonic()
+                        if remaining <= 0:
+                            return None, _error(
+                                "E_TIMEOUT",
+                                f"operation exceeded {timeout_ms} ms while waiting for a worker",
+                                {"phase": "queue", "timeoutMs": timeout_ms},
+                            )
+                        self.condition.wait(timeout=min(remaining, WORKER_POLL_SECONDS))
+            finally:
+                for victim in discarded:
+                    victim.terminate()
+            if selected is not None:
+                if under_warm:
+                    self._prewarm_one()
+                return selected, None
 
         try:
             worker, error = _start_worker(
@@ -196,6 +256,7 @@ class _WorkerPool:
             error = _error(
                 "E_RUNTIME",
                 f"worker startup failed: {type(startup_exception).__name__}",
+                phase="startup",
             )
         if worker is None:
             with self.condition:
@@ -205,9 +266,34 @@ class _WorkerPool:
         worker.pool_generation = generation
         return worker, None
 
+    def _should_replenish(self, generation: int | None) -> bool:
+        with self.condition:
+            return (
+                generation == self.generation
+                and self.total < self.desired_warm
+                and self.prewarm_generation is None
+            )
+
+    def _prewarm_one(self) -> None:
+        RUNTIME_TELEMETRY.increment("workers.adaptivePrewarm")
+        warm_worker_pool()
+
     def release(self, worker: _ReusableWorker, *, reusable: bool) -> None:
         terminate = False
+        replenish = False
         with self.condition:
+            if reusable:
+                worker.requests_completed += 1
+                resident = _resident_memory_bytes(worker.process.pid)
+                if (
+                    worker.requests_completed >= MAX_REQUESTS_PER_WORKER
+                    or (
+                        resident is not None
+                        and resident > WORKER_RECYCLE_RSS_MB * 1024 * 1024
+                    )
+                ):
+                    reusable = False
+                    RUNTIME_TELEMETRY.increment("workers.recycled")
             if (
                 reusable
                 and worker.is_running
@@ -218,19 +304,29 @@ class _WorkerPool:
             else:
                 self.total -= 1
                 terminate = True
+                replenish = self._should_replenish(worker.pool_generation)
             self.condition.notify()
         if terminate:
             worker.terminate()
+        if replenish:
+            self._prewarm_one()
 
     def reserve_prewarm(self) -> int | None:
-        """Reserve exactly one cold-pool slot for asynchronous startup."""
+        """Reserve one missing observed-capacity slot for async startup."""
         with self.condition:
-            if self.total != 0 or self.prewarm_generation is not None:
+            if (
+                self.total >= self.desired_warm
+                or self.prewarm_generation is not None
+            ):
                 return None
             generation = self.generation
             self.total += 1
             self.prewarm_generation = generation
             return generation
+
+    def owns_prewarm(self, generation: int) -> bool:
+        with self.condition:
+            return self.prewarm_generation == generation
 
     def finish_prewarm(
         self,
@@ -268,12 +364,15 @@ class _WorkerPool:
             if self.prewarm_generation is not None:
                 self.total -= 1
                 self.prewarm_generation = None
+            self.desired_warm = 1
             self.condition.notify_all()
         for worker in workers:
             worker.terminate()
 
 
 _WORKER_POOL = _WorkerPool()
+_ADMISSION = AdmissionController()
+_CIRCUIT = CircuitBreaker()
 atexit.register(_WORKER_POOL.shutdown)
 
 
@@ -294,12 +393,15 @@ def warm_worker_pool() -> None:
     def warm() -> None:
         worker: _ReusableWorker | None = None
         try:
-            worker, _unused = _start_worker(
-                DEFAULT_MEMORY_MB * 1024 * 1024,
-                deadline=time.monotonic() + WORKER_PREWARM_BUDGET_SECONDS,
-                timeout_ms=DEFAULT_TIMEOUT_MS,
-                cancel_event=None,
-            )
+            # A shutdown can land between reserving the slot and reaching
+            # this thread; spawning then would create a child nobody owns.
+            if _WORKER_POOL.owns_prewarm(generation):
+                worker, _unused = _start_worker(
+                    DEFAULT_MEMORY_MB * 1024 * 1024,
+                    deadline=time.monotonic() + WORKER_PREWARM_BUDGET_SECONDS,
+                    timeout_ms=DEFAULT_TIMEOUT_MS,
+                    cancel_event=None,
+                )
         except Exception:
             pass
         finally:
@@ -317,6 +419,38 @@ def run_operation(
     result_mode: str = DEFAULT_RESULT_MODE,
     max_output_bytes: int = DEFAULT_MAX_OUTPUT_BYTES,
     cancel_event: threading.Event | None = None,
+    _request_class: str = "single",
+) -> dict[str, Any]:
+    started = time.monotonic()
+    result = _run_operation_impl(
+        operation,
+        arguments,
+        timeout_ms=timeout_ms,
+        memory_mb=memory_mb,
+        result_mode=result_mode,
+        max_output_bytes=max_output_bytes,
+        cancel_event=cancel_event,
+        request_class=_request_class,
+    )
+    RUNTIME_TELEMETRY.increment("requests.total")
+    RUNTIME_TELEMETRY.increment(f"requests.{_request_class}")
+    if result.get("status") == "error":
+        code = str(result.get("error", {}).get("code", "E_RUNTIME"))
+        RUNTIME_TELEMETRY.increment(f"errors.{code}")
+    RUNTIME_TELEMETRY.observe("requests.totalMs", (time.monotonic() - started) * 1000)
+    return result
+
+
+def _run_operation_impl(
+    operation: str,
+    arguments: dict[str, Any],
+    *,
+    timeout_ms: int,
+    memory_mb: int,
+    result_mode: str,
+    max_output_bytes: int,
+    cancel_event: threading.Event | None,
+    request_class: str,
 ) -> dict[str, Any]:
     if cancel_event is not None and cancel_event.is_set():
         return _error("E_CANCELLED", "operation was cancelled")
@@ -365,6 +499,86 @@ def run_operation(
             max_output_bytes=max_output_bytes,
         )
     memory_bytes = memory_mb * 1024 * 1024
+    allowed, retry_after_ms = _CIRCUIT.allow()
+    if not allowed:
+        return _error(
+            "E_UNAVAILABLE",
+            "calculation workers are temporarily unavailable after repeated provider failures",
+            phase="admission",
+            retry_after_ms=retry_after_ms,
+        )
+    lease, admission_error = _ADMISSION.acquire(
+        memory_mb,
+        request_class=request_class,
+        deadline=deadline,
+        cancel_event=cancel_event,
+        poll_seconds=WORKER_POLL_SECONDS,
+    )
+    if lease is None:
+        # The half-open probe reserved by allow() was never consumed by an
+        # execution; returning it keeps one admission-phase failure from
+        # stranding the breaker in a state that refuses every later call.
+        _CIRCUIT.abandon_probe()
+        if admission_error == "overloaded":
+            return _error(
+                "E_OVERLOADED",
+                "calculation queue is full; retry after the current burst",
+                {"queueLimit": _ADMISSION.maximum_queued},
+                phase="admission",
+                retry_after_ms=100,
+            )
+        if admission_error == "cancelled":
+            return _error("E_CANCELLED", "operation was cancelled")
+        return _error(
+            "E_TIMEOUT",
+            f"operation exceeded {timeout_ms} ms while waiting for admission",
+            {"phase": "admission", "timeoutMs": timeout_ms},
+            phase="admission",
+        )
+    RUNTIME_TELEMETRY.observe("requests.queueMs", lease.queue_ms)
+    try:
+        result = _execute_admitted_operation(
+            request_line,
+            memory_bytes=memory_bytes,
+            deadline=deadline,
+            timeout_ms=timeout_ms,
+            memory_mb=memory_mb,
+            result_mode=result_mode,
+            max_output_bytes=max_output_bytes,
+            cancel_event=cancel_event,
+        )
+    except BaseException:
+        # _execute_admitted_operation converts its own failures, so this is
+        # a parent-side supervision bug; it is provider fault evidence and
+        # the probe must still be accounted before the exception escapes.
+        _CIRCUIT.record(outcome="infrastructure_failure")
+        raise
+    finally:
+        _ADMISSION.release(lease)
+    if result.get("status") == "error":
+        outcome = (
+            "infrastructure_failure"
+            if result.get("error", {}).get("code") == "E_RUNTIME"
+            else "error"
+        )
+    else:
+        outcome = "success"
+    if _CIRCUIT.record(outcome=outcome):
+        RUNTIME_TELEMETRY.increment("circuit.opened")
+    return result
+
+
+def _execute_admitted_operation(
+    request_line: str,
+    *,
+    memory_bytes: int,
+    deadline: float,
+    timeout_ms: int,
+    memory_mb: int,
+    result_mode: str,
+    max_output_bytes: int,
+    cancel_event: threading.Event | None,
+) -> dict[str, Any]:
     worker, startup_error = _WORKER_POOL.acquire(
         memory_bytes,
         deadline=deadline,
@@ -372,7 +586,9 @@ def run_operation(
         cancel_event=cancel_event,
     )
     if worker is None:
-        return startup_error or _error("E_RUNTIME", "worker failed to start")
+        return startup_error or _error(
+            "E_RUNTIME", "worker failed to start", phase="startup"
+        )
     if cancel_event is not None and cancel_event.is_set():
         _WORKER_POOL.release(worker, reusable=True)
         return _error("E_CANCELLED", "operation was cancelled")
@@ -385,6 +601,7 @@ def run_operation(
         )
     reusable = False
     output_policy_applied = False
+    execution_started = time.monotonic()
     try:
         result, reusable, output_policy_applied = _execute_worker(
             worker,
@@ -400,6 +617,10 @@ def run_operation(
             f"worker supervision failed: {type(execution_error).__name__}",
         )
     finally:
+        RUNTIME_TELEMETRY.observe(
+            "requests.executionMs",
+            (time.monotonic() - execution_started) * 1000,
+        )
         # An unexpected parent-side exception between acquire and release
         # previously leaked the slot permanently; four leaks saturated the
         # pool and every later operation became a queue-phase E_TIMEOUT.
@@ -451,6 +672,29 @@ def _start_worker(
     timeout_ms: int,
     cancel_event: threading.Event | None,
 ) -> tuple[_ReusableWorker | None, dict[str, Any] | None]:
+    started = time.monotonic()
+    try:
+        worker, error = _start_worker_impl(
+            memory_bytes,
+            deadline=deadline,
+            timeout_ms=timeout_ms,
+            cancel_event=cancel_event,
+        )
+        RUNTIME_TELEMETRY.increment(
+            "workers.started" if worker is not None else "workers.startFailed"
+        )
+        return worker, error
+    finally:
+        RUNTIME_TELEMETRY.observe("workers.startupMs", (time.monotonic() - started) * 1000)
+
+
+def _start_worker_impl(
+    memory_bytes: int,
+    *,
+    deadline: float,
+    timeout_ms: int,
+    cancel_event: threading.Event | None,
+) -> tuple[_ReusableWorker | None, dict[str, Any] | None]:
     if cancel_event is not None and cancel_event.is_set():
         return None, _error("E_CANCELLED", "operation was cancelled")
     environment = os.environ.copy()
@@ -463,7 +707,11 @@ def _start_worker(
     try:
         stderr_fd = _worker_stderr_file()
     except OSError as error:
-        return None, _error("E_RUNTIME", f"worker diagnostics could not be created: {error}")
+        return None, _error(
+            "E_RUNTIME",
+            f"worker diagnostics could not be created: {error}",
+            phase="startup",
+        )
     try:
         process = subprocess.Popen(
             command,
@@ -476,7 +724,9 @@ def _start_worker(
         )
     except OSError as error:
         os.close(stderr_fd)
-        return None, _error("E_RUNTIME", f"worker failed to start: {error}")
+        return None, _error(
+            "E_RUNTIME", f"worker failed to start: {error}", phase="startup"
+        )
     startup_error = _await_worker_ready(
         process,
         memory_bytes,
@@ -571,7 +821,9 @@ def _execute_worker(
         return _error("E_RUNTIME", "worker returned an invalid response"), False, False
     if response.get("ok") is True:
         return response["result"], True, True
-    error = response.get("error", {"code": "E_RUNTIME", "message": "unknown worker error"})
+    error = response.get("error")
+    if not isinstance(error, dict):
+        error = error_payload("E_RUNTIME", "unknown worker error")
     return (
         {"status": "error", "error": error},
         error.get("code") != "E_RUNTIME",
@@ -602,7 +854,7 @@ def _await_worker_ready(
     if process.stdout is None:
         process.kill()
         os.close(stderr_fd)
-        return _error("E_RUNTIME", "worker output was unavailable")
+        return _error("E_RUNTIME", "worker output was unavailable", phase="startup")
     with ThreadPoolExecutor(max_workers=1, thread_name_prefix="calculator-worker-startup") as executor:
         readiness = executor.submit(process.stdout.readline)
         startup_deadline = min(deadline, time.monotonic() + STARTUP_TIMEOUT_MS / 1000)
@@ -622,13 +874,21 @@ def _await_worker_ready(
                         f"operation exceeded {timeout_ms} ms while starting a worker",
                         {"phase": "startup", "timeoutMs": timeout_ms},
                     )
-                return _error("E_RUNTIME", f"worker did not start within {STARTUP_TIMEOUT_MS} ms")
+                return _error(
+                    "E_RUNTIME",
+                    f"worker did not start within {STARTUP_TIMEOUT_MS} ms",
+                    phase="startup",
+                )
             resident_bytes = _resident_memory_bytes(process.pid)
             if resident_bytes is not None and resident_bytes > memory_bytes:
                 process.kill()
                 readiness.result()
                 os.close(stderr_fd)
-                return _error("E_MEMORY", "worker exceeded the memory limit during startup")
+                return _error(
+                    "E_MEMORY",
+                    "worker exceeded the memory limit during startup",
+                    phase="startup",
+                )
             if process.poll() is not None:
                 break
             _wait_for_worker_progress(readiness)
@@ -641,7 +901,11 @@ def _await_worker_ready(
         stderr = _stderr_tail(stderr_fd).strip()
         process.kill()
         os.close(stderr_fd)
-        return _error("E_RUNTIME", stderr.splitlines()[-1] if stderr else "worker failed to start")
+        return _error(
+            "E_RUNTIME",
+            stderr.splitlines()[-1] if stderr else "worker failed to start",
+            phase="startup",
+        )
     return None
 
 
@@ -673,18 +937,75 @@ def run_batch(
         return _error("E_LIMIT", f"maxOutputBytes must be between {MIN_OUTPUT_BYTES} and {MAX_OUTPUT_BYTES}")
     deadline = time.monotonic() + timeout_ms / 1000
     worker_count = _batch_worker_count(items)
+    batch_cancel = threading.Event()
+    combined_cancel = _CombinedCancelEvent(cancel_event, batch_cancel)
+    grouped: dict[str, list[tuple[int, dict[str, Any]]]] = {}
+    for index, item in enumerate(items):
+        try:
+            key = json.dumps(item, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+        except (TypeError, ValueError, OverflowError, RecursionError):
+            key = f"unserializable:{index}"
+        grouped.setdefault(key, []).append((index, item))
+    coalesced = len(items) - len(grouped)
+    if coalesced:
+        RUNTIME_TELEMETRY.increment("batch.itemsCoalesced", coalesced)
+
+    results_by_index: dict[int, dict[str, Any]] = {}
+    encoded_bytes = 0
+    aborted: dict[str, Any] | None = None
     with ThreadPoolExecutor(max_workers=worker_count, thread_name_prefix="calculator-batch") as executor:
-        futures = [
+        futures = {
             executor.submit(
                 _run_batch_item,
-                indexed_item,
-                cancel_event,
+                entries[0],
+                combined_cancel,
                 deadline,
                 timeout_ms,
-            )
-            for indexed_item in enumerate(items)
-        ]
-        results = [future.result() for future in futures]
+            ): entries
+            for entries in grouped.values()
+        }
+        for future in as_completed(futures):
+            try:
+                representative = future.result()
+            except Exception as item_error:
+                # A supervision failure inside one item's thread must not
+                # convert the rest of a valid batch into a whole-call
+                # transport failure; it is that item's error envelope.
+                representative = _error(
+                    "E_RUNTIME",
+                    f"batch item supervision failed: {type(item_error).__name__}",
+                )
+            for index, _item in futures[future]:
+                indexed_result = deepcopy(representative)
+                indexed_result["index"] = index
+                results_by_index[index] = indexed_result
+                # Charge every logical result, including coalesced duplicates.
+                # Once item payloads alone exceed the limit, the final envelope
+                # is mathematically unable to fit.
+                encoded_bytes += len(
+                    json.dumps(indexed_result, ensure_ascii=False, separators=(",", ":")).encode()
+                )
+                if encoded_bytes > max_output_bytes:
+                    batch_cancel.set()
+                    for pending in futures:
+                        if pending is not future:
+                            pending.cancel()
+                    RUNTIME_TELEMETRY.increment("batch.outputAborts")
+                    aborted = _error(
+                        "E_OUTPUT_LIMIT",
+                        f"batch result requires at least {encoded_bytes} bytes; "
+                        "reduce the batch or increase maxOutputBytes",
+                        {"bytes": encoded_bytes, "maxOutputBytes": max_output_bytes},
+                        phase="output",
+                    )
+                    break
+            if aborted is not None:
+                break
+    if aborted is not None:
+        return aborted
+    if cancel_event is not None and cancel_event.is_set():
+        return _error("E_CANCELLED", "batch was cancelled")
+    results = [results_by_index[index] for index in range(len(items))]
     result = {
         "status": "ok" if all(result.get("status") == "ok" for result in results) else "partial",
         "count": len(results),
@@ -748,6 +1069,7 @@ def _run_batch_item(
         result_mode=item.get("resultMode", DEFAULT_RESULT_MODE),
         max_output_bytes=item.get("maxOutputBytes", DEFAULT_MAX_OUTPUT_BYTES),
         cancel_event=cancel_event,
+        _request_class="batch",
     )
     return {"index": index, **result}
 
@@ -762,4 +1084,6 @@ def _batch_worker_count(items: list[dict[str, Any]]) -> int:
     ]
     largest_limit = max(requested_limits, default=DEFAULT_MEMORY_MB)
     memory_bounded_workers = max(1, 4096 // max(DEFAULT_MEMORY_MB, largest_limit))
-    return max(1, min(4, len(items), memory_bounded_workers))
+    # A batch never owns the fourth worker. Admission gives that lane to an
+    # interactive math.run even under a sustained 32-item batch workload.
+    return max(1, min(3, len(items), memory_bounded_workers))

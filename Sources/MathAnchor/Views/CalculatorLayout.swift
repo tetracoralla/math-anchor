@@ -7,8 +7,6 @@ enum CalculatorLayout {
     // ten-column face (6 × 59 + 5 × 8 + 8 + 4 × 59 + 3 × 8 + 2 × 16).
     static let scientificWidth: CGFloat = 694
     static let historyWidth: CGFloat = 248
-    static let windowHeight: CGFloat = 486
-    static let conversionWindowHeight: CGFloat = 532
     static let headerHeight: CGFloat = 44
     static let displayHeight: CGFloat = 124
     static let conversionDisplayHeight: CGFloat = 170
@@ -17,6 +15,15 @@ enum CalculatorLayout {
     static let keyHeight: CGFloat = 52
     static let keySpacing: CGFloat = 8
     static let contentInset: CGFloat = 16
+    // Leave the full keypad and its shadow above the rounded window mask.
+    // CalculatorWindowConfigurator adds the live titlebar safe-area height to
+    // these usable-content heights when it derives the NSWindow frame.
+    static let keypadBottomInset: CGFloat = 20
+    static let keypadHeight: CGFloat = keyHeight * 5 + keySpacing * 4
+    static let windowHeight: CGFloat =
+        headerHeight + displayHeight + displayKeypadSpacing + keypadHeight + keypadBottomInset
+    static let conversionWindowHeight: CGFloat =
+        headerHeight + conversionDisplayHeight + displayKeypadSpacing + keypadHeight + keypadBottomInset
     static let basicKeyWidth: CGFloat = 59
     static let conversionKeyWidth: CGFloat = 81.3333333333
     static let scientificKeyWidth: CGFloat = 59

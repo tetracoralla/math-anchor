@@ -73,7 +73,7 @@ final class CalculatorStore: ObservableObject {
         distinctExactResult = nil
     }
 
-    func append(_ token: String) {
+    func append(_ token: String, evaluationToken: String? = nil) {
         errorMessage = nil
         if showingResult {
             if ["+", "-", "*", "/", "^"].contains(token) {
@@ -85,7 +85,7 @@ final class CalculatorStore: ObservableObject {
             }
             semanticUndo.removeAll(keepingCapacity: true)
         }
-        guard let edit = normalizedAppend(token) else { return }
+        guard let edit = normalizedAppend(token, evaluationToken: evaluationToken) else { return }
         invalidatePendingEvaluation()
         showingResult = false
         expression = edit.visible
@@ -96,7 +96,7 @@ final class CalculatorStore: ObservableObject {
 
     func appendFunction(_ name: String) {
         if expression.isEmpty || endsWithOperatorOrOpeningParenthesis(expression) {
-            append("\(name)(")
+            appendFunctionCall(name)
         } else {
             applyFunction(name)
         }
@@ -104,18 +104,23 @@ final class CalculatorStore: ObservableObject {
 
     func applyFunction(_ name: String) {
         guard !expression.isEmpty else {
-            append("\(name)(")
+            appendFunctionCall(name)
             return
         }
         if endsWithOperatorOrOpeningParenthesis(expression) {
-            append("\(name)(")
+            appendFunctionCall(name)
             return
         }
         prepareResultForUnaryEditing()
-        guard let visible = applyingToTrailingOperand(name, in: expression),
-              let evaluation = applyingToTrailingOperand(name, in: evaluationExpression)
-        else { return }
-        transformExpressions(visible: visible, evaluation: evaluation)
+        guard let visible = applyingToTrailingOperand(name, in: expression) else { return }
+        // The executable string is re-derived from the edited visible string:
+        // after a percent expansion the two strings are structurally
+        // divergent, so trailing-operand surgery on the stale expansion would
+        // splice the function onto the wrong operand.
+        transformExpressions(
+            visible: visible,
+            evaluation: ExpressionEditing.evaluationExpression(forVisible: visible)
+        )
     }
 
     func square() {
@@ -132,10 +137,11 @@ final class CalculatorStore: ObservableObject {
             return
         }
         prepareResultForUnaryEditing()
-        guard let visible = wrappingTrailingOperand(prefix: "1/", in: expression),
-              let evaluation = wrappingTrailingOperand(prefix: "1/", in: evaluationExpression)
-        else { return }
-        transformExpressions(visible: visible, evaluation: evaluation)
+        guard let visible = wrappingTrailingOperand(prefix: "1/", in: expression) else { return }
+        transformExpressions(
+            visible: visible,
+            evaluation: ExpressionEditing.evaluationExpression(forVisible: visible)
+        )
     }
 
     func clear() {
@@ -177,9 +183,11 @@ final class CalculatorStore: ObservableObject {
             evaluationExpression = previous.evaluation
         } else {
             expression.removeLast()
-            if !evaluationExpression.isEmpty {
-                evaluationExpression.removeLast()
-            }
+            // Visible and executable spellings are not always the same
+            // (`log(` executes as `log10(`, and percent expands structurally).
+            // Re-derive instead of deleting one hidden character and leaving
+            // an invisible fragment behind after repeated backspace presses.
+            evaluationExpression = ExpressionEditing.evaluationExpression(forVisible: expression)
         }
         display = expression.isEmpty ? "0" : expressionForDisplay
         errorMessage = nil
@@ -191,10 +199,11 @@ final class CalculatorStore: ObservableObject {
             return
         }
         prepareResultForUnaryEditing()
-        guard let visible = ExpressionEditing.togglingSign(in: expression),
-              let evaluation = ExpressionEditing.togglingSign(in: evaluationExpression)
-        else { return }
-        transformExpressions(visible: visible, evaluation: evaluation)
+        guard let visible = ExpressionEditing.togglingSign(in: expression) else { return }
+        transformExpressions(
+            visible: visible,
+            evaluation: ExpressionEditing.evaluationExpression(forVisible: visible)
+        )
     }
 
     func percent() {
@@ -242,7 +251,8 @@ final class CalculatorStore: ObservableObject {
         let openGroups = unmatchedOpeningParentheses(in: evaluationExpression)
         let submittedExpression =
             evaluationExpression + String(repeating: ")", count: openGroups)
-        let submittedVisibleExpression = expression
+        let submittedVisibleExpression =
+            expression + String(repeating: ")", count: unmatchedOpeningParentheses(in: expression))
         let submittedRevision = inputRevision
         let evaluationID = UUID()
         activeEvaluationID = evaluationID
@@ -416,7 +426,7 @@ final class CalculatorStore: ObservableObject {
         activeEvaluationID == id && inputRevision == revision
     }
 
-    private func normalizedAppend(_ token: String) -> ExpressionState? {
+    private func normalizedAppend(_ token: String, evaluationToken: String? = nil) -> ExpressionState? {
         let operators = ["+", "-", "*", "/", "^"]
         if operators.contains(token) {
             if expression.isEmpty {
@@ -472,7 +482,16 @@ final class CalculatorStore: ObservableObject {
         let separator = needsMultiplication ? "*" : ""
         return ExpressionState(
             visible: expression + separator + token,
-            evaluation: evaluationExpression + separator + token
+            evaluation: evaluationExpression + separator + (evaluationToken ?? token)
+        )
+    }
+
+    /// Starts a named call with the visible spelling the user pressed and the
+    /// core's executable spelling (the familiar `log` key runs as `log10`).
+    private func appendFunctionCall(_ name: String) {
+        append(
+            "\(name)(",
+            evaluationToken: ExpressionEditing.runtimeFunctionName(name) + "("
         )
     }
 

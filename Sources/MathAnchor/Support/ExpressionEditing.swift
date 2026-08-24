@@ -9,6 +9,10 @@ struct TrailingOperand {
 enum ExpressionEditing {
     static func normalizedForRuntime(_ expression: String) -> String {
         expression
+            // Re-derivation after backspace or a unary edit must preserve the
+            // keypad's familiar base-10 `log` meaning even while its call is
+            // still open and therefore cannot be parsed as a closed operand.
+            .replacingOccurrences(of: "log(", with: "log10(")
             .replacingOccurrences(of: "×", with: "*")
             .replacingOccurrences(of: "÷", with: "/")
             .replacingOccurrences(of: "−", with: "-")
@@ -39,11 +43,82 @@ enum ExpressionEditing {
               let left = split.left,
               let operatorToken = split.operatorToken
         else {
-            return normalizedForRuntime(expression)
+            return translatedOperand(expression)
         }
         return evaluationExpression(forVisible: left)
             + normalizedOperator(operatorToken)
             + evaluationExpression(forVisible: split.operand)
+    }
+
+    /// The familiar `log` key means base 10; the core's `log` name is natural
+    /// log, so the executable form uses the explicit base-10 name.
+    static func runtimeFunctionName(_ name: String) -> String {
+        name == "log" ? "log10" : name
+    }
+
+    /// Translates a trailing operand that carries no top-level operator.
+    /// Closed groups and named calls descend so percent notation anywhere in
+    /// the visible expression reaches its executable expansion.
+    private static func translatedOperand(_ operand: String) -> String {
+        if let inner = closedGroupInner(operand) {
+            return "(" + evaluationExpression(forVisible: inner) + ")"
+        }
+        if let call = namedCall(operand) {
+            return runtimeFunctionName(call.name)
+                + "("
+                + evaluationExpression(forVisible: call.argument)
+                + ")"
+        }
+        return normalizedForRuntime(operand)
+    }
+
+    /// Content of a leading group whose parenthesis matches the operand's
+    /// final character; still-open or trailing groups stay opaque.
+    private static func closedGroupInner(_ operand: String) -> String? {
+        guard operand.hasPrefix("("), operand.hasSuffix(")") else { return nil }
+        var depth = 0
+        for index in operand.indices {
+            if operand[index] == "(" {
+                depth += 1
+            } else if operand[index] == ")" {
+                depth -= 1
+                if depth == 0 {
+                    guard index == operand.index(before: operand.endIndex) else { return nil }
+                    return String(operand[operand.index(after: operand.startIndex)..<index])
+                }
+            }
+        }
+        return nil
+    }
+
+    /// A named call such as `sin(50%)` whose parenthesis matches the operand's
+    /// final character. Still-open arguments fall through to lexical runtime
+    /// normalization, which preserves their structure while translating the
+    /// keypad's `log(` alias.
+    private static func namedCall(_ operand: String) -> (name: String, argument: String)? {
+        guard let openingIndex = operand.firstIndex(of: "("), operand.hasSuffix(")") else {
+            return nil
+        }
+        let name = String(operand[..<openingIndex])
+        guard name.first?.isLetter == true,
+              name.allSatisfy({ $0.isLetter || $0.isNumber })
+        else { return nil }
+        var depth = 0
+        for index in operand.indices {
+            if operand[index] == "(" {
+                depth += 1
+            } else if operand[index] == ")" {
+                depth -= 1
+                if depth == 0 {
+                    guard index == operand.index(before: operand.endIndex) else { return nil }
+                    return (
+                        name,
+                        String(operand[operand.index(after: openingIndex)..<index])
+                    )
+                }
+            }
+        }
+        return nil
     }
 
     static func togglingSign(in expression: String) -> String? {

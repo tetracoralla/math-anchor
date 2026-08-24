@@ -18,13 +18,19 @@ from .operations import (
     dimension,
     expression,
     finance,
+    floating,
     inference,
+    linear_algebra,
     matrix,
+    measurement,
     number_theory,
     numerical,
     optimization,
     probability,
+    programmer,
     quantity,
+    rounding,
+    units,
     verification,
 )
 
@@ -114,6 +120,50 @@ _POSITIVE_MODULUS = {
         },
     ]
 }
+_PROGRAMMER_LITERAL = {
+    "type": "string",
+    "pattern": r"^[+-]?(?:0[bB][01]+|0[oO][0-7]+|0[xX][0-9A-Fa-f]+|[0-9]+)$",
+    "maxLength": 260,
+    "description": "Exact integer text; non-decimal values require a 0b, 0o, or 0x prefix.",
+}
+_PROGRAMMER_BIT_WIDTH = {
+    "type": "integer",
+    "enum": [8, 16, 32, 64, 128, 256],
+    "default": 64,
+}
+_PROGRAMMER_SIGNEDNESS = {
+    "type": "string",
+    "enum": ["unsigned", "twos_complement"],
+    "default": "unsigned",
+}
+_PROGRAMMER_INPUT_MODE = {
+    "type": "string",
+    "enum": ["value", "bits"],
+    "default": "value",
+    "description": "Interpret the literal as a mathematical value or as a nonnegative raw bit pattern.",
+}
+_PROGRAMMER_COUNT = {
+    "type": "integer",
+    "minimum": 0,
+    "maximum": 256,
+    "default": 1,
+}
+_PROGRAMMER_OFFSET = {"type": "integer", "minimum": 0, "maximum": 255}
+_PROGRAMMER_FIELD_WIDTH = {"type": "integer", "minimum": 1, "maximum": 256}
+_IEEE_FORMAT = {"type": "string", "enum": ["binary32", "binary64"], "default": "binary64"}
+_IEEE_INPUT_MODE = {"type": "string", "enum": ["decimal", "bits"], "default": "decimal"}
+_IEEE_VALUE = {
+    "type": "string",
+    "minLength": 1,
+    "maxLength": 256,
+    "description": "Decimal text or a nonnegative 0b/0o/0x/integer bit pattern according to inputMode.",
+}
+_LARGE_INTEGER_TEXT = {
+    "type": "string",
+    "pattern": r"^[+-]?[0-9]+$",
+    "maxLength": 1000,
+    "description": "Exact ASCII integer text.",
+}
 _VARIABLES = {
     "type": "array",
     "items": {"type": "string"},
@@ -148,6 +198,23 @@ _APPROXIMATE_VECTOR = {
     "type": "array",
     "minItems": 1,
     "maxItems": 100,
+    "items": _DECIMAL_TEXT,
+}
+_NUMERIC_LINALG_MATRIX = {
+    "type": "array",
+    "minItems": 1,
+    "maxItems": 32,
+    "items": {
+        "type": "array",
+        "minItems": 1,
+        "maxItems": 32,
+        "items": _DECIMAL_TEXT,
+    },
+}
+_NUMERIC_LINALG_VECTOR = {
+    "type": "array",
+    "minItems": 1,
+    "maxItems": 32,
     "items": _DECIMAL_TEXT,
 }
 _CANDIDATE = {
@@ -246,6 +313,42 @@ def _object(
     }
 
 
+def _continuous_distribution_object(
+    distribution: str,
+    parameters: dict[str, Any],
+    required_parameters: tuple[str, ...],
+) -> dict[str, Any]:
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "distribution": {"const": distribution},
+            "function": {"type": "string", "enum": ["pdf", "cdf", "quantile"]},
+            "x": _DECIMAL_TEXT,
+            "probability": _DECIMAL_TEXT,
+            **parameters,
+            "precision": {"type": "integer", "minimum": 16, "maximum": 100, "default": 30},
+        },
+        "required": ["distribution", "function", *required_parameters],
+        "oneOf": [
+            {
+                "properties": {
+                    "function": {"enum": ["pdf", "cdf"]},
+                    "probability": False,
+                },
+                "required": ["x"],
+            },
+            {
+                "properties": {
+                    "function": {"const": "quantile"},
+                    "x": False,
+                },
+                "required": ["probability"],
+            },
+        ],
+    }
+
+
 def _search_tokens(normalized_query: str) -> set[str]:
     tokens = set(re.findall(r"[a-z0-9]+", normalized_query))
     for run in _CJK_RUN.findall(normalized_query):
@@ -297,6 +400,62 @@ _SPECS = (
         examples=({"expression": "(x^2 - 1)/(x - 1)", "variables": ["x"]},),
         handler=expression.simplify,
         keywords=("reduce", "simplify", "symbolic", "化简", "约简"),
+    ),
+    OperationSpec(
+        id="decimal.quantize",
+        category="decimal",
+        summary="Round exact decimal text to places, significant digits, or an explicit increment.",
+        description="Apply one named decimal rounding convention without binary floating-point coercion, preserving negative zero and reporting whether and in which direction the numeric value changed.",
+        input_schema={
+            "oneOf": [
+                _object(
+                    {
+                        "action": {"const": "decimal_places"},
+                        "value": _DECIMAL_TEXT,
+                        "decimalPlaces": {"type": "integer", "minimum": -100, "maximum": 100, "default": 2},
+                        "roundingMode": {
+                            "type": "string",
+                            "enum": ["half_even", "half_up", "half_down", "toward_zero", "away_from_zero", "ceiling", "floor"],
+                            "default": "half_even",
+                        },
+                    },
+                    ("action", "value", "decimalPlaces"),
+                ),
+                _object(
+                    {
+                        "action": {"const": "significant_digits"},
+                        "value": _DECIMAL_TEXT,
+                        "significantDigits": {"type": "integer", "minimum": 1, "maximum": 100, "default": 6},
+                        "roundingMode": {
+                            "type": "string",
+                            "enum": ["half_even", "half_up", "half_down", "toward_zero", "away_from_zero", "ceiling", "floor"],
+                            "default": "half_even",
+                        },
+                    },
+                    ("action", "value", "significantDigits"),
+                ),
+                _object(
+                    {
+                        "action": {"const": "increment"},
+                        "value": _DECIMAL_TEXT,
+                        "increment": _DECIMAL_TEXT,
+                        "roundingMode": {
+                            "type": "string",
+                            "enum": ["half_even", "half_up", "half_down", "toward_zero", "away_from_zero", "ceiling", "floor"],
+                            "default": "half_even",
+                        },
+                    },
+                    ("action", "value", "increment"),
+                ),
+            ]
+        },
+        examples=(
+            {"action": "decimal_places", "value": "2.345", "decimalPlaces": 2, "roundingMode": "half_even"},
+            {"action": "significant_digits", "value": "12345.678", "significantDigits": 4, "roundingMode": "half_up"},
+            {"action": "increment", "value": "1.23", "increment": "0.05", "roundingMode": "half_up"},
+        ),
+        handler=rounding.quantize,
+        keywords=("round", "decimal places", "significant digits", "cash rounding", "quantize", "舍入", "四舍五入", "有效数字", "小数位", "定点数"),
     ),
     OperationSpec(
         id="function.sample",
@@ -740,6 +899,248 @@ _SPECS = (
         keywords=("modulo", "modular inverse", "modular exponent", "模运算", "模逆", "模幂"),
     ),
     OperationSpec(
+        id="integer.divide",
+        category="integer",
+        summary="Divide exact integers using truncating, floor, or Euclidean quotient-and-remainder semantics.",
+        description="Return an exact quotient and remainder under one explicit sign convention, preserving dividend = divisor * quotient + remainder.",
+        input_schema=_object(
+            {
+                "dividend": _LARGE_INTEGER_TEXT,
+                "divisor": _LARGE_INTEGER_TEXT,
+                "divisionMode": {
+                    "type": "string",
+                    "enum": ["truncating", "floor", "euclidean"],
+                    "default": "truncating",
+                },
+            },
+            ("dividend", "divisor"),
+        ),
+        examples=(
+            {"dividend": "-99", "divisor": "10", "divisionMode": "truncating"},
+            {"dividend": "-99", "divisor": "10", "divisionMode": "floor"},
+            {"dividend": "-99", "divisor": "-10", "divisionMode": "euclidean"},
+        ),
+        handler=rounding.divide_integer,
+        keywords=("integer division", "quotient", "remainder", "truncate division", "floor division", "Euclidean division", "整除", "商和余数", "截断除法", "欧几里得除法"),
+    ),
+    OperationSpec(
+        id="integer.represent",
+        category="integer",
+        summary="Render one fixed-width integer in binary, octal, decimal, hexadecimal, and character forms.",
+        description="Interpret explicit integer text as a bounded mathematical value or raw bit pattern, then expose unsigned and two's-complement meanings without silent wrapping.",
+        input_schema=_object(
+            {
+                "value": _PROGRAMMER_LITERAL,
+                "bitWidth": _PROGRAMMER_BIT_WIDTH,
+                "signedness": _PROGRAMMER_SIGNEDNESS,
+                "inputMode": _PROGRAMMER_INPUT_MODE,
+            },
+            ("value",),
+        ),
+        examples=(
+            {"value": "0xFF", "bitWidth": 8, "signedness": "twos_complement", "inputMode": "bits"},
+            {"value": "375", "bitWidth": 64},
+        ),
+        handler=programmer.represent,
+        keywords=("binary", "octal", "hexadecimal", "base conversion", "two's complement", "ASCII", "Unicode", "进制转换", "二进制", "十六进制", "补码", "字符编码"),
+    ),
+    OperationSpec(
+        id="integer.bitwise",
+        category="integer",
+        summary="Run one explicit fixed-width bitwise, shift, rotate, negate, or chunk-reversal operation.",
+        description="Apply machine-integer semantics with an explicit width and signed interpretation, returning every overflow, wrap, truncation, discarded bit, base rendering, and character interpretation.",
+        input_schema={
+            "oneOf": [
+                _object(
+                    {
+                        "action": {"type": "string", "enum": ["and", "or", "xor", "nor"]},
+                        "left": _PROGRAMMER_LITERAL,
+                        "right": _PROGRAMMER_LITERAL,
+                        "bitWidth": _PROGRAMMER_BIT_WIDTH,
+                        "signedness": _PROGRAMMER_SIGNEDNESS,
+                        "inputMode": _PROGRAMMER_INPUT_MODE,
+                    },
+                    ("action", "left", "right"),
+                ),
+                _object(
+                    {
+                        "action": {
+                            "type": "string",
+                            "enum": [
+                                "not",
+                                "negate",
+                                "count_ones",
+                                "leading_zeros",
+                                "trailing_zeros",
+                                "reverse_bits",
+                                "reverse_bytes",
+                                "reverse_words",
+                            ],
+                        },
+                        "value": _PROGRAMMER_LITERAL,
+                        "bitWidth": _PROGRAMMER_BIT_WIDTH,
+                        "signedness": _PROGRAMMER_SIGNEDNESS,
+                        "inputMode": _PROGRAMMER_INPUT_MODE,
+                    },
+                    ("action", "value"),
+                ),
+                _object(
+                    {
+                        "action": {"const": "extract"},
+                        "value": _PROGRAMMER_LITERAL,
+                        "offset": _PROGRAMMER_OFFSET,
+                        "fieldWidth": _PROGRAMMER_FIELD_WIDTH,
+                        "bitWidth": _PROGRAMMER_BIT_WIDTH,
+                        "signedness": _PROGRAMMER_SIGNEDNESS,
+                        "inputMode": _PROGRAMMER_INPUT_MODE,
+                    },
+                    ("action", "value", "offset", "fieldWidth"),
+                ),
+                _object(
+                    {
+                        "action": {"const": "insert"},
+                        "value": _PROGRAMMER_LITERAL,
+                        "field": _PROGRAMMER_LITERAL,
+                        "offset": _PROGRAMMER_OFFSET,
+                        "fieldWidth": _PROGRAMMER_FIELD_WIDTH,
+                        "bitWidth": _PROGRAMMER_BIT_WIDTH,
+                        "signedness": _PROGRAMMER_SIGNEDNESS,
+                        "inputMode": _PROGRAMMER_INPUT_MODE,
+                    },
+                    ("action", "value", "field", "offset", "fieldWidth"),
+                ),
+                _object(
+                    {
+                        "action": {"type": "string", "enum": ["align_up", "align_down"]},
+                        "value": _PROGRAMMER_LITERAL,
+                        "alignment": _PROGRAMMER_LITERAL,
+                        "bitWidth": _PROGRAMMER_BIT_WIDTH,
+                        "signedness": _PROGRAMMER_SIGNEDNESS,
+                        "inputMode": _PROGRAMMER_INPUT_MODE,
+                    },
+                    ("action", "value", "alignment"),
+                ),
+                _object(
+                    {
+                        "action": {
+                            "type": "string",
+                            "enum": [
+                                "shift_left",
+                                "logical_shift_right",
+                                "arithmetic_shift_right",
+                                "rotate_left",
+                                "rotate_right",
+                            ],
+                        },
+                        "value": _PROGRAMMER_LITERAL,
+                        "count": _PROGRAMMER_COUNT,
+                        "bitWidth": _PROGRAMMER_BIT_WIDTH,
+                        "signedness": _PROGRAMMER_SIGNEDNESS,
+                        "inputMode": _PROGRAMMER_INPUT_MODE,
+                    },
+                    ("action", "value"),
+                ),
+            ]
+        },
+        examples=(
+            {"action": "and", "left": "0xF0", "right": "0b10101010", "bitWidth": 8, "inputMode": "bits"},
+            {"action": "rotate_left", "value": "0x81", "count": 1, "bitWidth": 8, "inputMode": "bits"},
+            {"action": "reverse_words", "value": "0xABCD1234", "bitWidth": 32, "inputMode": "bits"},
+        ),
+        handler=programmer.bitwise,
+        keywords=("bitwise", "AND", "OR", "XOR", "NOR", "NOT", "shift", "rotate", "popcount", "leading zeros", "trailing zeros", "bit field", "alignment", "byte flip", "word flip", "位运算", "移位", "循环移位", "位域", "内存对齐", "字节翻转"),
+    ),
+    OperationSpec(
+        id="integer.machine_arithmetic",
+        category="integer",
+        summary="Simulate checked, wrapping, or saturating fixed-width machine arithmetic.",
+        description="Apply explicit width, signedness, input interpretation, overflow behavior, and division convention while keeping the unbounded mathematical result separate from the machine result.",
+        input_schema={
+            "oneOf": [
+                _object(
+                    {
+                        "action": {"type": "string", "enum": ["add", "subtract", "multiply"]},
+                        "left": _PROGRAMMER_LITERAL,
+                        "right": _PROGRAMMER_LITERAL,
+                        "bitWidth": _PROGRAMMER_BIT_WIDTH,
+                        "signedness": _PROGRAMMER_SIGNEDNESS,
+                        "inputMode": _PROGRAMMER_INPUT_MODE,
+                        "overflowBehavior": {
+                            "type": "string",
+                            "enum": ["checked", "wrapping", "saturating"],
+                            "default": "checked",
+                        },
+                    },
+                    ("action", "left", "right"),
+                ),
+                _object(
+                    {
+                        "action": {"type": "string", "enum": ["divide", "remainder"]},
+                        "left": _PROGRAMMER_LITERAL,
+                        "right": _PROGRAMMER_LITERAL,
+                        "bitWidth": _PROGRAMMER_BIT_WIDTH,
+                        "signedness": _PROGRAMMER_SIGNEDNESS,
+                        "inputMode": _PROGRAMMER_INPUT_MODE,
+                        "overflowBehavior": {
+                            "type": "string",
+                            "enum": ["checked", "wrapping", "saturating"],
+                            "default": "checked",
+                        },
+                        "divisionMode": {
+                            "type": "string",
+                            "enum": ["truncating", "floor", "euclidean"],
+                            "default": "truncating",
+                        },
+                    },
+                    ("action", "left", "right"),
+                ),
+            ]
+        },
+        examples=(
+            {"action": "add", "left": "127", "right": "1", "bitWidth": 8, "signedness": "twos_complement", "overflowBehavior": "checked"},
+            {"action": "multiply", "left": "200", "right": "2", "bitWidth": 8, "overflowBehavior": "saturating"},
+            {"action": "divide", "left": "-99", "right": "10", "bitWidth": 16, "signedness": "twos_complement", "divisionMode": "euclidean"},
+        ),
+        handler=programmer.machine_arithmetic,
+        keywords=("machine integer", "checked arithmetic", "wrapping", "saturating", "fixed width add", "overflow", "机器整数", "溢出", "环绕", "饱和算术"),
+    ),
+    OperationSpec(
+        id="float.ieee754",
+        category="numeric",
+        summary="Inspect or compare IEEE 754 binary32/binary64 values, bits, rounding, neighbors, and ULP distance.",
+        description="Convert explicit decimal text or raw bits under IEEE 754 ties-to-even semantics and expose classification, sign/exponent/significand fields, exact represented value, rounding direction, adjacent values, and comparisons without claiming decimal input stayed exact.",
+        input_schema={
+            "oneOf": [
+                _object(
+                    {
+                        "action": {"const": "inspect"},
+                        "value": _IEEE_VALUE,
+                        "format": _IEEE_FORMAT,
+                        "inputMode": _IEEE_INPUT_MODE,
+                    },
+                    ("action", "value"),
+                ),
+                _object(
+                    {
+                        "action": {"const": "compare"},
+                        "left": _IEEE_VALUE,
+                        "right": _IEEE_VALUE,
+                        "format": _IEEE_FORMAT,
+                        "inputMode": _IEEE_INPUT_MODE,
+                    },
+                    ("action", "left", "right"),
+                ),
+            ]
+        },
+        examples=(
+            {"action": "inspect", "value": "0.1", "format": "binary64"},
+            {"action": "inspect", "value": "0x3F800000", "format": "binary32", "inputMode": "bits"},
+            {"action": "compare", "left": "0.1", "right": "0.10000000000000001", "format": "binary64"},
+        ),
+        handler=floating.ieee754,
+        keywords=("IEEE 754", "binary32", "binary64", "float bits", "ULP", "subnormal", "NaN", "rounding error", "浮点", "尾数", "指数", "舍入误差"),
+    ),
+    OperationSpec(
         id="combinatorics.count",
         category="combinatorics",
         summary="Compute an exact combination, permutation, or multinomial count.",
@@ -873,6 +1274,122 @@ _SPECS = (
         keywords=("rank", "row reduce", "RREF", "null space", "column space", "秩", "行最简形", "零空间", "列空间"),
     ),
     OperationSpec(
+        id="linear_algebra.exact",
+        category="matrix",
+        summary="Run exact matrix multiplication, transpose, or vector algebra.",
+        description="Keep integer and symbolic-rational inputs on the exact SymPy path for matrix multiplication and transpose; vector actions require provably real exact entries so norms and projections retain unambiguous Euclidean semantics.",
+        input_schema={
+            "oneOf": [
+                _object(
+                    {
+                        "action": {"const": "matrix_multiply"},
+                        "left": _EXACT_MATRIX,
+                        "right": _EXACT_MATRIX,
+                        "precision": _PRECISION,
+                    },
+                    ("action", "left", "right"),
+                ),
+                _object(
+                    {
+                        "action": {"const": "transpose"},
+                        "matrix": _EXACT_MATRIX,
+                        "precision": _PRECISION,
+                    },
+                    ("action", "matrix"),
+                ),
+                _object(
+                    {
+                        "action": {"type": "string", "enum": ["dot", "cross"]},
+                        "left": _EXACT_VECTOR,
+                        "right": _EXACT_VECTOR,
+                        "precision": _PRECISION,
+                    },
+                    ("action", "left", "right"),
+                ),
+                _object(
+                    {
+                        "action": {"type": "string", "enum": ["norm", "norm_squared"]},
+                        "vector": _EXACT_VECTOR,
+                        "precision": _PRECISION,
+                    },
+                    ("action", "vector"),
+                ),
+                _object(
+                    {
+                        "action": {"const": "projection"},
+                        "left": _EXACT_VECTOR,
+                        "onto": _EXACT_VECTOR,
+                        "precision": _PRECISION,
+                    },
+                    ("action", "left", "onto"),
+                ),
+            ]
+        },
+        examples=(
+            {"action": "matrix_multiply", "left": [[1, 2], [3, 4]], "right": [[2], [1]]},
+            {"action": "cross", "left": [1, 0, 0], "right": [0, 1, 0]},
+            {"action": "projection", "left": [2, 2], "onto": [1, 0]},
+        ),
+        handler=linear_algebra.exact,
+        keywords=("matrix multiplication", "transpose", "dot product", "cross product", "vector norm", "projection", "矩阵乘法", "转置", "点积", "叉积", "向量范数", "投影"),
+    ),
+    OperationSpec(
+        id="linear_algebra.numeric",
+        category="numeric",
+        summary="Run binary64 least squares, QR, SVD, or Moore-Penrose pseudoinverse with diagnostics.",
+        description="Convert decimal text to binary64, use an explicit relative singular-value tolerance, and report rank, condition number, residual or reconstruction diagnostics without claiming exactness; least squares states uniqueness and the minimum-norm selection convention.",
+        input_schema={
+            "oneOf": [
+                _object(
+                    {
+                        "action": {"const": "least_squares"},
+                        "matrix": _NUMERIC_LINALG_MATRIX,
+                        "constants": _NUMERIC_LINALG_VECTOR,
+                        "tolerance": {**_DECIMAL_TEXT, "default": "1e-12"},
+                        "precision": {"type": "integer", "minimum": 2, "maximum": 15, "default": 15},
+                    },
+                    ("action", "matrix", "constants"),
+                ),
+                _object(
+                    {
+                        "action": {"const": "qr"},
+                        "matrix": _NUMERIC_LINALG_MATRIX,
+                        "mode": {"type": "string", "enum": ["reduced", "complete"], "default": "reduced"},
+                        "tolerance": {**_DECIMAL_TEXT, "default": "1e-12"},
+                        "precision": {"type": "integer", "minimum": 2, "maximum": 15, "default": 15},
+                    },
+                    ("action", "matrix"),
+                ),
+                _object(
+                    {
+                        "action": {"const": "svd"},
+                        "matrix": _NUMERIC_LINALG_MATRIX,
+                        "fullMatrices": {"type": "boolean", "default": False},
+                        "tolerance": {**_DECIMAL_TEXT, "default": "1e-12"},
+                        "precision": {"type": "integer", "minimum": 2, "maximum": 15, "default": 15},
+                    },
+                    ("action", "matrix"),
+                ),
+                _object(
+                    {
+                        "action": {"const": "pseudoinverse"},
+                        "matrix": _NUMERIC_LINALG_MATRIX,
+                        "tolerance": {**_DECIMAL_TEXT, "default": "1e-12"},
+                        "precision": {"type": "integer", "minimum": 2, "maximum": 15, "default": 15},
+                    },
+                    ("action", "matrix"),
+                ),
+            ]
+        },
+        examples=(
+            {"action": "least_squares", "matrix": [["1", "0"], ["1", "1"], ["1", "2"]], "constants": ["1", "2", "2"]},
+            {"action": "svd", "matrix": [["3", "0"], ["0", "2"]]},
+            {"action": "pseudoinverse", "matrix": [["2", "0"], ["0", "0"]]},
+        ),
+        handler=linear_algebra.numeric,
+        keywords=("least squares", "QR decomposition", "SVD", "singular value decomposition", "pseudoinverse", "Moore Penrose", "numerical linear algebra", "最小二乘", "QR分解", "奇异值分解", "伪逆"),
+    ),
+    OperationSpec(
         id="statistics.describe",
         category="statistics",
         summary="Compute descriptive statistics for numeric values.",
@@ -899,8 +1416,8 @@ _SPECS = (
     OperationSpec(
         id="statistics.infer",
         category="statistics",
-        summary="Compute a mean interval, one-sample t test, or simple linear regression.",
-        description="Use bounded decimal-text samples and explicit methods to return approximate inferential results, sample constraints, and interpretation assumptions.",
+        summary="Compute confidence intervals, regression, comparative t tests, or chi-square goodness-of-fit.",
+        description="Use bounded decimal-text samples and explicit variance/test methods to return approximate inferential results, degrees of freedom, sample constraints, and interpretation assumptions.",
         input_schema={
             "oneOf": [
                 _object(
@@ -931,21 +1448,61 @@ _SPECS = (
                     },
                     ("action", "x", "y"),
                 ),
+                _object(
+                    {
+                        "action": {"const": "paired_t_test"},
+                        "sampleA": {**_DECIMAL_TEXT_VECTOR, "minItems": 2},
+                        "sampleB": {**_DECIMAL_TEXT_VECTOR, "minItems": 2},
+                        "nullDifference": {**_DECIMAL_TEXT, "default": "0"},
+                        "alternative": {"type": "string", "enum": ["two_sided", "less", "greater"], "default": "two_sided"},
+                        "precision": {"type": "integer", "minimum": 16, "maximum": 100, "default": 30},
+                    },
+                    ("action", "sampleA", "sampleB"),
+                ),
+                _object(
+                    {
+                        "action": {"const": "two_sample_t_test"},
+                        "sampleA": {**_DECIMAL_TEXT_VECTOR, "minItems": 2},
+                        "sampleB": {**_DECIMAL_TEXT_VECTOR, "minItems": 2},
+                        "nullDifference": {**_DECIMAL_TEXT, "default": "0"},
+                        "varianceModel": {"type": "string", "enum": ["welch", "equal"], "default": "welch"},
+                        "alternative": {"type": "string", "enum": ["two_sided", "less", "greater"], "default": "two_sided"},
+                        "precision": {"type": "integer", "minimum": 16, "maximum": 100, "default": 30},
+                    },
+                    ("action", "sampleA", "sampleB"),
+                ),
+                _object(
+                    {
+                        "action": {"const": "chi_square_goodness_of_fit"},
+                        "observed": {
+                            "type": "array",
+                            "items": {"type": "integer", "minimum": 0, "maximum": 1_000_000_000},
+                            "minItems": 2,
+                            "maxItems": 1_000,
+                        },
+                        "expectedProbabilities": {**_DECIMAL_TEXT_VECTOR, "minItems": 2, "maxItems": 1_000},
+                        "precision": {"type": "integer", "minimum": 16, "maximum": 100, "default": 30},
+                    },
+                    ("action", "observed", "expectedProbabilities"),
+                ),
             ]
         },
         examples=(
             {"action": "mean_confidence_interval", "sample": ["10", "12", "9", "11", "13"], "confidenceLevel": "0.95"},
             {"action": "one_sample_t_test", "sample": ["10", "12", "9", "11", "13"], "nullMean": "10"},
             {"action": "linear_regression", "x": ["1", "2", "3"], "y": ["2", "4.1", "5.9"]},
+            {"action": "paired_t_test", "sampleA": ["10", "12", "9", "11"], "sampleB": ["8", "11", "8", "9"]},
+            {"action": "two_sample_t_test", "sampleA": ["10", "12", "9"], "sampleB": ["7", "8", "9"], "varianceModel": "welch"},
+            {"action": "chi_square_goodness_of_fit", "observed": [20, 30, 50], "expectedProbabilities": ["0.25", "0.25", "0.5"]},
         ),
         handler=inference.infer,
-        keywords=("confidence interval", "t test", "regression", "hypothesis test", "置信区间", "t检验", "回归", "假设检验"),
+        keywords=("confidence interval", "one sample t test", "paired t test", "Welch t test", "two sample t test", "chi square goodness of fit", "regression", "hypothesis test", "置信区间", "配对t检验", "双样本t检验", "卡方拟合优度", "回归", "假设检验"),
     ),
     OperationSpec(
         id="probability.distribution",
         category="probability",
         summary="Evaluate common probability distributions.",
-        description="Evaluate normal PDF/CDF/quantiles, binomial PMF/CDF, or Poisson PMF/CDF with explicit parameters and arbitrary-precision numerical methods.",
+        description="Evaluate normal, Beta, Gamma, and lognormal PDF/CDF/quantiles plus binomial and Poisson PMF/CDF with explicit parameters and arbitrary-precision numerical methods.",
         input_schema={
             "oneOf": [
                 _object(
@@ -991,15 +1548,116 @@ _SPECS = (
                     },
                     ("distribution", "function", "k", "rate"),
                 ),
+                _continuous_distribution_object(
+                    "beta",
+                    {"alpha": _DECIMAL_TEXT, "beta": _DECIMAL_TEXT},
+                    ("alpha", "beta"),
+                ),
+                _continuous_distribution_object(
+                    "gamma",
+                    {"shape": _DECIMAL_TEXT, "scale": {**_DECIMAL_TEXT, "default": "1"}},
+                    ("shape",),
+                ),
+                _continuous_distribution_object(
+                    "lognormal",
+                    {
+                        "logMean": {**_DECIMAL_TEXT, "default": "0"},
+                        "logStandardDeviation": {**_DECIMAL_TEXT, "default": "1"},
+                    },
+                    (),
+                ),
             ]
         },
         examples=(
             {"distribution": "normal", "function": "cdf", "x": "1.96"},
             {"distribution": "binomial", "function": "cdf", "n": 20, "k": 4, "probability": "0.1"},
             {"distribution": "poisson", "function": "pmf", "k": 3, "rate": "2.5"},
+            {"distribution": "beta", "function": "quantile", "probability": "0.95", "alpha": "2", "beta": "5"},
+            {"distribution": "gamma", "function": "cdf", "x": "4", "shape": "2", "scale": "3"},
+            {"distribution": "lognormal", "function": "pdf", "x": "2", "logMean": "0", "logStandardDeviation": "1"},
         ),
         handler=probability.distribution,
-        keywords=("normal distribution", "binomial", "Poisson", "cdf", "pmf", "概率分布", "正态分布", "二项分布", "泊松分布"),
+        keywords=("normal distribution", "binomial", "Poisson", "beta distribution", "gamma distribution", "lognormal", "cdf", "pmf", "quantile", "概率分布", "正态分布", "二项分布", "泊松分布", "贝塔分布", "伽马分布", "对数正态分布"),
+    ),
+    OperationSpec(
+        id="measurement.propagate",
+        category="measurement",
+        summary="Propagate standard uncertainties through an explicit mathematical model.",
+        description="Apply first-order Taylor covariance propagation to coherent-unit decimal inputs, validate the correlation matrix, and report nominal, combined standard, and coverage-factor-expanded uncertainty separately.",
+        input_schema=_object(
+            {
+                "expression": _EXPRESSION,
+                "inputs": {
+                    "type": "object",
+                    "propertyNames": {"pattern": r"^[A-Za-z_][A-Za-z0-9_]*$", "maxLength": 64},
+                    "additionalProperties": _object(
+                        {
+                            "value": _DECIMAL_TEXT,
+                            "standardUncertainty": _DECIMAL_TEXT,
+                        },
+                        ("value", "standardUncertainty"),
+                    ),
+                    "minProperties": 1,
+                    "maxProperties": 16,
+                },
+                "correlations": {
+                    "type": "array",
+                    "maxItems": 120,
+                    "items": _object(
+                        {
+                            "left": {"type": "string", "maxLength": 64},
+                            "right": {"type": "string", "maxLength": 64},
+                            "coefficient": _DECIMAL_TEXT,
+                        },
+                        ("left", "right", "coefficient"),
+                    ),
+                    "default": [],
+                },
+                "coverageFactor": {**_DECIMAL_TEXT, "default": "2"},
+                "precision": {"type": "integer", "minimum": 16, "maximum": 100, "default": 30},
+            },
+            ("expression", "inputs"),
+        ),
+        examples=(
+            {
+                "expression": "x + y",
+                "inputs": {
+                    "x": {"value": "10", "standardUncertainty": "0.5"},
+                    "y": {"value": "20", "standardUncertainty": "1"},
+                },
+            },
+            {
+                "expression": "x * y",
+                "inputs": {
+                    "x": {"value": "2", "standardUncertainty": "0.1"},
+                    "y": {"value": "3", "standardUncertainty": "0.2"},
+                },
+                "correlations": [{"left": "x", "right": "y", "coefficient": "0.5"}],
+            },
+        ),
+        handler=measurement.propagate,
+        keywords=("measurement uncertainty", "error propagation", "covariance", "correlation", "coverage factor", "GUM", "不确定度传播", "误差传播", "协方差", "相关系数", "扩展不确定度"),
+    ),
+    OperationSpec(
+        id="units.search",
+        category="units",
+        summary="Discover stable unit IDs and exact runtime spellings.",
+        description="Search Math Anchor's curated unit catalog before converting. Returned IDs are stable inputs to units.convert; runtimeUnit is available for compound quantity expressions.",
+        input_schema=_object(
+            {
+                "query": {"type": "string", "maxLength": 128, "default": ""},
+                "category": {"type": "string", "enum": list(units.UNIT_CATEGORIES)},
+                "limit": {"type": "integer", "minimum": 1, "maximum": 50, "default": 20},
+            },
+            (),
+        ),
+        examples=(
+            {"query": "兆字节"},
+            {"category": "torque"},
+            {"query": "Mbps"},
+        ),
+        handler=units.search,
+        keywords=("unit catalog", "unit id", "measurement discovery", "单位目录", "查找单位", "数据量", "频率", "力", "扭矩", "密度"),
     ),
     OperationSpec(
         id="units.convert",
@@ -1011,6 +1669,12 @@ _SPECS = (
                 "value": {"oneOf": [{"type": "number"}, _DECIMAL_TEXT]},
                 "fromUnit": {"type": "string", "maxLength": 128},
                 "toUnit": {"type": "string", "maxLength": 128},
+                "calendarPolicy": {
+                    "type": "string",
+                    "enum": list(units.CALENDAR_POLICIES),
+                    "default": "reject",
+                    "description": "Reject civil months/years by default; average_duration explicitly selects fixed average lengths.",
+                },
                 "precision": _PRECISION,
             },
             ("value", "fromUnit", "toUnit"),
@@ -1018,6 +1682,7 @@ _SPECS = (
         examples=(
             {"value": 72, "fromUnit": "watt", "toUnit": "kilowatt"},
             {"value": 68, "fromUnit": "degF", "toUnit": "degC"},
+            {"value": 100, "fromUnit": "megabit-per-second", "toUnit": "megabyte-per-second"},
         ),
         handler=data.units_convert,
         keywords=("measurement", "dimension", "temperature", "length", "energy", "单位换算", "单位转换", "温度转换"),
@@ -1035,6 +1700,11 @@ _SPECS = (
                     "description": "Unit-bearing expression such as 80 * kg * 9.81 * m / s^2. Multiplication must be explicit.",
                 },
                 "toUnit": {"type": "string", "maxLength": 128},
+                "calendarPolicy": {
+                    "type": "string",
+                    "enum": list(units.CALENDAR_POLICIES),
+                    "default": "reject",
+                },
                 "precision": _PRECISION,
             },
             ("expression",),

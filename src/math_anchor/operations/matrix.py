@@ -23,6 +23,10 @@ def inverse(arguments: dict[str, Any]) -> dict[str, Any]:
     require(matrix.rows == matrix.cols, "E_INPUT", "inverse requires a square matrix")
     try:
         result = matrix.inv()
+    except CalculatorError:
+        # An in-process timeout (or any runtime failure) raised inside inv()
+        # is not a mathematical judgment about the matrix and must propagate.
+        raise
     except Exception as error:
         raise CalculatorError("E_DOMAIN", "matrix is singular and has no inverse") from error
     return matrix_result("matrix.inverse", result, precision)

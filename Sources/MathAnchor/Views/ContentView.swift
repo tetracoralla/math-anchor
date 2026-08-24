@@ -39,7 +39,7 @@ struct ContentView: View {
                         ConversionKeypadView(store: conversionStore)
                             .equatable()
                             .padding(.horizontal, CalculatorLayout.contentInset)
-                            .padding(.bottom, 14)
+                            .padding(.bottom, CalculatorLayout.keypadBottomInset)
                     } else {
                         HStack(alignment: .bottom, spacing: CalculatorLayout.keySpacing) {
                             if store.mode == .scientific {
@@ -51,7 +51,7 @@ struct ContentView: View {
                                 .equatable()
                         }
                         .padding(.horizontal, CalculatorLayout.contentInset)
-                        .padding(.bottom, 14)
+                        .padding(.bottom, CalculatorLayout.keypadBottomInset)
                     }
                 }
                 .frame(width: calculatorWidth, height: calculatorHeight)

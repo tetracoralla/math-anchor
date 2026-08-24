@@ -1,6 +1,12 @@
 # Math Anchor repository contract
 
-Read `docs/product-model.md` before changing the product surface.
+Read `docs/product-model.md` and `docs/REVIEW_CONTRACT.md` before changing or reviewing the product surface.
+
+A plain owner request to review, audit, 审核, or 复核 automatically invokes the
+complete review contract in read-only mode unless fixes are also requested.
+Treat it as the minimum scope, not a ceiling, and finish with `tools-dev
+workspace escalations` for shared contracts, installation, or resource risks;
+do not ask the owner to supply a separate checklist.
 
 - Keep the human macOS app and the Agent interface on one calculation core.
 - Keep Agent discovery, schemas, runtime metadata, and protocol concepts out of the human calculator UI.

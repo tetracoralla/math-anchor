@@ -88,6 +88,33 @@ def test_conversion_is_a_lightweight_numeric_mode() -> None:
     assert 'Image(systemName: "arrow.right")' not in display
 
 
+def test_fixed_window_height_includes_the_complete_keypad_and_bottom_inset() -> None:
+    layout = (ROOT / "Sources/MathAnchor/Views/CalculatorLayout.swift").read_text()
+    content = (ROOT / "Sources/MathAnchor/Views/ContentView.swift").read_text()
+    configurator = (
+        ROOT / "Sources/MathAnchor/Support/CalculatorWindowConfigurator.swift"
+    ).read_text()
+
+    # Negative regression: the prior hand-entered heights exactly matched the
+    # nominal row sum but clipped the last row in the real rounded app window.
+    assert "static let keypadBottomInset: CGFloat = 20" in layout
+    assert "keyHeight * 5 + keySpacing * 4" in layout
+    assert "headerHeight + displayHeight + displayKeypadSpacing + keypadHeight + keypadBottomInset" in layout
+    assert (
+        "headerHeight + conversionDisplayHeight + displayKeypadSpacing + keypadHeight + keypadBottomInset"
+        in layout
+    )
+    assert content.count(".padding(.bottom, CalculatorLayout.keypadBottomInset)") == 2
+    # Negative regression: after inserting fullSizeContentView, asking AppKit
+    # for frameRect(forContentRect:) discarded the titlebar safe area on the
+    # first mode switch and shrank a 524 pt window to 492 pt.
+    assert "window.frame.height - window.contentLayoutRect.height" in configurator
+    assert "height: contentSize.height + chromeHeight" in configurator
+    assert "let targetWindowSize = window.frameRect" not in configurator
+    assert "window.minSize = targetWindowSize" in configurator
+    assert "window.maxSize = targetWindowSize" in configurator
+
+
 def test_conversion_keeps_currency_status_human_facing_and_agent_catalog_unchanged() -> None:
     runtime = (ROOT / "Sources/MathAnchor/Services/MathRuntimeService.swift").read_text()
     status = (ROOT / "Sources/MathAnchor/Views/CurrencyRateStatusView.swift").read_text()
@@ -102,6 +129,29 @@ def test_conversion_keeps_currency_status_human_facing_and_agent_catalog_unchang
     assert 'return ("EXPIRED"' in status
     assert "not a transaction quote" in status
     assert 'id="currency.convert"' not in registry
+
+
+def test_conversion_catalog_includes_data_and_engineering_units() -> None:
+    catalog = (ROOT / "Sources/MathAnchor/Models/UnitDefinition.swift").read_text()
+
+    for category in (
+        "case data",
+        'case dataRate = "data rate"',
+        "case frequency",
+        "case force",
+        "case acceleration",
+        "case torque",
+        "case density",
+    ):
+        assert category in catalog
+    for stable_id in (
+        'unit("gibibyte"',
+        'unit("megabit-per-second"',
+        '"standard-gravity"',
+        'unit("newton-meter"',
+        '"kilogram-per-cubic-meter"',
+    ):
+        assert stable_id in catalog
 
 
 def test_conversion_popovers_and_text_editing_own_keyboard_focus() -> None:

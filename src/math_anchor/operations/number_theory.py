@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import re
 from typing import Any
 
 import sympy as sp
@@ -11,6 +12,7 @@ from ..validation import enum_arg, exact_integer_arg, integer_arg, list_arg
 
 
 _MAX_INTEGER = 9_007_199_254_740_991
+_ASCII_INTEGER = re.compile(r"[+-]?[0-9]+")
 
 
 def factorization(arguments: dict[str, Any]) -> dict[str, Any]:
@@ -82,7 +84,7 @@ def modular(arguments: dict[str, Any]) -> dict[str, Any]:
 def _parse_integer(value: Any, *, name: str) -> int:
     require(
         (isinstance(value, int) and not isinstance(value, bool))
-        or (isinstance(value, str) and value.strip().lstrip("+-").isdigit()),
+        or (isinstance(value, str) and _ASCII_INTEGER.fullmatch(value.strip()) is not None),
         "E_INPUT",
         f"{name} must be an integer or integer text",
     )

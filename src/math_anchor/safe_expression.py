@@ -238,6 +238,7 @@ def make_symbols(names: list[str]) -> dict[str, sp.Symbol]:
     require(len(names) <= 16, "E_LIMIT", "too many variables")
     require(len(set(names)) == len(names), "E_INPUT", "variables must not contain duplicates")
     for name in names:
+        require(len(name) <= 64, "E_LIMIT", "variable names must be at most 64 characters")
         require(bool(_IDENTIFIER.match(name)), "E_INPUT", f"invalid variable name: {name}")
         require(name not in _CONSTANTS and name not in _FUNCTIONS, "E_INPUT", f"reserved variable name: {name}")
     return {name: sp.Symbol(name) for name in names}

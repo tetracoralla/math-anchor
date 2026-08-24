@@ -7,8 +7,13 @@ VENV_PYTHON="$ROOT_DIR/.venv/bin/python"
 PLUGIN_RUNTIME_DIR="$ROOT_DIR/plugins/math-anchor/runtime"
 PLUGIN_RUNTIME_BUNDLE="$PLUGIN_RUNTIME_DIR/math-anchor-runtime"
 PLUGIN_RUNTIME="$PLUGIN_RUNTIME_BUNDLE/math-anchor-runtime"
+PROJECT_LICENSE="$ROOT_DIR/LICENSE"
+PROJECT_NOTICE="$ROOT_DIR/NOTICE"
+BUNDLED_LICENSE="$PLUGIN_RUNTIME_BUNDLE/LICENSE"
+BUNDLED_NOTICE="$PLUGIN_RUNTIME_BUNDLE/NOTICE"
 PYTHON_RUNTIME_LOADER="$PLUGIN_RUNTIME_BUNDLE/_internal/Python"
 PYTHON_RUNTIME_LOADER_MATERIALIZED="$PLUGIN_RUNTIME_BUNDLE/_internal/Python.materialized"
+PYTHON_FRAMEWORK="$PLUGIN_RUNTIME_BUNDLE/_internal/Python.framework"
 RUNTIME_LOCK="$ROOT_DIR/requirements-runtime.lock"
 BUILD_DIR="$ROOT_DIR/.build/runtime-package"
 DIST_DIR="$BUILD_DIR/dist"
@@ -41,6 +46,8 @@ validate_write_paths() {
     "$PLUGIN_RUNTIME_DIR" \
     "$PLUGIN_RUNTIME_BUNDLE" \
     "$PLUGIN_RUNTIME" \
+    "$BUNDLED_LICENSE" \
+    "$BUNDLED_NOTICE" \
     "$PYTHON_RUNTIME_LOADER_MATERIALIZED"
 }
 
@@ -53,6 +60,9 @@ fi
 PROJECT_VERSION="$(
   "$VENV_PYTHON" "$ROOT_DIR/script/release_metadata.py" version --root "$ROOT_DIR"
 )"
+PYTHON_FRAMEWORK_VERSION="$(
+  "$VENV_PYTHON" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")'
+)"
 
 needs_build=0
 if [[ ! -x "$PLUGIN_RUNTIME" ]]; then
@@ -64,7 +74,7 @@ elif ! "$VENV_PYTHON" "$ROOT_DIR/script/runtime_manifest.py" verify \
   --source-root "$ROOT_DIR" \
   --version "$PROJECT_VERSION" >/dev/null 2>&1; then
   needs_build=1
-elif find "$ROOT_DIR/src/math_anchor" "$ROOT_DIR/legal" "$ROOT_DIR/LICENSE" \
+elif find "$ROOT_DIR/src/math_anchor" "$ROOT_DIR/legal" "$PROJECT_LICENSE" "$PROJECT_NOTICE" \
   "$ROOT_DIR/pyproject.toml" "$ROOT_DIR/script/package_runtime.sh" \
   "$ROOT_DIR/script/generate_third_party_materials.py" "$ROOT_DIR/script/release_metadata.py" \
   "$ROOT_DIR/script/runtime_manifest.py" \
@@ -120,10 +130,56 @@ if [[ -L "$PYTHON_RUNTIME_LOADER" ]]; then
   fi
   mv -f "$PYTHON_RUNTIME_LOADER_MATERIALIZED" "$PYTHON_RUNTIME_LOADER"
 fi
-if [[ ! -f "$PYTHON_RUNTIME_LOADER" ]] || [[ -L "$PYTHON_RUNTIME_LOADER" ]]; then
-  echo "The packaged Python loader must be a regular file for Codex installation." >&2
+python_loader_count=0
+if [[ -e "$PYTHON_RUNTIME_LOADER" ]]; then
+  if [[ ! -f "$PYTHON_RUNTIME_LOADER" ]] || [[ -L "$PYTHON_RUNTIME_LOADER" ]]; then
+    echo "The packaged Python loader must be a regular file for Codex installation." >&2
+    exit 1
+  fi
+  python_loader_count=$((python_loader_count + 1))
+fi
+while IFS= read -r -d '' python_dylib; do
+  if [[ ! -f "$python_dylib" ]] || [[ -L "$python_dylib" ]]; then
+    echo "The packaged Python shared library must be a regular file: $python_dylib" >&2
+    exit 1
+  fi
+  python_loader_count=$((python_loader_count + 1))
+done < <(find "$PLUGIN_RUNTIME_BUNDLE/_internal" -type f -name 'libpython*.dylib' -print0)
+if [[ "$python_loader_count" -eq 0 ]]; then
+  echo "The packaged runtime does not contain a supported Python loader." >&2
   exit 1
 fi
+
+# Codex's Plugin copier intentionally omits symbolic links. Homebrew Python
+# frameworks include three nonessential convenience aliases, so remove only
+# those known aliases after materializing the loader above and fail closed if
+# PyInstaller introduces any other link that could make the installed copy
+# differ from the verified bundle.
+remove_framework_alias() {
+  local alias_path="$1"
+  local expected_target="$2"
+  local actual_target
+  if [[ ! -L "$alias_path" ]]; then
+    return
+  fi
+  actual_target="$(readlink "$alias_path")"
+  if [[ "$actual_target" != "$expected_target" ]]; then
+    echo "Unexpected Python framework alias target: $alias_path -> $actual_target" >&2
+    exit 1
+  fi
+  rm "$alias_path"
+}
+remove_framework_alias "$PYTHON_FRAMEWORK/Python" "Versions/Current/Python"
+remove_framework_alias "$PYTHON_FRAMEWORK/Resources" "Versions/Current/Resources"
+remove_framework_alias "$PYTHON_FRAMEWORK/Versions/Current" "$PYTHON_FRAMEWORK_VERSION"
+remaining_symlink="$(find "$PLUGIN_RUNTIME_BUNDLE" -type l -print -quit)"
+if [[ -n "$remaining_symlink" ]]; then
+  echo "Packaged runtime contains a symbolic link that Codex installation would omit: $remaining_symlink" >&2
+  exit 1
+fi
+
+cp "$PROJECT_LICENSE" "$BUNDLED_LICENSE"
+cp "$PROJECT_NOTICE" "$BUNDLED_NOTICE"
 "$VENV_PYTHON" "$ROOT_DIR/script/generate_third_party_materials.py" \
   --lock "$RUNTIME_LOCK" \
   --project "$ROOT_DIR/pyproject.toml" \
