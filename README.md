@@ -9,7 +9,7 @@ Both surfaces use the same Python calculation core. The Agent catalog currently 
 
 Currency conversion is an online, human-app feature calculated from the European Central Bank's daily euro reference rates. The interface shows the source, publication time, and current or expired state; cached rates remain explicitly marked when a refresh cannot complete. These rates are informational and are not transaction quotes. Currency conversion remains an app-internal request and does not add another public MCP tool or Agent operation.
 
-## What's new in 0.2.0
+## What's new in 0.2
 
 - `dimension.check` verifies both sides of a symbolic formula plus additive and
   dimensionless-function constraints.
@@ -23,6 +23,8 @@ Currency conversion is an online, human-app feature calculated from the European
 - The Codex Plugin remains one self-contained installation with four public MCP
   tools and 34 typed operations; no symbolic-dimensional controls were added to
   the human calculator.
+- Patch 0.2.1 makes MCP domain/input failures explicit tool-execution errors and
+  reports the Math Anchor product version during server initialization.
 
 See [CHANGELOG.md](CHANGELOG.md) for the source milestone details and
 [docs/dimensional-analysis.md](docs/dimensional-analysis.md) for the capability

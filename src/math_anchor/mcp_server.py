@@ -9,6 +9,7 @@ from mcp.server.fastmcp import server as fastmcp_server
 from mcp.types import CallToolResult, TextContent, ToolAnnotations
 from pydantic import Field, WithJsonSchema
 
+from . import __version__
 from .catalog import (
     MAX_CATEGORY_LENGTH,
     MAX_OPERATION_ID_LENGTH,
@@ -48,6 +49,9 @@ mcp = FastMCP(
         "Preserve the distinction between exact and approximate results."
     ),
 )
+# FastMCP 1.x otherwise reports the MCP SDK version as the server version.
+# Bind the initialized server identity to this provider release instead.
+mcp._mcp_server.version = __version__
 
 
 def _caught(callable_: Any, *arguments: Any) -> dict[str, Any]:
@@ -164,7 +168,8 @@ async def _run_cancellable(callable_: Any, *arguments: Any, **keywords: Any) -> 
 
 
 def _tool_result(result: dict[str, Any]) -> CallToolResult:
-    if result.get("status") == "error":
+    failed = result.get("status") == "error"
+    if failed:
         error = result.get("error", {})
         summary = f"{error.get('code', 'E_RUNTIME')}: {error.get('message', 'Calculation failed')}"
     else:
@@ -172,7 +177,9 @@ def _tool_result(result: dict[str, Any]) -> CallToolResult:
     return CallToolResult(
         content=[TextContent(type="text", text=summary)],
         structuredContent=result,
-        isError=False,
+        # MCP execution errors must not be mistaken for successful provider
+        # results by a host that preserves the transport error boundary.
+        isError=failed,
     )
 
 

@@ -5,6 +5,15 @@ milestone is not automatically a downloadable macOS release: signed binaries
 are supported only when a matching tag, GitHub Release, Developer ID signature,
 and Apple notarization record exist.
 
+## 0.2.1 - 2026-08-25
+
+### Fixed
+
+- Reported mathematical domain and input failures as MCP tool-execution errors
+  while preserving their structured provider-owned error envelopes.
+- Reported the Math Anchor product version during MCP initialization instead of
+  inheriting the installed MCP SDK version as the server identity.
+
 ## 0.2.0 - 2026-08-20
 
 ### Added
