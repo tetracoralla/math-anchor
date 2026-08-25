@@ -1,6 +1,6 @@
 {
   "name": "math-anchor",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Safe exact, scientific, matrix, statistics, unit, and dimensional calculations for Codex.",
   "author": {
     "name": "openAdam",

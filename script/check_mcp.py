@@ -17,6 +17,7 @@ from mcp.types import (
     ClientNotification,
 )
 
+from math_anchor import __version__
 from plugin_server import plugin_server_parameters, tools_listing_bytes
 
 
@@ -44,7 +45,8 @@ async def main(plugin_root: Path | None = None) -> None:
     server_errors = tempfile.TemporaryFile(mode="w+", encoding="utf-8")
     async with stdio_client(parameters, errlog=server_errors) as (read_stream, write_stream):
         async with ClientSession(read_stream, write_stream) as session:
-            await session.initialize()
+            initialized = await session.initialize()
+            assert initialized.serverInfo.version == __version__
             listed = await session.list_tools()
             names = sorted(tool.name for tool in listed.tools)
             assert names == ["math.batch", "math.describe", "math.run", "math.search"]
@@ -81,6 +83,7 @@ async def main(plugin_root: Path | None = None) -> None:
                 "math.run",
                 {"operation": "expression.evaluate", "arguments": {"expression": "6*7"}},
             )
+            assert direct.isError is False
             assert direct.structuredContent["exact"] == "42"
 
             rejected_outer = await session.call_tool(
@@ -294,6 +297,7 @@ async def main(plugin_root: Path | None = None) -> None:
                 "math.run",
                 {"operation": "expression.evaluate", "arguments": {"expression": "1/0"}},
             )
+            assert undefined.isError is True
             assert undefined.structuredContent["status"] == "error"
             assert undefined.structuredContent["error"]["code"] == "E_DOMAIN"
 
