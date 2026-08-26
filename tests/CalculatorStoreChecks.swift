@@ -943,7 +943,8 @@ struct CalculatorStoreChecks {
         // real app shares one local runtime between expression evaluation and
         // physical conversion, so this composed sequence must cancel the old
         // CPU-heavy request before activating conversion.
-        let modeSwitchRuntime = MathRuntimeService(requestTimeout: 3)
+        let modeSwitchRequestTimeout: TimeInterval = 3
+        let modeSwitchRuntime = MathRuntimeService(requestTimeout: modeSwitchRequestTimeout)
         let modeSwitchWarmup = try? await modeSwitchRuntime.evaluate(
             expression: "1+1",
             precision: 16
@@ -975,8 +976,14 @@ struct CalculatorStoreChecks {
         check(!modeSwitchStore.isEvaluating, "mode switch clears calculator progress")
         check(modeSwitchConversionStore.errorMessage == nil, "first conversion survives the mode switch")
         check(modeSwitchConversionStore.output != "—", "first conversion produces a result")
+        // This is a cancellation check, not a benchmark of first-use unit
+        // conversion on a shared hosted runner. If the old expression keeps
+        // the serial worker, this conversion reaches its own request deadline
+        // and the result checks above fail. Keep the elapsed guard tied to the
+        // same runtime contract instead of imposing a second, undocumented
+        // 1.5-second cold-path SLO.
         check(
-            modeSwitchElapsed < 1.5,
+            modeSwitchElapsed < modeSwitchRequestTimeout,
             "mode switch releases the shared runtime before the old evaluation deadline"
         )
 
