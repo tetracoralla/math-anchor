@@ -1,15 +1,34 @@
 from __future__ import annotations
 
 from decimal import Decimal, ROUND_HALF_EVEN
+import importlib.util
 import json
 import math
 from pathlib import Path
 import struct
 from statistics import NormalDist
+import subprocess
+import sys
+
+import pytest
 
 
 ROOT = Path(__file__).resolve().parents[2]
 EVAL_DIR = ROOT / "evals" / "agent"
+
+
+AGENT_EVAL_SPEC = importlib.util.spec_from_file_location(
+    "math_anchor_agent_eval",
+    ROOT / "script" / "agent_eval.py",
+)
+assert AGENT_EVAL_SPEC is not None and AGENT_EVAL_SPEC.loader is not None
+agent_eval = importlib.util.module_from_spec(AGENT_EVAL_SPEC)
+SCRIPT_DIR = str(ROOT / "script")
+sys.path.insert(0, SCRIPT_DIR)
+try:
+    AGENT_EVAL_SPEC.loader.exec_module(agent_eval)
+finally:
+    sys.path.remove(SCRIPT_DIR)
 
 
 def _load(name: str) -> dict:
@@ -152,9 +171,12 @@ def test_experiments_fix_one_agent_harness_driver_and_target() -> None:
         assert experiment["purpose"] == purpose
         assert experiment["repeats"] == repeats
         assert experiment["agent"] == {"provider": "openai", "model": "gpt-5.6-luna"}
-        assert experiment["harness"] == {"id": "codex-cli", "version": "0.149.0-alpha.4.1"}
+        assert experiment["harness"] == {"id": "codex-cli", "version": "0.150.0-alpha.8"}
         assert experiment["driver"]["id"] == "codex-cli-driver"
         assert experiment["driver"]["version"] == "0.4.1"
+        arguments = experiment["driver"]["args"]
+        reasoning_index = arguments.index("--config") + 1
+        assert arguments[reasoning_index] == 'model_reasoning_effort="low"'
         assert experiment["budget"]["maxToolCalls"] == 4
         assert task_count * repeats * len(experiment["conditions"]) == planned
         assert experiment["conditions"]["baseline"]["capabilityAvailable"] is False
@@ -187,9 +209,42 @@ def test_installed_plugin_smoke_uses_one_isolated_target_plugin_without_policy_i
     assert experiment["budget"]["maxToolCalls"] == 4
 
 
+def test_model_run_preflight_rejects_stale_codex_harness(monkeypatch) -> None:
+    experiment = _load("codex-luna-installed-plugin-routing-smoke.v0.1.json")
+    monkeypatch.setattr(agent_eval.shutil, "which", lambda _command: "/usr/local/bin/codex")
+    monkeypatch.setattr(
+        agent_eval.subprocess,
+        "run",
+        lambda *_args, **_kwargs: subprocess.CompletedProcess(
+            args=["codex", "--version"],
+            returncode=0,
+            stdout="codex-cli 99.0.0\n",
+            stderr="",
+        ),
+    )
+
+    with pytest.raises(SystemExit, match="declared Codex harness does not match"):
+        agent_eval._validate_codex_harness(experiment)
+
+
+def test_isolated_agent_environment_restores_home(monkeypatch) -> None:
+    monkeypatch.setenv("HOME", "/tmp/math-anchor-original-home")
+
+    with agent_eval._temporary_environment({"HOME": "/tmp/math-anchor-isolated-home"}):
+        assert agent_eval.os.environ["HOME"] == "/tmp/math-anchor-isolated-home"
+
+    assert agent_eval.os.environ["HOME"] == "/tmp/math-anchor-original-home"
+
+
 def test_installed_skill_routes_machine_semantics_to_one_nested_run_call() -> None:
     skill = (ROOT / "plugins/math-anchor/skills/calculate/SKILL.md").read_text(encoding="utf-8")
+    assert "MUST load and use it for fixed-width" in skill
     assert "fixed-width wrapping/saturating arithmetic" in skill
     assert "do not classify them as trivial arithmetic" in skill
     assert "outer envelope `{operation, arguments}`" in skill
     assert "never flatten them beside" in skill
+    assert '"operation":"integer.machine_arithmetic"' in skill
+    assert '"operation":"combinatorics.count"' in skill
+    assert "never search or\ndescribe these shapes first" in skill
+    assert '"overflowBehavior":"wrapping"' in skill
+    assert '"action":"binomial"' in skill

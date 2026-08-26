@@ -59,6 +59,20 @@ def main() -> None:
 
     calculate_skill = PLUGIN / "skills" / "calculate" / "SKILL.md"
     calculate_text = calculate_skill.read_text()
+    if len(calculate_text.encode("utf-8")) > 6_000:
+        fail("calculate Skill must stay below the 6 KB always-loaded budget")
+    reference_paths = set(re.findall(r"\]\((references/[^)]+\.md)\)", calculate_text))
+    expected_references = {
+        "references/machine-semantics.md",
+        "references/scientific-math.md",
+        "references/statistics-units-dimensions.md",
+        "references/result-error-policy.md",
+    }
+    if reference_paths != expected_references:
+        fail("calculate Skill must link the complete bounded reference set")
+    for relative_path in reference_paths:
+        if not (calculate_skill.parent / relative_path).is_file():
+            fail(f"calculate Skill reference is missing: {relative_path}")
     if "Do not load it for trivial, low-risk arithmetic" not in calculate_text:
         fail("calculate Skill must preserve the trivial-arithmetic routing boundary")
     if "A successful tool response proves that the declared operation ran" not in calculate_text:

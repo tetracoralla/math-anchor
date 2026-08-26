@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import MathAnchorCore
 
 enum CalculatorPalette {
     static let canvasTop = dynamic(

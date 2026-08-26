@@ -235,6 +235,8 @@ def test_series_and_multivariate_derivatives_preserve_symbolic_results() -> None
         "calculus.multivariate",
         {"action": "gradient", "expression": "x^2 + x*y + y^2", "variables": ["x", "y"]},
     )
+    assert gradient["kind"] == "derivative_matrix"
+    assert gradient["shape"] == [2, 1]
     assert gradient["exact"] == [["2*x + y"], ["x + 2*y"]]
 
     jacobian = execute_direct(
@@ -258,7 +260,9 @@ def test_series_and_multivariate_derivatives_preserve_symbolic_results() -> None
             "direction": [3, 4],
         },
     )
-    assert directional["exact"] == [["6*x + 8*y"]]
+    assert directional["kind"] == "derivative_scalar"
+    assert "shape" not in directional
+    assert directional["exact"] == "6*x + 8*y"
 
     divergence = execute_direct(
         "calculus.multivariate",
@@ -268,7 +272,9 @@ def test_series_and_multivariate_derivatives_preserve_symbolic_results() -> None
             "variables": ["x", "y", "z"],
         },
     )
-    assert divergence["exact"] == [["3*x + 2*z"]]
+    assert divergence["kind"] == "derivative_scalar"
+    assert "shape" not in divergence
+    assert divergence["exact"] == "3*x + 2*z"
 
     curl = execute_direct(
         "calculus.multivariate",
@@ -284,7 +290,9 @@ def test_series_and_multivariate_derivatives_preserve_symbolic_results() -> None
         "calculus.multivariate",
         {"action": "laplacian", "expression": "x^2 + y^2 + z^2", "variables": ["x", "y", "z"]},
     )
-    assert laplacian["exact"] == [["6"]]
+    assert laplacian["kind"] == "derivative_scalar"
+    assert "shape" not in laplacian
+    assert laplacian["exact"] == "6"
 
 
 @pytest.mark.parametrize(

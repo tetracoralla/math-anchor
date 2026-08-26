@@ -1,12 +1,12 @@
 {
   "schemaVersion": "openadam.agent-tool-eval.experiment.v0.1",
   "id": "math-anchor.codex-luna.coding-agent-utility-0-3",
-  "title": "Math Anchor 0.3 Coding Agent utility estimate in Codex Luna",
+  "title": "Math Anchor 0.4 Coding Agent utility estimate in Codex Luna",
   "purpose": "utility-estimate",
   "suiteRef": {"id": "math-anchor.coding-agent-utility", "version": "0.1.0"},
   "targetRef": {"id": "math-anchor", "version": "0.4.0"},
   "agent": {"provider": "openai", "model": "gpt-5.6-luna"},
-  "harness": {"id": "codex-cli", "version": "0.149.0-alpha.4.1"},
+  "harness": {"id": "codex-cli", "version": "0.150.0-alpha.8"},
   "repeats": 3,
   "seed": "math-anchor-coding-agent-utility-2026-08-24",
   "budget": {
@@ -26,6 +26,7 @@
     "args": [
       "src/adapters/codex-driver.mjs",
       "--model", "gpt-5.6-luna",
+      "--config", "model_reasoning_effort=\"low\"",
       "--target-plugin-id", "math-anchor@openadam",
       "--target-mcp-server-id", "math-anchor",
       "--target-tool-prefix", "math.",

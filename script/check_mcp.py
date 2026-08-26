@@ -53,8 +53,10 @@ async def main(plugin_root: Path | None = None) -> None:
             assert "fixed-width overflow" in run_tool.description
             assert "Do not use for trivial low-risk arithmetic" in run_tool.description
             assert "{operation, arguments}; never flatten" in run_tool.description
+            assert "Known direct shapes need no describe call" in run_tool.description
             describe_tool = next(tool for tool in listed.tools if tool.name == "math.describe")
             assert "nest one under math.run.arguments" in describe_tool.description
+            assert "Do not call this for known" in describe_tool.description
             assert set(run_tool.inputSchema["properties"]["operation"]["enum"]) == set(OPERATIONS)
             run_schema_bytes = len(
                 json.dumps(run_tool.inputSchema, ensure_ascii=False, separators=(",", ":")).encode()
@@ -250,6 +252,21 @@ async def main(plugin_root: Path | None = None) -> None:
             )
             assert invalid_direction.isError is True
             assert invalid_direction.structuredContent["error"]["code"] == "E_INPUT"
+            directional = await session.call_tool(
+                "math.run",
+                {
+                    "operation": "calculus.multivariate",
+                    "arguments": {
+                        "action": "directional_derivative",
+                        "expression": "x^2 + y^2",
+                        "variables": ["x", "y"],
+                        "direction": [3, 4],
+                    },
+                },
+            )
+            assert directional.structuredContent["kind"] == "derivative_scalar"
+            assert directional.structuredContent["exact"] == "6*x + 8*y"
+            assert "shape" not in directional.structuredContent
 
             eigenspaces = await session.call_tool(
                 "math.run",

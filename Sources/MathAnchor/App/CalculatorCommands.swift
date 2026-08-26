@@ -1,4 +1,5 @@
 import SwiftUI
+import MathAnchorCore
 
 struct CalculatorCommands: Commands {
     @ObservedObject var store: CalculatorStore

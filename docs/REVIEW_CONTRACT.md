@@ -12,22 +12,30 @@ benchmark number.
 
 ## Current authorities and carrier seams
 
-- `src/math_anchor/catalog.py`, `contracts.py`, and `operations/` own operation
-  identity, argument schemas, result shapes, examples, and mathematical
-  semantics. The registry is the source for discovery and the typed
-  `math.run` schema; do not maintain a second hand-written catalogue.
+- `src/math_anchor/operation_specs/` owns operation identity, argument schemas,
+  examples, and registry order; `catalog.py` is the thin search/describe
+  facade. `result_contracts/` owns result variants while `contracts.py`
+  validates them and projects the four public tool schemas. `operations/` owns
+  mathematical semantics. Do not maintain a second hand-written catalogue or
+  result vocabulary.
 - `safe_expression.py` and the dimension/unit expression translators own the
   accepted expression language. They must remain explicit AST translators;
   Python `eval`, `exec`, string `sympify`, and `parse_expr` are forbidden.
-- `sandbox.py`, `worker.py`, `runtime_control.py`, `runtime_telemetry.py`, and
-  `output_policy.py` own isolation, deadlines, memory accounting, admission,
-  cancellation, recovery, and response bounds.
+- `sandbox.py` owns request and batch orchestration; `worker_pool.py` and
+  `worker_process.py` own persistent-worker lifecycle and process transport;
+  `sandbox_errors.py` owns sandbox error normalization, and
+  `sandbox_testing.py` is the only test fault-injection seam.
+  `runtime_control.py`, `runtime_telemetry.py`, and `output_policy.py` own
+  admission, accounting, recovery observations, and response bounds.
 - `mcp_server.py` owns the public Agent carrier. `cli.py`, `app_runtime.py`, and
   `bundled_runtime.py` are adapters and must not invent different operation or
   result semantics.
-- `CalculatorApp/` owns the human carrier. It may add human-only conveniences
-  such as the ECB-backed currency workflow, but its mathematical calculations
-  still go through the shared core. Currency is not a hidden fifth MCP tool.
+- `Sources/MathAnchorCore/` owns the testable Swift models, services, stores,
+  and pure formatting/state helpers. `Sources/MathAnchor/` is the SwiftUI/AppKit
+  carrier, and `Tests/MathAnchorCoreTests/` exercises the package core without
+  app chrome. The human carrier may add conveniences such as the ECB-backed
+  currency workflow, but mathematical calculations still go through the
+  shared runtime. Currency is not a hidden fifth MCP tool.
 - `plugins/math-anchor/`, packaging scripts, and the installed plugin cache are
   distinct distribution carriers. Source tests do not prove an installed
   package starts, routes, or uses the intended bundled runtime.
@@ -138,10 +146,16 @@ Run from the repository root:
 ```
 
 That command is the development regression lane. Its current-source checks
-include source safety, Python tests, Swift store tests/build, the real MCP
+include source safety, Python tests, Swift package tests, Swift store
+integration/build, the real MCP
 protocol probe, a bounded load/recovery run, plugin packaging, and release
 hygiene. For focused iteration, use the owning narrow test first, then return to
 the complete command before closeout.
+
+`script/swift_test.sh` is the repository-owned SwiftPM test entry point. It
+still runs `swift test`, while supplying the Swift Testing framework search and
+runtime paths needed by Command Line Tools installations that do not discover
+the bundled framework automatically.
 
 The bounded representative load harness is:
 

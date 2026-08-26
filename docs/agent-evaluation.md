@@ -7,8 +7,9 @@ enough reliability to justify the extra Agent/tool round. The paired assets in
 
 ## Evaluation model
 
-- The weakest intended current Agent class is `gpt-5.6-luna` through the
-  installed Codex CLI harness.
+- The weakest intended current Agent class is `gpt-5.6-luna` at explicitly
+  declared `low` reasoning effort through the installed Codex CLI harness.
+  The experiment does not inherit a developer's ambient reasoning setting.
 - Baseline and treatment use the same prompt, Agent, harness, driver, budgets,
   isolation, and effective configuration. Only the provenance-checked Math
   Anchor MCP server is available in treatment.
@@ -83,8 +84,9 @@ earlier report.
 
 The installed smoke creates one temporary Codex home, links the current Codex
 authentication without copying it, installs only the current packaged Math
-Anchor Plugin, verifies its version and MCP entry, and removes the temporary
-home after the paired run. Driver arguments remain digest-only in the report.
+Anchor Plugin, isolates `HOME` as well as `CODEX_HOME` so ambient user Skills
+cannot enter the prompt, verifies the target Skill and MCP entry, and removes
+the temporary home after the paired run. Driver arguments remain digest-only in the report.
 This setup cost is Controller overhead and is not confused with per-task Agent
 tokens or tool turns.
 
@@ -121,6 +123,27 @@ make a fresh Agent turn economical or reliable for repeated structured
 calculation. Driver v0.4.1 now explicitly enables the Plugin feature and locks
 that precondition in a negative regression; that repair is development-tested
 but has not been promoted into a second paid smoke.
+
+An August 26 rerun first exposed a stale declared Codex CLI version before
+confirming that inherited/default high reasoning can again exceed 100,000
+tokens on the two required tasks. Current experiments therefore pin `low`
+reasoning as part of their shared configuration and reject CLI-version drift
+before model execution. Earlier reports remain invalid and are not merged into
+the current result.
+
+The same investigation found that isolating only `CODEX_HOME` still admitted
+the user's global `~/.agents/skills` catalogue. Current installed runs isolate
+both home roots and fail preflight unless the target Skill is present and
+ambient Skills are absent.
+
+The final August 26 installed smoke with Codex CLI `0.150.0-alpha.8`, Luna at
+low reasoning, both home roots isolated, and the direct common-operation
+templates still did not satisfy promotion. The large exact combination used
+one successful `math.run` call and the simple and irrelevant controls made no
+target call, but the required fixed-width treatment exceeded 100,000 tokens.
+The comparison is therefore invalid and installed cold natural routing remains
+`BLOCKED`; the 180-run estimate was not started. This does not invalidate the
+separately measured deterministic direct-host route.
 
 The zero-model cold direct-host smoke is a separate observation. It invokes 13
 structured `math.run` workloads once each, with no Agent, harness, prompt,

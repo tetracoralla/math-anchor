@@ -171,7 +171,11 @@ Bootstrap accepts any available Python 3.11 or newer interpreter. Set `MATH_ANCH
 ./script/check_all.sh
 ```
 
-This runs Python regression tests, Swift state checks/build, the four-tool MCP discovery and execution flow, and plugin validation. Human visual acceptance remains separate from those development checks.
+This runs Python regression tests, Swift package and state tests/build, the
+four-tool MCP discovery and execution flow, and plugin validation. Use
+`./script/swift_test.sh` for the focused `MathAnchorCore` SwiftPM suite; it
+supplies the framework lookup needed by some Command Line Tools installations.
+Human visual acceptance remains separate from those development checks.
 For a GitHub-generated ZIP or tarball without `.git` metadata, run
 `./script/check_source_layout.sh --archive-clean` once immediately after
 extraction and before the first `check_all.sh`; subsequent development checks

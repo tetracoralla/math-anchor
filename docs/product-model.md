@@ -31,9 +31,10 @@ This repository started empty. There were no components, types, tokens, or domai
 
 - a safe expression AST translated directly into SymPy objects;
 - one operation registry containing descriptions, JSON-shaped input contracts, and handlers;
-- one structured result vocabulary covering scalars, transformations, verification judgments and residuals, programmer integers, exact division and rounding conventions, matrices and bases, exact and approximate linear systems and decompositions, bracketed roots, numerical integrals with honest error estimates, series, derivative matrices, financial results, probability, statistics, measurement uncertainty, unit catalogs and quantities, and exact symbolic dimension vectors and constraint classifications;
+- one structured result vocabulary covering scalars, transformations, verification judgments and residuals, programmer integers, exact division and rounding conventions, matrices and bases, exact and approximate linear systems and decompositions, bracketed roots, numerical integrals with honest error estimates, series, scalar and matrix derivative results, financial results, probability, statistics, measurement uncertainty, unit catalogs and quantities, and exact symbolic dimension vectors and constraint classifications;
 - one isolated execution boundary with time and memory limits;
 - SwiftUI calculation and conversion models that share one warm local runtime for expression evaluation, the existing `units.convert` operation, and an app-internal currency operation;
+- a `MathAnchorCore` Swift package target for models, services, stores, and pure state/formatting logic, with package-scoped access from the `MathAnchor` app target and direct Swift Testing coverage;
 - one curated human conversion catalog that maps readable physical units—including data quantity/rate, frequency, force, acceleration, torque, and density—to the core's Pint identifiers and currency names to ECB codes without reimplementing factors or rates in Swift;
 - one bounded ECB reference-rate provider and local cache carrying source, rate date, publication, check, expiry, cache, and refresh-failure metadata;
 - one adaptive mineral-blue and teal visual system shared by the calculator face, display, keys, history drawer, and packaged app icon;

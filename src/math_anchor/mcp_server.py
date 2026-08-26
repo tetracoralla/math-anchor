@@ -80,6 +80,8 @@ def _caught(callable_: Any, *arguments: Any) -> dict[str, Any]:
         "IEEE-754, named rounding or division conventions, large integers, matrices, units and dimensions, "
         "uncertainty, probability, numerical methods, or finance. Do not use for trivial low-risk arithmetic. "
         "Always pass operation-specific fields inside the arguments object: {operation, arguments}; never flatten them. "
+        "Known direct shapes need no describe call: integer.machine_arithmetic arguments include action, left, right, "
+        "bitWidth, signedness, inputMode, and overflowBehavior; combinatorics.count arguments use action, n, and k. "
         "The typed operation keeps exact and approximate results separate; one successful ordinary call is sufficient."
     ),
     annotations=_READ_ONLY,
@@ -150,7 +152,8 @@ def math_search(
     name="math.describe",
     title="Describe a mathematical operation",
     description=(
-        "Get schema and argument examples for one operation selected by math.search. "
+        "Get schema and argument examples only for one unfamiliar operation selected by math.search. "
+        "Do not call this for known integer.machine_arithmetic or combinatorics.count shapes. "
         "Examples are arguments objects; nest one under math.run.arguments and pass its id as math.run.operation."
     ),
     annotations=_READ_ONLY,

@@ -71,7 +71,7 @@ def test_mode_menu_uses_the_visible_rounded_rectangle_as_its_trigger() -> None:
 
 
 def test_conversion_is_a_lightweight_numeric_mode() -> None:
-    mode = (ROOT / "Sources/MathAnchor/Models/CalculatorMode.swift").read_text()
+    mode = (ROOT / "Sources/MathAnchorCore/Models/CalculatorMode.swift").read_text()
     icon = (ROOT / "Sources/MathAnchor/Views/CalculatorModeIcon.swift").read_text()
     content = (ROOT / "Sources/MathAnchor/Views/ContentView.swift").read_text()
     display = (ROOT / "Sources/MathAnchor/Views/ConversionDisplayView.swift").read_text()
@@ -122,7 +122,7 @@ def test_fixed_window_height_includes_the_complete_keypad_and_bottom_inset() -> 
 
 
 def test_conversion_keeps_currency_status_human_facing_and_agent_catalog_unchanged() -> None:
-    runtime = (ROOT / "Sources/MathAnchor/Services/MathRuntimeService.swift").read_text()
+    runtime = (ROOT / "Sources/MathAnchorCore/Services/MathRuntimeService.swift").read_text()
     status = (ROOT / "Sources/MathAnchor/Views/CurrencyRateStatusView.swift").read_text()
     registry = (ROOT / "src/math_anchor/catalog.py").read_text()
 
@@ -138,7 +138,7 @@ def test_conversion_keeps_currency_status_human_facing_and_agent_catalog_unchang
 
 
 def test_conversion_catalog_includes_data_and_engineering_units() -> None:
-    catalog = (ROOT / "Sources/MathAnchor/Models/UnitDefinition.swift").read_text()
+    catalog = (ROOT / "Sources/MathAnchorCore/Models/UnitDefinition.swift").read_text()
 
     for category in (
         "case data",
@@ -166,7 +166,7 @@ def test_conversion_popovers_and_text_editing_own_keyboard_focus() -> None:
     ).read_text()
     content = (ROOT / "Sources/MathAnchor/Views/ContentView.swift").read_text()
     transition = (
-        ROOT / "Sources/MathAnchor/Support/CalculatorModeTransition.swift"
+        ROOT / "Sources/MathAnchorCore/Support/CalculatorModeTransition.swift"
     ).read_text()
     commands = (ROOT / "Sources/MathAnchor/App/CalculatorCommands.swift").read_text()
 

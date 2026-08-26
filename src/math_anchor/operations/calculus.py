@@ -111,7 +111,10 @@ def multivariate(arguments: dict[str, Any]) -> dict[str, Any]:
                 "E_INPUT",
                 "divergence requires one vector-field component per variable",
             )
-            result = sp.Matrix([[sum(sp.diff(value, symbol) for value, symbol in zip(expressions, ordered_symbols))]])
+            result = sum(
+                sp.diff(value, symbol)
+                for value, symbol in zip(expressions, ordered_symbols)
+            )
         else:
             require(
                 len(expressions) == len(ordered_symbols) == 3,
@@ -134,7 +137,7 @@ def multivariate(arguments: dict[str, Any]) -> dict[str, Any]:
         elif action == "hessian":
             result = sp.hessian(expression, ordered_symbols)
         elif action == "laplacian":
-            result = sp.Matrix([[sum(sp.diff(expression, symbol, 2) for symbol in ordered_symbols)]])
+            result = sum(sp.diff(expression, symbol, 2) for symbol in ordered_symbols)
         else:
             direction_values = list_arg(arguments, "direction", maximum=8)
             require(
@@ -149,9 +152,19 @@ def multivariate(arguments: dict[str, Any]) -> dict[str, Any]:
                 "directional derivative requires exact direction components",
             )
             require(any(value != 0 for value in direction), "E_DOMAIN", "direction vector must be nonzero")
-            result = sp.Matrix(
-                [[sum(sp.diff(expression, symbol) * component for symbol, component in zip(ordered_symbols, direction))]]
+            result = sum(
+                sp.diff(expression, symbol) * component
+                for symbol, component in zip(ordered_symbols, direction)
             )
+    if action in {"directional_derivative", "divergence", "laplacian"}:
+        return typed_scalar_result(
+            "calculus.multivariate",
+            "derivative_scalar",
+            result,
+            precision,
+            action=action,
+            variables=variable_names,
+        )
     return {
         "status": "ok",
         "operation": "calculus.multivariate",

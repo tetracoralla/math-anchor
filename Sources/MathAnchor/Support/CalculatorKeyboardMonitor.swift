@@ -1,5 +1,8 @@
 @preconcurrency import AppKit
 import SwiftUI
+#if canImport(MathAnchorCore)
+import MathAnchorCore
+#endif
 
 @MainActor
 final class CalculatorKeyboardMonitor {

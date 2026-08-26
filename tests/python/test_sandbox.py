@@ -7,6 +7,7 @@ import threading
 import time
 
 import math_anchor.sandbox as sandbox
+from math_anchor import sandbox_testing
 from math_anchor import worker
 from math_anchor.errors import CalculatorError
 from math_anchor.sandbox import run_batch, run_operation
@@ -97,7 +98,7 @@ def test_warm_worker_meets_a_short_complete_call_timeout() -> None:
 def test_timeout_bounds_worker_queue_wait(monkeypatch) -> None:
     sandbox._WORKER_POOL.shutdown()
     isolated_pool = sandbox._WorkerPool(maximum=1)
-    monkeypatch.setattr(sandbox, "_WORKER_POOL", isolated_pool)
+    sandbox_testing.bind_worker_pool(monkeypatch, isolated_pool)
     worker, error = isolated_pool.acquire(
         sandbox.DEFAULT_MEMORY_MB * 1024 * 1024,
         deadline=time.monotonic() + 5,
@@ -335,7 +336,7 @@ def test_worker_reader_failure_returns_a_structured_error(monkeypatch) -> None:
     def broken_reader(process):
         raise ValueError("simulated reader failure")
 
-    monkeypatch.setattr(sandbox, "_read_response_line", broken_reader)
+    monkeypatch.setattr(sandbox_testing.process_runtime(), "_read_response_line", broken_reader)
     result = sandbox.run_operation("expression.evaluate", {"expression": "1+1"})
     assert result["status"] == "error"
     assert result["error"]["code"] == "E_RUNTIME"
@@ -431,7 +432,7 @@ def test_completed_response_is_not_rejudged_against_the_deadline(monkeypatch) ->
 
     sandbox._WORKER_POOL.shutdown()
     try:
-        monkeypatch.setattr(sandbox, "time", _ReaderSkewedClock)
+        monkeypatch.setattr(sandbox_testing.process_runtime(), "time", _ReaderSkewedClock)
         warm = run_operation("expression.evaluate", {"expression": "6*7"}, timeout_ms=2_000)
         assert warm["exact"] == "42"
         prewarmed_pid = sandbox._WORKER_POOL.available[-1].process.pid
@@ -450,7 +451,7 @@ def test_response_arriving_after_the_deadline_is_rejected(monkeypatch) -> None:
     # Negative regression: a long polling wait used to leave a race where the
     # future became done after the deadline but before the loop condition was
     # rechecked, so an over-budget response was accepted as success.
-    monkeypatch.setattr(sandbox, "WORKER_POLL_SECONDS", 1.0)
+    monkeypatch.setattr(sandbox_testing.process_runtime(), "WORKER_POLL_SECONDS", 1.0)
     stderr_fd = sandbox._worker_stderr_file()
     process = subprocess.Popen(
         [
@@ -585,7 +586,7 @@ def test_completed_worker_output_does_not_wait_out_the_supervision_cadence(
 ) -> None:
     completed: Future[None] = Future()
     completed.set_result(None)
-    monkeypatch.setattr(sandbox, "WORKER_POLL_SECONDS", 1.0)
+    monkeypatch.setattr(sandbox_testing.process_runtime(), "WORKER_POLL_SECONDS", 1.0)
 
     started = time.monotonic()
     sandbox._wait_for_worker_progress(completed)
@@ -707,7 +708,7 @@ def test_warm_worker_pool_is_idempotent() -> None:
 
 def test_shutdown_invalidates_an_inflight_prewarm(monkeypatch) -> None:
     isolated_pool = sandbox._WorkerPool(maximum=1)
-    monkeypatch.setattr(sandbox, "_WORKER_POOL", isolated_pool)
+    sandbox_testing.bind_worker_pool(monkeypatch, isolated_pool)
     startup_entered = threading.Event()
     worker_terminated = threading.Event()
 
@@ -730,7 +731,7 @@ def test_shutdown_invalidates_an_inflight_prewarm(monkeypatch) -> None:
         assert cancel_event.wait(timeout=2)
         return FakeWorker(), None
 
-    monkeypatch.setattr(sandbox, "_start_worker", delayed_start)
+    monkeypatch.setattr(sandbox_testing.pool_runtime(), "_start_worker", delayed_start)
     sandbox.warm_worker_pool()
     assert startup_entered.wait(timeout=1)
 
@@ -764,9 +765,9 @@ def test_unserializable_error_obeys_the_output_budget() -> None:
 
 def test_worker_startup_exception_does_not_leak_a_pool_slot(monkeypatch) -> None:
     isolated_pool = sandbox._WorkerPool(maximum=1)
-    monkeypatch.setattr(sandbox, "_WORKER_POOL", isolated_pool)
+    sandbox_testing.bind_worker_pool(monkeypatch, isolated_pool)
     monkeypatch.setattr(
-        sandbox,
+        sandbox_testing.pool_runtime(),
         "_start_worker",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("simulated")),
     )
@@ -789,7 +790,7 @@ def test_worker_supervision_exception_is_structured_and_releases_the_slot(
     monkeypatch,
 ) -> None:
     isolated_pool = sandbox._WorkerPool(maximum=1)
-    monkeypatch.setattr(sandbox, "_WORKER_POOL", isolated_pool)
+    sandbox_testing.bind_worker_pool(monkeypatch, isolated_pool)
     try:
         real_execute = sandbox._execute_worker
         monkeypatch.setattr(

@@ -1,7 +1,7 @@
 interface:
   display_name: "Math Anchor"
-  short_description: "Run reliability-sensitive mathematics with exactness and diagnostics."
-  default_prompt: "Use $calculate when this calculation needs deterministic precision, units, exactness, or verification."
+  short_description: "Use Math Anchor for machine semantics, exactness, precision, units, and diagnostics."
+  default_prompt: "Use $calculate for fixed-width or IEEE-754 semantics, large exact counts, precision, units, exactness, or verification."
 dependencies:
   tools:
     - type: "mcp"

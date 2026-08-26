@@ -4,6 +4,7 @@ import threading
 import time
 
 import math_anchor.sandbox as sandbox
+from math_anchor import sandbox_testing
 from math_anchor.runtime_control import AdmissionController, CircuitBreaker
 from math_anchor.runtime_telemetry import RUNTIME_TELEMETRY
 
@@ -313,8 +314,9 @@ def test_cancelled_worker_start_is_not_reported_as_provider_failure(monkeypatch)
         return None, sandbox._error("E_CANCELLED", "startup cancelled")
 
     RUNTIME_TELEMETRY.reset()
-    monkeypatch.setattr(sandbox, "_start_worker_impl", cancelled_start)
-    worker, error = sandbox._start_worker(
+    process_runtime = sandbox_testing.process_runtime()
+    monkeypatch.setattr(process_runtime, "_start_worker_impl", cancelled_start)
+    worker, error = process_runtime._start_worker(
         sandbox.DEFAULT_MEMORY_MB * 1024 * 1024,
         deadline=time.monotonic() + 1,
         timeout_ms=1_000,
@@ -332,7 +334,7 @@ def test_worker_recycles_after_bounded_request_count_and_adaptively_refills(
     monkeypatch,
 ) -> None:
     sandbox._WORKER_POOL.shutdown()
-    monkeypatch.setattr(sandbox, "MAX_REQUESTS_PER_WORKER", 2)
+    monkeypatch.setattr(sandbox_testing.pool_runtime(), "MAX_REQUESTS_PER_WORKER", 2)
     try:
         first = sandbox.run_operation(
             "expression.evaluate", {"expression": "6*7"}, timeout_ms=2_000

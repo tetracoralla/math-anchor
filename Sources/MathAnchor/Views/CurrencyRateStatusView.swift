@@ -1,4 +1,5 @@
 import SwiftUI
+import MathAnchorCore
 
 struct CurrencyRateStatusView: View {
     @ObservedObject var store: UnitConversionStore

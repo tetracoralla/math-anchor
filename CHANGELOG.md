@@ -57,12 +57,31 @@ and Apple notarization record exist.
 
 ### Fixed
 
+- Returned scalar derivative contracts for directional derivative, divergence,
+  and the Laplacian while retaining matrix contracts and shapes for gradient,
+  Jacobian, Hessian, and curl. This keeps mathematical rank aligned across the
+  registry, runtime, and MCP result schema.
 - Kept the installed Codex `math.run` declaration typed by replacing the
   oversized always-listed 44-branch union with a 1.8 KB host-safe envelope
   carrying every stable operation id and execution limit. Exact closed
   argument schemas remain registry-owned, are returned by `math.describe`, and
   are still enforced before execution; current Codex no longer compacts the
   entire model-facing call into `args: unknown`.
+- Made model-backed evaluation preflight compare the versioned experiment's
+  declared Codex CLI against the installed harness before spending any model
+  calls, so host upgrades fail before producing an invalid comparison.
+- Pinned the paired Luna experiments to low reasoning effort in both
+  conditions instead of inheriting an ambient/default setting that could spend
+  more than 100,000 tokens before a required calculation reached the tool.
+- Isolated both `CODEX_HOME` and `HOME` for installed-Plugin Agent evaluation,
+  and made preflight require the packaged Math Anchor Skill while rejecting
+  ambient `~/.agents/skills` leakage.
+- Promoted fixed-width machine arithmetic and large exact combinatorial counts
+  to mandatory Skill triggers with their direct operation mappings, avoiding
+  both mental fallback and unnecessary discovery on common high-risk tasks.
+- Put the same two complete direct argument shapes in the always-visible
+  `math.run` description and explicitly excluded them from `math.describe`, so
+  a cold Agent need not load an 8.7 KB operation schema before one known call.
 - Gave this expanded capability milestone the distinct `0.4.0` package
   identity and added byte-for-byte source-versus-cache validation plus a fresh
   Codex Skill-path check to the installation workflow, preventing an older
@@ -170,6 +189,15 @@ and Apple notarization record exist.
 
 ### Changed
 
+- Split the Python operation catalogue, result contracts, and worker sandbox
+  into bounded owning modules while preserving the generated registry and tool
+  contracts byte-for-byte. Reduced the always-loaded calculation Skill to its
+  routing and one-call contract, moving domain detail into four on-demand
+  references guarded by package regressions.
+- Split the macOS package into a testable `MathAnchorCore` library and the
+  SwiftUI/AppKit `MathAnchor` executable, adding direct Swift Testing coverage
+  for formatting, copy semantics, mode-switch race rejection, and shared
+  physical conversion.
 - Added a 36-request MCP ingress bound before executor submission, bounded
   calculation admission, a 4 GiB weighted global request-memory
   budget, a reserved single-call lane during batches, true running-sibling

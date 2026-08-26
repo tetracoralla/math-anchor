@@ -1,4 +1,5 @@
 import SwiftUI
+import MathAnchorCore
 
 struct ScientificKeypadView: View {
     let store: CalculatorStore

@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import MathAnchorCore
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {

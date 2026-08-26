@@ -1,4 +1,5 @@
 import SwiftUI
+import MathAnchorCore
 
 struct DisplayView: View {
     @ObservedObject var store: CalculatorStore

@@ -85,8 +85,11 @@ def test_local_codex_marketplace_exposes_the_packaged_plugin() -> None:
 
 
 def test_calculation_skill_keeps_cost_and_trust_boundaries() -> None:
-    skill = (PLUGIN / "skills" / "calculate" / "SKILL.md").read_text()
+    skill_path = PLUGIN / "skills" / "calculate" / "SKILL.md"
+    skill = skill_path.read_text()
+    assert len(skill.encode("utf-8")) <= 6_000
     assert "Do not load it for trivial, low-risk arithmetic" in skill
+    assert "MUST load and use it for fixed-width" in skill
     assert "A successful tool response proves that the declared operation ran" in skill
     assert "Stop after the first successful call for an ordinary calculation" in skill
     assert "Never call `list_mcp_resources`" in skill
@@ -95,6 +98,14 @@ def test_calculation_skill_keeps_cost_and_trust_boundaries() -> None:
     assert "scope: dimensional_consistency_only" in skill
     assert "`precision` is not a top-level `math.run` field" in skill
     assert "at least two guard digits in the first call" in skill
+    for reference in (
+        "machine-semantics.md",
+        "scientific-math.md",
+        "statistics-units-dimensions.md",
+        "result-error-policy.md",
+    ):
+        assert f"(references/{reference})" in skill
+        assert (skill_path.parent / "references" / reference).is_file()
     agent_metadata = (
         PLUGIN / "skills" / "calculate" / "agents" / "openai.yaml"
     ).read_text()

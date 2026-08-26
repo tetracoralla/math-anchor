@@ -51,6 +51,9 @@ def test_tool_discovery_survives_current_codex_host_compaction() -> None:
     assert run_tool is not None
     assert "one successful ordinary call is sufficient" in run_tool.description
     assert "{operation, arguments}; never flatten" in run_tool.description
+    assert "Known direct shapes need no describe call" in run_tool.description
+    assert "integer.machine_arithmetic" in run_tool.description
+    assert "combinatorics.count" in run_tool.description
     output_bytes = len(
         json.dumps(run_tool.output_schema, separators=(",", ":")).encode()
     )
