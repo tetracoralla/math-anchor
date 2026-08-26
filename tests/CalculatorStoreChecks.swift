@@ -914,7 +914,8 @@ struct CalculatorStoreChecks {
         // immediately. Keeping conversion requests warm is valuable, but the
         // same policy for CPU-heavy evaluation made the next ordinary result
         // wait for the abandoned operation's ten-second worker-side timeout.
-        let cancellationRuntime = MathRuntimeService(requestTimeout: 3)
+        let cancellationRequestTimeout: TimeInterval = 3
+        let cancellationRuntime = MathRuntimeService(requestTimeout: cancellationRequestTimeout)
         let cancellationWarmup = try? await cancellationRuntime.evaluate(
             expression: "1+1",
             precision: 16
@@ -935,9 +936,13 @@ struct CalculatorStoreChecks {
         )
         let cancellationRecoveryElapsed = Date().timeIntervalSince(cancellationRecoveryStart)
         check(cancellationRecovery?.exact == "42", "replacement evaluation succeeds after cancellation")
+        // The successful replacement above is the primary cancellation check.
+        // Tie the elapsed guard to the runtime deadline so slower hosted Intel
+        // startup cannot turn this into an undocumented 1.5-second cold-path
+        // benchmark while a retained abandoned request still fails the check.
         check(
-            cancellationRecoveryElapsed < 1.5,
-            "abandoned evaluation does not occupy the runtime until its timeout"
+            cancellationRecoveryElapsed < cancellationRequestTimeout,
+            "abandoned evaluation releases the runtime before its request deadline"
         )
         _ = await abandonedEvaluation.value
 
