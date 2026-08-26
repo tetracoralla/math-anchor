@@ -298,9 +298,14 @@ def _execute_worker(
     error = response.get("error")
     if not isinstance(error, dict):
         error = error_payload("E_RUNTIME", "unknown worker error")
+    error_code = error.get("code")
     return (
         {"status": "error", "error": error},
-        error.get("code") != "E_RUNTIME",
+        # A worker-side deadline can win the race with the supervisor's
+        # matching wall-clock deadline. Recycle in either case: timed-out
+        # symbolic work may have crossed mutable-library state, and recovery
+        # must not depend on which process observed the deadline first.
+        error_code not in {"E_RUNTIME", "E_TIMEOUT"},
         True,
     )
 
