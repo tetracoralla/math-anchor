@@ -3,7 +3,8 @@
     "math-anchor": {
       "command": "runtime/math-anchor-runtime/math-anchor-runtime",
       "args": ["mcp"],
-      "cwd": "."
+      "cwd": ".",
+      "startup_timeout_sec": 30
     }
   }
 }

@@ -33,6 +33,8 @@ def main() -> None:
     server = transport.get("mcpServers", {}).get("math-anchor")
     if not isinstance(server, dict):
         fail("math-anchor MCP server is required")
+    if server.get("startup_timeout_sec") != 30:
+        fail("MCP cold-start timeout must remain explicitly bounded at 30 seconds")
     cwd = (PLUGIN / server.get("cwd", "")).resolve()
     command = Path(server.get("command", ""))
     executable = command if command.is_absolute() else cwd / command
