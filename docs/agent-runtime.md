@@ -7,6 +7,11 @@ operation and arguments. A high-frequency coding tool should start
 `math.batch` calls over that session. Starting the CLI once per calculation is
 correct but repeatedly pays process and import startup.
 
+The supported 0.4 boundary is explicit invocation. Cold natural-language
+selection by a fresh Agent remains useful integration research, but it depends
+on the host, model, installed catalogue, and context budget. It is not a
+release gate and must not be presented as guaranteed automatic adoption.
+
 The practical low-cost topology is therefore: use an Agent only to translate
 an ambiguous natural-language request into a closed `{operation, arguments}`
 invocation, then let the host reuse that invocation shape for direct calls. Do

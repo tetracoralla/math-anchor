@@ -344,4 +344,3 @@ ERROR_RESULT_SCHEMA = {
     },
     "required": ["status", "error"],
 }
-

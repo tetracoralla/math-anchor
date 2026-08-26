@@ -189,6 +189,10 @@ and Apple notarization record exist.
 
 ### Changed
 
+- Defined the 0.4 Agent promise as explicit structured invocation plus
+  deterministic execution. Cold natural-language Plugin selection remains a
+  separately measured host/model integration experiment and no longer blocks
+  release of the direct product contract or implies automatic adoption.
 - Split the Python operation catalogue, result contracts, and worker sandbox
   into bounded owning modules while preserving the generated registry and tool
   contracts byte-for-byte. Reduced the always-loaded calculation Skill to its

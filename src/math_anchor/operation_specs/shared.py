@@ -347,4 +347,3 @@ def _continuous_distribution_object(
             },
         ],
     }
-

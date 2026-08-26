@@ -123,10 +123,12 @@ the normal suite:
   concurrent batch, requested-memory exhaustion, cancellation storms, worker
   crash/recycle, circuit open/half-open/recovery, and a healthy call after each;
 - packaged runtime startup without a source checkout or development-only
-  environment, current installed-plugin routing, and a cold natural-language
-  task that reaches the intended public tool;
-- the current `evals/agent/` routing smoke before any larger paired run, then a
-  reviewed three-repeat utility estimate when making an Agent-value claim;
+  environment, plus an explicit structured call through the current installed
+  Plugin;
+- only when making a natural-language selection or Agent-value claim, a cold
+  task that reaches the intended public tool, the current `evals/agent/`
+  routing smoke before any larger paired run, and then a reviewed three-repeat
+  utility estimate;
 - macOS launch, keyboard-only calculation, history, human-only currency cache
   and stale/failure paths, app relaunch, and visible error recovery.
 
@@ -194,8 +196,10 @@ Keep evidence lanes separate:
 
 - **Development regression:** current source, schemas, tests, builds, protocol
   probes, safety checks, and bounded load/recovery.
-- **Runtime Agent flow:** current packaged process and installed plugin, cold
-  routing, cancellation, overload, and recovery in the real host.
+- **Runtime Agent flow:** current packaged process and installed Plugin through
+  explicit structured invocation, cancellation, overload, and recovery in the
+  real host. Cold natural-language selection is a separate experimental lane
+  and is required only for an automatic-adoption or Agent-value claim.
 - **Runtime human flow:** the built macOS app, keyboard/history/conversion/error
   behavior, persistence, and visible state after failure.
 - **Distribution/release:** source archive, binary/app bundle, plugin package,

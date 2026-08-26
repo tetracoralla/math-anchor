@@ -90,9 +90,13 @@ the temporary home after the paired run. Driver arguments remain digest-only in 
 This setup cost is Controller overhead and is not confused with per-task Agent
 tokens or tool turns.
 
-## Release interpretation
+## Claim interpretation
 
-Technical promotion requires current evidence that:
+Math Anchor 0.4 supports explicit structured invocation and deterministic
+execution. Source or binary release therefore does not require a fresh Agent
+to select the Plugin from natural language. Promotion of a natural-language
+selection, automatic-adoption, or Agent-quality claim requires current
+evidence that:
 
 - the paired comparison is valid and baseline never reaches the target;
 - every required treatment task is correct and invokes Math Anchor;
@@ -105,10 +109,11 @@ Technical promotion requires current evidence that:
 
 A zero paired quality delta can still support deterministic or direct-host
 value, but cannot be described as an Agent quality gain. A negative treatment
-delta is a release NO-GO until its task translation, schema, Skill, or runtime
-cause is repaired. Token or latency overhead is reported rather than hidden;
-an Agent-mediated microtask is not expected to beat an already structured
-zero-model direct-host call.
+delta blocks the corresponding natural-language selection or Agent-quality
+claim until its task translation, schema, Skill, or runtime cause is repaired;
+it does not by itself block the explicit-invocation product contract. Token or
+latency overhead is reported rather than hidden; an Agent-mediated microtask is
+not expected to beat an already structured zero-model direct-host call.
 
 ## Current isolated and direct-host findings
 
@@ -142,8 +147,9 @@ templates still did not satisfy promotion. The large exact combination used
 one successful `math.run` call and the simple and irrelevant controls made no
 target call, but the required fixed-width treatment exceeded 100,000 tokens.
 The comparison is therefore invalid and installed cold natural routing remains
-`BLOCKED`; the 180-run estimate was not started. This does not invalidate the
-separately measured deterministic direct-host route.
+`BLOCKED`; the 180-run estimate was not started. This blocks any claim of
+automatic adoption or Agent-quality improvement, but does not invalidate or
+block release of the separately measured deterministic explicit route.
 
 The zero-model cold direct-host smoke is a separate observation. It invokes 13
 structured `math.run` workloads once each, with no Agent, harness, prompt,

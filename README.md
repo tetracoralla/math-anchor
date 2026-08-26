@@ -132,6 +132,11 @@ same four tools directly; they do not need a model turn per calculation. See
 [docs/agent-runtime.md](docs/agent-runtime.md) for admission, retries, load
 evidence, and direct-host usage.
 
+Math Anchor 0.4 supports this explicit structured route. Cold selection from a
+fresh natural-language Agent session is host/model-dependent integration
+behavior, not a guaranteed zero-configuration feature or a source-release
+condition.
+
 Coding Agent adoption and conditional utility are measured through the
 repo-owned paired corpus in [docs/agent-evaluation.md](docs/agent-evaluation.md),
 including a single-Plugin installed Skill/MCP smoke kept separate from
