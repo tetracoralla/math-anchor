@@ -402,19 +402,22 @@ def test_unit_registry_warm_waits_for_a_real_idle_interval(monkeypatch) -> None:
 
     activity = worker._RequestActivity()
     warmed = threading.Event()
-    monkeypatch.setattr(worker, "UNIT_REGISTRY_WARM_IDLE_SECONDS", 0.05)
+    monkeypatch.setattr(worker, "UNIT_REGISTRY_WARM_IDLE_SECONDS", 0.2)
     monkeypatch.setattr(data, "warm_unit_registries", warmed.set)
 
+    # Establish the active request before the background thread starts. Starting
+    # the thread first made the test depend on whether a busy runner scheduled
+    # it for a full idle interval before the main thread called begin().
+    activity.begin()
     worker._warm_unit_registries_in_background(activity)
-    activity.begin()
-    time.sleep(0.08)
+    time.sleep(0.25)
     assert warmed.is_set() is False
     activity.end()
-    time.sleep(0.02)
+    time.sleep(0.01)
     activity.begin()
     activity.end()
     assert warmed.is_set() is False
-    assert warmed.wait(timeout=0.5)
+    assert warmed.wait(timeout=0.75)
 
 
 def test_completed_response_is_not_rejudged_against_the_deadline(monkeypatch) -> None:
