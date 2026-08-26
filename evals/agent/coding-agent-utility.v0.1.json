@@ -1,0 +1,222 @@
+{
+  "schemaVersion": "openadam.agent-tool-eval.task-suite.v0.1",
+  "id": "math-anchor.coding-agent-utility",
+  "version": "0.1.0",
+  "title": "Math Anchor Coding Agent utility estimate",
+  "targetRef": {
+    "id": "math-anchor",
+    "version": "0.4.0"
+  },
+  "tasks": [
+    {
+      "id": "machine.u8-wrapping-add",
+      "prompt": "A generated binary format stores a counter as an unsigned 8-bit integer with wrapping arithmetic. The current value is 250 and the decoder adds 20. Return only the resulting decimal stored value.",
+      "opportunity": "required",
+      "tags": ["coding", "integer", "overflow"],
+      "evaluator": {"kind": "numeric-tolerance", "actualPointer": "", "expected": 14, "absoluteTolerance": 0, "relativeTolerance": 0}
+    },
+    {
+      "id": "machine.i16-saturating-multiply",
+      "prompt": "A DSP routine multiplies 300 by 300 using signed 16-bit saturating arithmetic. Return only the resulting decimal stored value.",
+      "opportunity": "required",
+      "tags": ["coding", "integer", "overflow"],
+      "evaluator": {"kind": "numeric-tolerance", "actualPointer": "", "expected": 32767, "absoluteTolerance": 0, "relativeTolerance": 0}
+    },
+    {
+      "id": "bits.rotate-left-u8",
+      "prompt": "Rotate the 8-bit value 0x81 left by one bit. Return only the resulting unsigned decimal value.",
+      "opportunity": "required",
+      "tags": ["coding", "integer", "bitwise"],
+      "evaluator": {"kind": "numeric-tolerance", "actualPointer": "", "expected": 3, "absoluteTolerance": 0, "relativeTolerance": 0}
+    },
+    {
+      "id": "bits.extract-byte",
+      "prompt": "From the 32-bit value 0xDEADBEEF, extract the 8-bit field whose least-significant bit is at offset 8. Return only the unsigned decimal field value.",
+      "opportunity": "required",
+      "tags": ["coding", "integer", "bitfield"],
+      "evaluator": {"kind": "numeric-tolerance", "actualPointer": "", "expected": 190, "absoluteTolerance": 0, "relativeTolerance": 0}
+    },
+    {
+      "id": "float.binary64-negative-zero",
+      "prompt": "Return the raw IEEE-754 binary64 bits for negative zero as exactly 16 lowercase hexadecimal digits with no prefix.",
+      "opportunity": "required",
+      "tags": ["coding", "float", "ieee754"],
+      "evaluator": {"kind": "string-equality", "actualPointer": "", "expected": "8000000000000000", "trim": true, "caseSensitive": true}
+    },
+    {
+      "id": "float.binary32-integer-rounding",
+      "prompt": "The integer 16777217 is converted to IEEE-754 binary32 and then read back as a decimal integer. Return only that resulting integer.",
+      "opportunity": "required",
+      "tags": ["coding", "float", "rounding"],
+      "evaluator": {"kind": "numeric-tolerance", "actualPointer": "", "expected": 16777216, "absoluteTolerance": 0, "relativeTolerance": 0}
+    },
+    {
+      "id": "float.binary64-ulp-distance",
+      "prompt": "Using IEEE-754 binary64 numeric ordering, what is the ULP distance between 1.0 and 1.0000000000000002? Return only the integer.",
+      "opportunity": "required",
+      "tags": ["coding", "float", "ulp"],
+      "evaluator": {"kind": "numeric-tolerance", "actualPointer": "", "expected": 1, "absoluteTolerance": 0, "relativeTolerance": 0}
+    },
+    {
+      "id": "decimal.half-even-quantize",
+      "prompt": "Round the exact decimal 2.675 to two decimal places using decimal round-half-to-even. Return only the decimal number.",
+      "opportunity": "required",
+      "tags": ["coding", "decimal", "rounding"],
+      "evaluator": {"kind": "numeric-tolerance", "actualPointer": "", "expected": 2.68, "absoluteTolerance": 0, "relativeTolerance": 0}
+    },
+    {
+      "id": "integer.euclidean-quotient",
+      "prompt": "Compute the Euclidean-division quotient of -17 divided by 5, with a nonnegative remainder smaller than 5. Return only the quotient integer.",
+      "opportunity": "required",
+      "tags": ["coding", "integer", "division"],
+      "evaluator": {"kind": "numeric-tolerance", "actualPointer": "", "expected": -4, "absoluteTolerance": 0, "relativeTolerance": 0}
+    },
+    {
+      "id": "integer.modular-inverse",
+      "prompt": "Compute the multiplicative inverse of 65537 modulo 3120. Return only the least nonnegative integer residue.",
+      "opportunity": "required",
+      "tags": ["coding", "integer", "modular"],
+      "evaluator": {"kind": "numeric-tolerance", "actualPointer": "", "expected": 2753, "absoluteTolerance": 0, "relativeTolerance": 0}
+    },
+    {
+      "id": "integer.binomial-100-50",
+      "prompt": "Compute the exact binomial coefficient 100 choose 50. Return the integer as a string with no separators.",
+      "opportunity": "required",
+      "tags": ["coding", "integer", "combinatorics"],
+      "evaluator": {"kind": "string-equality", "actualPointer": "", "expected": "100891344545564193334812497256", "trim": true, "caseSensitive": true}
+    },
+    {
+      "id": "integer.large-product",
+      "prompt": "Compute 987654321 multiplied by 123456789 exactly. Return the integer as a string with no separators.",
+      "opportunity": "required",
+      "tags": ["coding", "integer", "exact"],
+      "evaluator": {"kind": "string-equality", "actualPointer": "", "expected": "121932631112635269", "trim": true, "caseSensitive": true}
+    },
+    {
+      "id": "matrix.determinant-4x4",
+      "prompt": "Find the exact determinant of [[17,23,5,11],[31,47,13,19],[2,3,7,29],[37,41,43,53]]. Return only the integer.",
+      "opportunity": "required",
+      "tags": ["coding", "matrix", "exact"],
+      "evaluator": {"kind": "numeric-tolerance", "actualPointer": "", "expected": -78848, "absoluteTolerance": 0, "relativeTolerance": 0}
+    },
+    {
+      "id": "linear-algebra.minimum-norm-coordinate",
+      "prompt": "For the underdetermined equation x + y = 2, take the least-squares solution with minimum Euclidean norm. Return only the value of x.",
+      "opportunity": "required",
+      "tags": ["coding", "matrix", "least-squares"],
+      "evaluator": {"kind": "numeric-tolerance", "actualPointer": "", "expected": 1, "absoluteTolerance": 1e-12, "relativeTolerance": 1e-12}
+    },
+    {
+      "id": "units.gibibyte-to-bits",
+      "prompt": "Convert exactly 1 gibibyte to bits. Return only the integer number of bits.",
+      "opportunity": "required",
+      "tags": ["coding", "units", "data"],
+      "evaluator": {"kind": "numeric-tolerance", "actualPointer": "", "expected": 8589934592, "absoluteTolerance": 0, "relativeTolerance": 0}
+    },
+    {
+      "id": "units.data-rate-to-bytes",
+      "prompt": "A link transfers at exactly 1 gigabit per second for 2.5 seconds. Using decimal SI gigabit, return only the exact number of bytes transferred.",
+      "opportunity": "required",
+      "tags": ["coding", "units", "data-rate"],
+      "evaluator": {"kind": "numeric-tolerance", "actualPointer": "", "expected": 312500000, "absoluteTolerance": 0, "relativeTolerance": 0}
+    },
+    {
+      "id": "units.force-newtons",
+      "prompt": "Compute the force in newtons for a mass of 80 kilograms under an acceleration of 9.81 metres per second squared. Return only the numeric value.",
+      "opportunity": "required",
+      "tags": ["coding", "units", "quantity"],
+      "evaluator": {"kind": "numeric-tolerance", "actualPointer": "", "expected": 784.8, "absoluteTolerance": 1e-12, "relativeTolerance": 1e-12}
+    },
+    {
+      "id": "units.density-si",
+      "prompt": "A payload has mass 5 kilograms and volume 2 litres. Return only its density in kilograms per cubic metre.",
+      "opportunity": "required",
+      "tags": ["coding", "units", "quantity"],
+      "evaluator": {"kind": "numeric-tolerance", "actualPointer": "", "expected": 2500, "absoluteTolerance": 1e-12, "relativeTolerance": 1e-12}
+    },
+    {
+      "id": "measurement.correlated-sum",
+      "prompt": "For z = x + y, x has standard uncertainty 3, y has standard uncertainty 4, and their correlation is exactly +1. Return only the combined standard uncertainty of z.",
+      "opportunity": "required",
+      "tags": ["coding", "statistics", "uncertainty"],
+      "evaluator": {"kind": "numeric-tolerance", "actualPointer": "", "expected": 7, "absoluteTolerance": 1e-12, "relativeTolerance": 1e-12}
+    },
+    {
+      "id": "probability.normal-quantile",
+      "prompt": "Return only the 0.975 quantile of the standard normal distribution, accurate to at least 10 decimal places.",
+      "opportunity": "required",
+      "tags": ["coding", "probability", "quantile"],
+      "evaluator": {"kind": "numeric-tolerance", "actualPointer": "", "expected": 1.9599639845400534, "absoluteTolerance": 1e-10, "relativeTolerance": 1e-10}
+    },
+    {
+      "id": "numeric.integral-sine",
+      "prompt": "Evaluate the definite integral of sin(x) from 0 to pi. Return only the numeric value.",
+      "opportunity": "required",
+      "tags": ["coding", "calculus", "integration"],
+      "evaluator": {"kind": "numeric-tolerance", "actualPointer": "", "expected": 2, "absoluteTolerance": 1e-12, "relativeTolerance": 1e-12}
+    },
+    {
+      "id": "numeric.root-cubic",
+      "prompt": "Find the real root of x^3 - x - 2 in the bracket [1,2]. Return only the root accurate to at least 12 significant digits.",
+      "opportunity": "required",
+      "tags": ["coding", "calculus", "root"],
+      "evaluator": {"kind": "numeric-tolerance", "actualPointer": "", "expected": 1.5213797068045676, "absoluteTolerance": 1e-12, "relativeTolerance": 1e-12}
+    },
+    {
+      "id": "finance.compound-future-value",
+      "prompt": "An account starts with exactly 1000 currency units and compounds by 5 percent once per period for 10 periods, with no additional cash flows. Return only the future value.",
+      "opportunity": "required",
+      "tags": ["coding", "finance", "decimal"],
+      "evaluator": {"kind": "numeric-tolerance", "actualPointer": "", "expected": 1628.8946267774414, "absoluteTolerance": 1e-9, "relativeTolerance": 1e-12}
+    },
+    {
+      "id": "dimension.energy-time-exponent",
+      "prompt": "For E = m*c^2, using mass dimension M and c with dimensions L*T^-1, return only the exponent of T in the resulting dimension of E.",
+      "opportunity": "required",
+      "tags": ["coding", "dimension", "symbolic"],
+      "evaluator": {"kind": "numeric-tolerance", "actualPointer": "", "expected": -2, "absoluteTolerance": 0, "relativeTolerance": 0}
+    },
+    {
+      "id": "optional.simple-percentage",
+      "prompt": "What is 17 percent of 200? Return only the number.",
+      "opportunity": "optional",
+      "tags": ["control", "arithmetic", "simple"],
+      "evaluator": {"kind": "numeric-tolerance", "actualPointer": "", "expected": 34, "absoluteTolerance": 0, "relativeTolerance": 0}
+    },
+    {
+      "id": "optional.simple-gcd",
+      "prompt": "Return only the greatest common divisor of 84 and 126.",
+      "opportunity": "optional",
+      "tags": ["control", "integer", "simple"],
+      "evaluator": {"kind": "numeric-tolerance", "actualPointer": "", "expected": 42, "absoluteTolerance": 0, "relativeTolerance": 0}
+    },
+    {
+      "id": "optional.celsius-to-fahrenheit",
+      "prompt": "Convert 20 degrees Celsius to degrees Fahrenheit. Return only the numeric value.",
+      "opportunity": "optional",
+      "tags": ["control", "units", "simple"],
+      "evaluator": {"kind": "numeric-tolerance", "actualPointer": "", "expected": 68, "absoluteTolerance": 0, "relativeTolerance": 0}
+    },
+    {
+      "id": "irrelevant.marker-string",
+      "prompt": "Return the exact string openadam-eval-marker.",
+      "opportunity": "irrelevant",
+      "tags": ["control", "nonmath", "string"],
+      "evaluator": {"kind": "string-equality", "actualPointer": "", "expected": "openadam-eval-marker", "trim": true, "caseSensitive": true}
+    },
+    {
+      "id": "irrelevant.language-name",
+      "prompt": "Return the exact lowercase programming-language name swift.",
+      "opportunity": "irrelevant",
+      "tags": ["control", "nonmath", "string"],
+      "evaluator": {"kind": "string-equality", "actualPointer": "", "expected": "swift", "trim": true, "caseSensitive": true}
+    },
+    {
+      "id": "irrelevant.identifier-style",
+      "prompt": "Is the identifier mathAnchor written in lowerCamelCase? Return only true or false.",
+      "opportunity": "irrelevant",
+      "tags": ["control", "nonmath", "boolean"],
+      "evaluator": {"kind": "json-equality", "actualPointer": "", "expected": true}
+    }
+  ]
+}

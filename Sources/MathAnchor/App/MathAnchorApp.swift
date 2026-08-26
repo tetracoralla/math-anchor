@@ -13,6 +13,7 @@ struct MathAnchorApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var store: CalculatorStore
     @StateObject private var conversionStore: UnitConversionStore
+    @StateObject private var modeTransition: CalculatorModeTransition
 
     init() {
         let runtime = MathRuntimeService()
@@ -23,17 +24,26 @@ struct MathAnchorApp: App {
                 currencyRuntime: runtime
             )
         )
+        _modeTransition = StateObject(wrappedValue: CalculatorModeTransition())
     }
 
     var body: some Scene {
         WindowGroup("Calculator") {
-            ContentView(store: store, conversionStore: conversionStore)
+            ContentView(
+                store: store,
+                conversionStore: conversionStore,
+                modeTransition: modeTransition
+            )
         }
         .windowStyle(.hiddenTitleBar)
         .defaultPosition(.center)
         .defaultSize(width: CalculatorLayout.basicWidth, height: CalculatorLayout.windowHeight)
         .commands {
-            CalculatorCommands(store: store, conversionStore: conversionStore)
+            CalculatorCommands(
+                store: store,
+                conversionStore: conversionStore,
+                modeTransition: modeTransition
+            )
         }
     }
 }

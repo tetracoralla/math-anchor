@@ -1,0 +1,89 @@
+{
+  "$schema": "../../../agent-tool-evals/schemas/direct-task-suite.schema.json",
+  "schemaVersion": "openadam.agent-tool-eval.direct-task-suite.v0.1",
+  "executionMode": "direct-host",
+  "id": "math-anchor.direct-host.coding-agent-profile",
+  "version": "0.1.0",
+  "title": "Math Anchor structured Coding Agent workload",
+  "targetRef": {"id": "math-anchor", "version": "0.4.0"},
+  "tasks": [
+    {
+      "id": "machine.wrapping-add",
+      "tags": ["coding", "integer", "overflow"],
+      "invocation": {"operationId": "math.run", "input": {"operation": "integer.machine_arithmetic", "arguments": {"action": "add", "left": "250", "right": "20", "bitWidth": 8, "signedness": "unsigned", "inputMode": "value", "overflowBehavior": "wrapping"}}},
+      "evaluator": {"kind": "string-equality", "actualPointer": "/result/decimal", "expected": "14", "trim": false, "caseSensitive": true}
+    },
+    {
+      "id": "bits.rotate-left-u8",
+      "tags": ["coding", "integer", "bitwise"],
+      "invocation": {"operationId": "math.run", "input": {"operation": "integer.bitwise", "arguments": {"action": "rotate_left", "value": "0x81", "count": 1, "bitWidth": 8, "inputMode": "bits"}}},
+      "evaluator": {"kind": "string-equality", "actualPointer": "/result/unsignedDecimal", "expected": "3", "trim": false, "caseSensitive": true}
+    },
+    {
+      "id": "float.binary64-ulp-distance",
+      "tags": ["coding", "float", "ieee754"],
+      "invocation": {"operationId": "math.run", "input": {"operation": "float.ieee754", "arguments": {"action": "compare", "left": "1.0", "right": "1.0000000000000002", "format": "binary64"}}},
+      "evaluator": {"kind": "string-equality", "actualPointer": "/ulpDistance", "expected": "1", "trim": false, "caseSensitive": true}
+    },
+    {
+      "id": "decimal.half-even",
+      "tags": ["coding", "decimal", "rounding"],
+      "invocation": {"operationId": "math.run", "input": {"operation": "decimal.quantize", "arguments": {"action": "decimal_places", "value": "2.675", "decimalPlaces": 2, "roundingMode": "half_even"}}},
+      "evaluator": {"kind": "string-equality", "actualPointer": "/result", "expected": "2.68", "trim": false, "caseSensitive": true}
+    },
+    {
+      "id": "integer.binomial-100-50",
+      "tags": ["coding", "integer", "combinatorics"],
+      "invocation": {"operationId": "math.run", "input": {"operation": "combinatorics.count", "arguments": {"action": "binomial", "n": 100, "k": 50}}},
+      "evaluator": {"kind": "string-equality", "actualPointer": "/exact", "expected": "100891344545564193334812497256", "trim": false, "caseSensitive": true}
+    },
+    {
+      "id": "matrix.determinant-4x4",
+      "tags": ["coding", "matrix", "exact"],
+      "invocation": {"operationId": "math.run", "input": {"operation": "matrix.determinant", "arguments": {"matrix": [[17, 23, 5, 11], [31, 47, 13, 19], [2, 3, 7, 29], [37, 41, 43, 53]]}}},
+      "evaluator": {"kind": "string-equality", "actualPointer": "/exact", "expected": "-78848", "trim": false, "caseSensitive": true}
+    },
+    {
+      "id": "units.gibibyte-to-bits",
+      "tags": ["coding", "units", "data"],
+      "invocation": {"operationId": "math.run", "input": {"operation": "units.convert", "arguments": {"value": "1", "fromUnit": "gibibyte", "toUnit": "bit"}}},
+      "evaluator": {"kind": "string-equality", "actualPointer": "/exact", "expected": "8589934592", "trim": false, "caseSensitive": true}
+    },
+    {
+      "id": "units.force-expression",
+      "tags": ["coding", "units", "quantity"],
+      "invocation": {"operationId": "math.run", "input": {"operation": "quantity.evaluate", "arguments": {"expression": "80 * kg * 9.81 * m / s^2", "toUnit": "newton"}}},
+      "evaluator": {"kind": "string-equality", "actualPointer": "/exact", "expected": "3924/5", "trim": false, "caseSensitive": true}
+    },
+    {
+      "id": "measurement.correlated-uncertainty",
+      "tags": ["coding", "measurement", "uncertainty"],
+      "invocation": {"operationId": "math.run", "input": {"operation": "measurement.propagate", "arguments": {"expression": "x + y", "inputs": {"x": {"value": "10", "standardUncertainty": "3"}, "y": {"value": "20", "standardUncertainty": "4"}}, "correlations": [{"left": "x", "right": "y", "coefficient": "1"}]}}},
+      "evaluator": {"kind": "string-equality", "actualPointer": "/combinedStandardUncertainty/exact", "expected": "7", "trim": false, "caseSensitive": true}
+    },
+    {
+      "id": "probability.normal-quantile",
+      "tags": ["coding", "probability", "quantile"],
+      "invocation": {"operationId": "math.run", "input": {"operation": "probability.distribution", "arguments": {"distribution": "normal", "function": "quantile", "probability": "0.975"}}},
+      "evaluator": {"kind": "numeric-tolerance", "actualPointer": "/value/approx", "expected": 1.959963984540054, "absoluteTolerance": 1e-14, "relativeTolerance": 1e-14}
+    },
+    {
+      "id": "numeric.integral-sine",
+      "tags": ["coding", "calculus", "integration"],
+      "invocation": {"operationId": "math.run", "input": {"operation": "numeric.integrate", "arguments": {"expression": "sin(x)", "variable": "x", "lower": "0", "upper": "3.14159265358979323846", "featureScale": "0.1"}}},
+      "evaluator": {"kind": "numeric-tolerance", "actualPointer": "/approx", "expected": 2, "absoluteTolerance": 1e-12, "relativeTolerance": 1e-12}
+    },
+    {
+      "id": "finance.compound-future-value",
+      "tags": ["coding", "finance", "decimal"],
+      "invocation": {"operationId": "math.run", "input": {"operation": "finance.calculate", "arguments": {"action": "compound_value", "principal": "1000", "annualRate": "0.05", "periodsPerYear": 1, "numberOfPeriods": 10, "decimalPlaces": 12}}},
+      "evaluator": {"kind": "numeric-tolerance", "actualPointer": "/results/0/approx", "expected": 1628.894626777441, "absoluteTolerance": 1e-9, "relativeTolerance": 1e-12}
+    },
+    {
+      "id": "dimension.energy-consistency",
+      "tags": ["coding", "dimension", "symbolic"],
+      "invocation": {"operationId": "math.run", "input": {"operation": "dimension.check", "arguments": {"left": "E", "right": "m * c^2", "symbols": {"E": "joule", "m": "kilogram", "c": "meter / second"}}}},
+      "evaluator": {"kind": "json-equality", "actualPointer": "/dimensionallyConsistent", "expected": true}
+    }
+  ]
+}

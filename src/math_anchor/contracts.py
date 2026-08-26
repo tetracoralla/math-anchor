@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-from collections import Counter
 from copy import deepcopy
-import json
 from typing import Any
 
 from jsonschema import Draft202012Validator
@@ -230,6 +228,17 @@ _VALUE_VECTOR = _VALUE_VECTOR_REF
 _SHAPE = _SHAPE_REF
 _DIMENSION_VECTOR = _DIMENSION_VECTOR_REF
 _DIMENSION_VECTOR_OR_NULL = {"oneOf": [_DIMENSION_VECTOR, {"type": "null"}]}
+_MATRIX_COMPONENT = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "exact": _TEXT_MATRIX,
+        "approx": _TEXT_MATRIX,
+        "precision": {"type": "integer", "minimum": 2},
+        "shape": _SHAPE,
+    },
+    "required": ["exact", "approx", "precision", "shape"],
+}
 _BASE_OK_PROPERTIES = {
     "status": {"const": "ok"},
     "operation": {"type": "string"},
@@ -683,6 +692,100 @@ RUN_RESULT_SCHEMA = {
             ["action", "basis", "dimension", "vectorSize", "precision"],
         ),
         _ok_schema(
+            "exact_eigenspaces",
+            {
+                "action": {"const": "eigenspaces"},
+                "matrixSize": {"type": "integer", "minimum": 1},
+                "diagonalizable": {"type": "boolean"},
+                "eigenspaces": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": {
+                            "eigenvalue": _VALUE,
+                            "algebraicMultiplicity": {"type": "integer", "minimum": 1},
+                            "geometricMultiplicity": {"type": "integer", "minimum": 1},
+                            "basis": {"type": "array", "items": _VALUE_VECTOR},
+                        },
+                        "required": [
+                            "eigenvalue",
+                            "algebraicMultiplicity",
+                            "geometricMultiplicity",
+                            "basis",
+                        ],
+                    },
+                    "minItems": 1,
+                },
+                "precision": {"type": "integer", "minimum": 2},
+            },
+            ["action", "matrixSize", "diagonalizable", "eigenspaces", "precision"],
+        ),
+        _ok_schema(
+            "exact_matrix_decomposition",
+            {
+                "action": {"const": "lu"},
+                "factors": {
+                    "type": "array",
+                    "prefixItems": [
+                        {
+                            "type": "object",
+                            "additionalProperties": False,
+                            "properties": {"name": {"const": "L"}, **_MATRIX_COMPONENT["properties"]},
+                            "required": ["name", *_MATRIX_COMPONENT["required"]],
+                        },
+                        {
+                            "type": "object",
+                            "additionalProperties": False,
+                            "properties": {"name": {"const": "U"}, **_MATRIX_COMPONENT["properties"]},
+                            "required": ["name", *_MATRIX_COMPONENT["required"]],
+                        },
+                    ],
+                    "items": False,
+                    "minItems": 2,
+                    "maxItems": 2,
+                },
+                "permutation": _MATRIX_COMPONENT,
+                "pivotSwaps": {
+                    "type": "array",
+                    "items": {
+                        "type": "array",
+                        "items": {"type": "integer", "minimum": 0},
+                        "minItems": 2,
+                        "maxItems": 2,
+                    },
+                },
+                "relation": {"const": "P*A = L*U"},
+                "precision": {"type": "integer", "minimum": 2},
+            },
+            ["action", "factors", "permutation", "pivotSwaps", "relation", "precision"],
+        ),
+        _ok_schema(
+            "exact_matrix_decomposition",
+            {
+                "action": {"const": "cholesky"},
+                "factors": {
+                    "type": "array",
+                    "prefixItems": [
+                        {
+                            "type": "object",
+                            "additionalProperties": False,
+                            "properties": {"name": {"const": "L"}, **_MATRIX_COMPONENT["properties"]},
+                            "required": ["name", *_MATRIX_COMPONENT["required"]],
+                        },
+                    ],
+                    "items": False,
+                    "minItems": 1,
+                    "maxItems": 1,
+                },
+                "permutation": {"type": "null"},
+                "pivotSwaps": {"type": "array", "maxItems": 0},
+                "relation": {"const": "A = L*L.H"},
+                "precision": {"type": "integer", "minimum": 2},
+            },
+            ["action", "factors", "permutation", "pivotSwaps", "relation", "precision"],
+        ),
+        _ok_schema(
             "exact_matrix_algebra",
             {
                 "action": {"enum": ["matrix_multiply", "transpose"]},
@@ -796,7 +899,17 @@ RUN_RESULT_SCHEMA = {
         _ok_schema(
             "derivative_matrix",
             {
-                "action": {"enum": ["gradient", "jacobian", "hessian"]},
+                "action": {
+                    "enum": [
+                        "gradient",
+                        "jacobian",
+                        "hessian",
+                        "directional_derivative",
+                        "divergence",
+                        "curl",
+                        "laplacian",
+                    ]
+                },
                 "variables": {"type": "array", "items": {"type": "string"}},
                 "exact": _TEXT_MATRIX_OR_NULL,
                 "approx": _TEXT_MATRIX_OR_NULL,
@@ -1566,7 +1679,7 @@ RUN_RESULT_SCHEMA = {
 # Keep the complete per-kind schema above as the runtime validation authority.
 # Advertising that entire union on every tool listing made Agents pay for more
 # than 20 KB of result detail before making an ordinary call. The live tool
-# therefore publishes the stable common envelope and dominant scalar fields;
+# therefore publishes the stable common envelope and dominant scalar/matrix fields;
 # operation-specific output remains structured and is still validated against
 # RUN_RESULT_SCHEMA before it crosses the execution boundary.
 RUN_TOOL_OUTPUT_SCHEMA = {
@@ -1576,15 +1689,18 @@ RUN_TOOL_OUTPUT_SCHEMA = {
         "status": {"enum": ["ok", "uncertain", "error"]},
         "operation": {"type": "string"},
         "kind": {"type": "string"},
-        "exact": _TEXT_OR_NULL,
-        "approx": _TEXT_OR_NULL,
+        "exact": {"oneOf": [_TEXT_OR_NULL, _TEXT_MATRIX]},
+        "approx": {"oneOf": [_TEXT_OR_NULL, _TEXT_MATRIX]},
         "precision": {"type": "integer", "minimum": 2},
         "unit": _TEXT_OR_NULL,
         "warnings": {"type": "array", "items": {"type": "string"}},
         "error": ERROR_RESULT_SCHEMA["properties"]["error"],
     },
     "required": ["status"],
-    "$defs": {"textOrNull": deepcopy(_TEXT_OR_NULL_DEFINITION)},
+    "$defs": {
+        "textOrNull": deepcopy(_TEXT_OR_NULL_DEFINITION),
+        "textMatrix": deepcopy(_TEXT_MATRIX_DEFINITION),
+    },
 }
 
 
@@ -1667,205 +1783,52 @@ def validate_result(result: dict[str, Any]) -> None:
         ) from error
 
 
-def operation_request_variants(
-    operation_schemas: list[tuple[str, dict[str, Any]]],
-    *,
-    include_limits: bool,
-    close_object: bool = True,
-    inherit_root_contract: bool = False,
-) -> list[dict[str, Any]]:
-    variants = []
-    for operation, arguments_schema in operation_schemas:
-        properties = {
-            "operation": {"const": operation},
-            "arguments": deepcopy(arguments_schema),
-        }
-        if include_limits:
-            properties.update(deepcopy(_LIMIT_PROPERTIES))
-        variant = {"properties": properties}
-        if not inherit_root_contract:
-            variant["type"] = "object"
-            variant["required"] = ["operation", "arguments"]
-        if close_object:
-            variant["additionalProperties"] = False
-        variants.append(variant)
-    return variants
+def run_tool_parameters(operation_schemas: list[tuple[str, dict[str, Any]]]) -> dict[str, Any]:
+    """Return the always-listed, Codex-host-safe execution envelope.
 
-
-def _compress_schema_references(schema: dict[str, Any]) -> dict[str, Any]:
-    """Deduplicate repeated input-schema fragments for MCP discovery.
-
-    Runtime validation and math.describe keep the registry's expanded schemas.
-    Only the combined math.run discovery schema uses local JSON Schema refs, so
-    adding typed operations does not linearly repeat shared decimal, matrix,
-    expression, and limit shapes in every tool listing.
+    Current Codex hosts compact input schemas larger than roughly 5 KB. A full
+    44-branch tagged union crosses that boundary and loses its argument surface
+    before the model sees it. Keep the stable operation IDs and execution
+    limits fully typed here; ``math.describe`` publishes the exact closed
+    argument schema for one selected operation, and runtime validation still
+    consumes the same registry schema before execution.
     """
 
-    def fingerprint(value: dict[str, Any]) -> str:
-        return json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
-
-    def child_schemas(value: dict[str, Any]) -> list[dict[str, Any]]:
-        children: list[dict[str, Any]] = []
-        for container_name in ("properties", "$defs"):
-            container = value.get(container_name)
-            if isinstance(container, dict):
-                children.extend(item for item in container.values() if isinstance(item, dict))
-        for child_name in (
-            "items",
-            "additionalProperties",
-            "propertyNames",
-            "contains",
-            "not",
-            "if",
-            "then",
-            "else",
-        ):
-            child = value.get(child_name)
-            if isinstance(child, dict):
-                children.append(child)
-        for list_name in ("oneOf", "anyOf", "allOf", "prefixItems"):
-            items = value.get(list_name)
-            if isinstance(items, list):
-                children.extend(item for item in items if isinstance(item, dict))
-        return children
-
-    counts: Counter[str] = Counter()
-    originals: dict[str, dict[str, Any]] = {}
-
-    def count(value: dict[str, Any]) -> None:
-        serialized = fingerprint(value)
-        counts[serialized] += 1
-        originals.setdefault(serialized, value)
-        for child in child_schemas(value):
-            count(child)
-
-    count(schema)
-    selected = set()
-    for serialized, occurrences in counts.items():
-        if occurrences < 2 or '"$ref"' in serialized:
-            continue
-        size = len(serialized.encode("utf-8"))
-        # A local reference currently costs at most 28 bytes and its compact
-        # definition key at most 8. Select a fragment only when replacing every
-        # duplicate has a real serialized saving plus a small safety margin.
-        # This retains small schemas inline while allowing highly repeated
-        # 40–79 byte programmer/limit fragments to earn their way into $defs.
-        estimated_saving = (occurrences - 1) * size - occurrences * 28 - 8
-        if estimated_saving >= 0:
-            selected.add(serialized)
-    # These definitions live only inside one generated schema, so compact,
-    # deterministic ordinal names carry the same semantics as long hashes and
-    # save every Agent from paying for repeated 12-character suffixes.
-    names = {
-        serialized: f"s{index}"
-        for index, serialized in enumerate(sorted(selected))
-    }
-
-    def replace(value: dict[str, Any], *, skip: str | None = None) -> dict[str, Any]:
-        serialized = fingerprint(value)
-        if serialized in selected and serialized != skip:
-            return {"$ref": f"#/$defs/{names[serialized]}"}
-        output = deepcopy(value)
-        for container_name in ("properties", "$defs"):
-            container = output.get(container_name)
-            if isinstance(container, dict):
-                output[container_name] = {
-                    key: replace(item, skip=skip) if isinstance(item, dict) else item
-                    for key, item in container.items()
-                }
-        for child_name in (
-            "items",
-            "additionalProperties",
-            "propertyNames",
-            "contains",
-            "not",
-            "if",
-            "then",
-            "else",
-        ):
-            child = output.get(child_name)
-            if isinstance(child, dict):
-                output[child_name] = replace(child, skip=skip)
-        for list_name in ("oneOf", "anyOf", "allOf", "prefixItems"):
-            items = output.get(list_name)
-            if isinstance(items, list):
-                output[list_name] = [
-                    replace(item, skip=skip) if isinstance(item, dict) else item
-                    for item in items
-                ]
-        return output
-
-    compressed = replace(schema)
-    definitions = {
-        names[serialized]: replace(originals[serialized], skip=serialized)
-        for serialized in selected
-    }
-    referenced: set[str] = set()
-
-    def collect_references(value: Any) -> None:
-        if isinstance(value, dict):
-            reference = value.get("$ref")
-            if isinstance(reference, str) and reference.startswith("#/$defs/"):
-                referenced.add(reference.rsplit("/", 1)[-1])
-            for child in value.values():
-                collect_references(child)
-        elif isinstance(value, list):
-            for child in value:
-                collect_references(child)
-
-    collect_references(compressed)
-    while True:
-        previous = set(referenced)
-        for name in previous:
-            collect_references(definitions[name])
-        if referenced == previous:
-            break
-    compressed["$defs"] = {
-        name: definitions[name]
-        for name in sorted(referenced)
-    }
-    return compressed
-
-
-def run_tool_parameters(operation_schemas: list[tuple[str, dict[str, Any]]]) -> dict[str, Any]:
-    expanded = {
+    operation_ids = [operation for operation, _ in operation_schemas]
+    return {
         "title": "math_runArguments",
         "type": "object",
         "additionalProperties": False,
         "properties": {
             "operation": {
                 "type": "string",
-                "maxLength": 128,
-                "description": "Operation ID; each oneOf branch below fixes the allowed value and its typed arguments.",
+                "enum": operation_ids,
+                "description": "Stable operation ID. Use math.describe once if its exact arguments are unfamiliar.",
             },
-            "arguments": {"type": "object"},
+            "arguments": {
+                "type": "object",
+                "description": "Operation-specific object. Unknown fields are rejected by the selected registry contract before execution.",
+            },
             **deepcopy(_LIMIT_PROPERTIES),
         },
         "required": ["operation", "arguments"],
-        "oneOf": operation_request_variants(
-            operation_schemas,
-            include_limits=False,
-            close_object=False,
-            inherit_root_contract=True,
-        ),
     }
-    # Operation descriptions remain available from math.search/math.describe.
-    # Repeating them in the always-advertised union makes every Agent pay for
-    # prose it usually does not need and leaves very little carrier headroom as
-    # the registry grows. Keep every structural constraint, default, and enum;
-    # remove only non-validating annotations from this discovery projection.
-    def strip_annotations(value: Any) -> None:
-        if isinstance(value, dict):
-            value.pop("description", None)
-            value.pop("title", None)
-            for child in value.values():
-                strip_annotations(child)
-        elif isinstance(value, list):
-            for child in value:
-                strip_annotations(child)
 
-    strip_annotations(expanded)
-    return _compress_schema_references(expanded)
+
+def describe_tool_parameters(operation_schemas: list[tuple[str, dict[str, Any]]]) -> dict[str, Any]:
+    return {
+        "title": "math_describeArguments",
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "operation": {
+                "type": "string",
+                "enum": [operation for operation, _ in operation_schemas],
+                "description": "Selected operation whose exact closed input schema and examples are needed.",
+            }
+        },
+        "required": ["operation"],
+    }
 
 
 def batch_item_parameters() -> dict[str, Any]:

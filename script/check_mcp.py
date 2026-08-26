@@ -17,25 +17,8 @@ from mcp.types import (
     ClientNotification,
 )
 
-from math_anchor import __version__
 from math_anchor.catalog import OPERATIONS
 from plugin_server import plugin_server_parameters, tools_listing_bytes
-
-
-def schema_is_closed(schema: dict | bool, root: dict) -> bool:
-    if isinstance(schema, bool):
-        return schema is False
-    reference = schema.get("$ref")
-    if isinstance(reference, str) and reference.startswith("#/$defs/"):
-        schema = root["$defs"][reference.rsplit("/", 1)[-1]]
-    # A closed outer object remains closed when oneOf adds conditional field
-    # constraints. Those nested branches are not independent object surfaces
-    # and therefore do not need their own additionalProperties keyword.
-    if schema.get("additionalProperties") is False:
-        return True
-    if "oneOf" in schema:
-        return all(schema_is_closed(variant, root) for variant in schema["oneOf"])
-    return False
 
 
 def persistent_worker_cpu_seconds() -> dict[int, float]:
@@ -52,19 +35,27 @@ def persistent_worker_cpu_seconds() -> dict[int, float]:
 async def main(plugin_root: Path | None = None) -> None:
     root = Path(__file__).resolve().parent.parent
     selected_plugin = plugin_root or root / "plugins/math-anchor"
+    expected_version = json.loads(
+        (selected_plugin / ".codex-plugin" / "plugin.json").read_text(encoding="utf-8")
+    )["version"]
     parameters = plugin_server_parameters(selected_plugin)
     server_errors = tempfile.TemporaryFile(mode="w+", encoding="utf-8")
     async with stdio_client(parameters, errlog=server_errors) as (read_stream, write_stream):
         async with ClientSession(read_stream, write_stream) as session:
             initialized = await session.initialize()
-            assert initialized.serverInfo.version == __version__
+            assert initialized.serverInfo.version == expected_version
             listed = await session.list_tools()
             names = sorted(tool.name for tool in listed.tools)
             assert names == ["math.batch", "math.describe", "math.run", "math.search"]
             assert all(tool.annotations and tool.annotations.readOnlyHint for tool in listed.tools)
             run_tool = next(tool for tool in listed.tools if tool.name == "math.run")
             batch_tool = next(tool for tool in listed.tools if tool.name == "math.batch")
-            assert len(run_tool.inputSchema["oneOf"]) == len(OPERATIONS)
+            assert "fixed-width overflow" in run_tool.description
+            assert "Do not use for trivial low-risk arithmetic" in run_tool.description
+            assert "{operation, arguments}; never flatten" in run_tool.description
+            describe_tool = next(tool for tool in listed.tools if tool.name == "math.describe")
+            assert "nest one under math.run.arguments" in describe_tool.description
+            assert set(run_tool.inputSchema["properties"]["operation"]["enum"]) == set(OPERATIONS)
             run_schema_bytes = len(
                 json.dumps(run_tool.inputSchema, ensure_ascii=False, separators=(",", ":")).encode()
             )
@@ -78,12 +69,12 @@ async def main(plugin_root: Path | None = None) -> None:
             assert all(tool.inputSchema["additionalProperties"] is False for tool in listed.tools)
             assert "oneOf" not in batch_tool.inputSchema["properties"]["items"]["items"]
             assert batch_schema_bytes < 2_000
-            assert listed_bytes < 40_000
+            assert run_schema_bytes < 4_800
+            assert not ({"oneOf", "anyOf", "allOf", "$defs"} & set(run_tool.inputSchema))
+            assert listed_bytes < 10_000
             assert run_tool.inputSchema["additionalProperties"] is False
-            assert all(
-                schema_is_closed(variant["properties"]["arguments"], run_tool.inputSchema)
-                for variant in run_tool.inputSchema["oneOf"]
-            )
+            assert run_tool.inputSchema["properties"]["arguments"]["type"] == "object"
+            assert set(describe_tool.inputSchema["properties"]["operation"]["enum"]) == set(OPERATIONS)
             assert run_output_schema_bytes < 2_000
             assert run_tool.outputSchema["required"] == ["status"]
             assert {"exact", "approx", "warnings", "error"} <= set(
@@ -233,6 +224,54 @@ async def main(plugin_root: Path | None = None) -> None:
             assert linear_system.structuredContent["classification"] == "unique"
             assert [item["exact"] for item in linear_system.structuredContent["particular"]] == ["4", "3"]
 
+            vector_calculus = await session.call_tool(
+                "math.run",
+                {
+                    "operation": "calculus.multivariate",
+                    "arguments": {
+                        "action": "curl",
+                        "expressions": ["y*z", "x*z", "x*y"],
+                        "variables": ["x", "y", "z"],
+                    },
+                },
+            )
+            assert vector_calculus.structuredContent["exact"] == [["0"], ["0"], ["0"]]
+            invalid_direction = await session.call_tool(
+                "math.run",
+                {
+                    "operation": "calculus.multivariate",
+                    "arguments": {
+                        "action": "directional_derivative",
+                        "expression": "x^2 + y^2",
+                        "variables": ["x", "y"],
+                        "direction": [1],
+                    },
+                },
+            )
+            assert invalid_direction.isError is True
+            assert invalid_direction.structuredContent["error"]["code"] == "E_INPUT"
+
+            eigenspaces = await session.call_tool(
+                "math.run",
+                {
+                    "operation": "matrix.reduce",
+                    "arguments": {"action": "eigenspaces", "matrix": [[2, 1], [0, 2]]},
+                },
+            )
+            assert eigenspaces.structuredContent["diagonalizable"] is False
+            assert eigenspaces.structuredContent["eigenspaces"][0]["geometricMultiplicity"] == 1
+            cholesky = await session.call_tool(
+                "math.run",
+                {
+                    "operation": "matrix.reduce",
+                    "arguments": {"action": "cholesky", "matrix": [[4, 2], [2, 3]]},
+                },
+            )
+            assert cholesky.structuredContent["factors"][0]["exact"] == [
+                ["2", "0"],
+                ["1", "sqrt(2)"],
+            ]
+
             searched = await session.call_tool("math.search", {"query": "integrate"})
             assert searched.structuredContent["operations"][0]["id"] == "calculus.integrate"
 
@@ -368,6 +407,14 @@ async def main(plugin_root: Path | None = None) -> None:
                 {"operation": "expression.evaluate", "arguments": {"expression": "sqrt(2)", "precision": 50}},
             )
             assert evaluated.structuredContent["exact"] == "sqrt(2)"
+            special_function = await session.call_tool(
+                "math.run",
+                {
+                    "operation": "expression.evaluate",
+                    "arguments": {"expression": "beta(2, 3) + polygamma(1, 1)"},
+                },
+            )
+            assert special_function.structuredContent["exact"] == "1/12 + pi**2/6"
 
             misspelled = await session.call_tool(
                 "math.run",
@@ -400,6 +447,16 @@ async def main(plugin_root: Path | None = None) -> None:
             assert undefined.isError is True
             assert undefined.structuredContent["status"] == "error"
             assert undefined.structuredContent["error"]["code"] == "E_DOMAIN"
+
+            syntax_error = await session.call_tool(
+                "math.run",
+                {"operation": "expression.evaluate", "arguments": {"expression": "1+"}},
+            )
+            assert syntax_error.isError is True
+            assert syntax_error.structuredContent["status"] == "error"
+            assert syntax_error.structuredContent["error"]["code"] == "E_SYNTAX"
+            assert syntax_error.structuredContent["error"]["phase"] == "input"
+            assert syntax_error.structuredContent["error"]["suggestedAction"] == "correct_input"
 
             float_eigenvalues = await session.call_tool(
                 "math.run",
@@ -744,7 +801,23 @@ async def main(plugin_root: Path | None = None) -> None:
                     },
                 )
             )
-            await asyncio.sleep(0.3)
+            # Identify the worker that is actually consuming CPU for this
+            # request. The pool may also contain idle workers, and after
+            # cancellation it deliberately starts a replacement prewarm; PID
+            # identity keeps both from being mistaken for the cancelled job.
+            active_workers: set[int] = set()
+            previous_workers = persistent_worker_cpu_seconds()
+            active_deadline = time.monotonic() + 2
+            while not active_workers and time.monotonic() < active_deadline:
+                await asyncio.sleep(0.1)
+                current_workers = persistent_worker_cpu_seconds()
+                active_workers = {
+                    pid
+                    for pid, cpu in current_workers.items()
+                    if pid in previous_workers and cpu - previous_workers[pid] > 0.04
+                }
+                previous_workers = current_workers
+            assert active_workers, "no active persistent worker observed during cancellable call"
             await session.send_notification(
                 ClientNotification(
                     CancelledNotification(
@@ -762,15 +835,14 @@ async def main(plugin_root: Path | None = None) -> None:
                 pass
             else:  # pragma: no cover - the server must reject the cancelled request
                 raise AssertionError("cancelled MCP request unexpectedly completed")
-            workers_before = persistent_worker_cpu_seconds()
-            await asyncio.sleep(0.5)
-            workers_after = persistent_worker_cpu_seconds()
-            leaked = {
-                pid: round(cpu - workers_before[pid], 3)
-                for pid, cpu in workers_after.items()
-                if pid in workers_before and cpu - workers_before[pid] > 0.35
-            }
-            assert not leaked, f"workers kept computing after cancellation: {leaked}"
+            cleanup_deadline = time.monotonic() + 2
+            remaining_active = active_workers
+            while remaining_active and time.monotonic() < cleanup_deadline:
+                await asyncio.sleep(0.05)
+                remaining_active &= set(persistent_worker_cpu_seconds())
+            assert not remaining_active, (
+                f"cancelled active workers remained alive after cleanup: {sorted(remaining_active)}"
+            )
             recovered_after_cancel = await asyncio.wait_for(
                 session.call_tool(
                     "math.run",
@@ -800,10 +872,10 @@ async def main(plugin_root: Path | None = None) -> None:
     print(
         "MCP runtime check passed through plugin transport: one-call typed run, multilingual discovery, "
         "description, equivalence and solution verification, stable unit discovery, calendar-safe conversions, unit expressions, symbolic dimensional analysis and Pi groups, financial math, stability-aware "
-        "linear solving, exact vector algebra, diagnostic SVD, numerical integration, extended probability distributions, comparative inference, covariance uncertainty propagation, standard algebra, exact/high-precision results, "
+        "linear solving, vector calculus, exact eigenspaces and decompositions, exact vector algebra, diagnostic SVD, numerical integration, extended probability distributions, comparative inference, covariance uncertainty propagation, registered special functions, standard algebra, exact/high-precision results, "
         "schema rejection, MCP tool-error signaling, domain errors, precision provenance, large integer output, ordered partial batch, cancellation recovery, "
         "and unsafe-input rejection. "
-        f"math.run advertises {len(run_tool.inputSchema['oneOf'])} input variants in {run_schema_bytes} bytes; "
+        f"math.run advertises {len(run_tool.inputSchema['properties']['operation']['enum'])} operation ids in a Codex-host-safe {run_schema_bytes}-byte envelope; "
         f"its result contract is {run_output_schema_bytes} bytes; "
         f"compact math.batch input is {batch_schema_bytes} bytes and all four listed tools total {listed_bytes} bytes; "
         f"five warm expression calls completed in {warm_elapsed:.3f}s."

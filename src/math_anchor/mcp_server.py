@@ -18,7 +18,14 @@ from .catalog import (
     operation_schemas,
     search_operations,
 )
-from .contracts import BATCH_RESULT_SCHEMA, RUN_TOOL_OUTPUT_SCHEMA, batch_item_parameters, batch_tool_parameters, run_tool_parameters
+from .contracts import (
+    BATCH_RESULT_SCHEMA,
+    RUN_TOOL_OUTPUT_SCHEMA,
+    batch_item_parameters,
+    batch_tool_parameters,
+    describe_tool_parameters,
+    run_tool_parameters,
+)
 from .errors import CalculatorError, error_payload
 from .output_policy import DEFAULT_BATCH_MAX_OUTPUT_BYTES, DEFAULT_MAX_OUTPUT_BYTES
 from .runtime_control import MAX_ACTIVE_REQUESTS, MAX_QUEUED_REQUESTS
@@ -68,7 +75,13 @@ def _caught(callable_: Any, *arguments: Any) -> dict[str, Any]:
 @mcp.tool(
     name="math.run",
     title="Run a mathematical operation",
-    description="Calculate, solve, verify, differentiate, integrate, analyze dimensions, convert units, or run another supported typed operation. Exact and approximate results stay separate. One successful ordinary call is sufficient.",
+    description=(
+        "Use for exact or reliability-sensitive mathematics, especially fixed-width overflow and bits, "
+        "IEEE-754, named rounding or division conventions, large integers, matrices, units and dimensions, "
+        "uncertainty, probability, numerical methods, or finance. Do not use for trivial low-risk arithmetic. "
+        "Always pass operation-specific fields inside the arguments object: {operation, arguments}; never flatten them. "
+        "The typed operation keeps exact and approximate results separate; one successful ordinary call is sufficient."
+    ),
     annotations=_READ_ONLY,
     structured_output=True,
 )
@@ -136,7 +149,10 @@ def math_search(
 @mcp.tool(
     name="math.describe",
     title="Describe a mathematical operation",
-    description="Get schema and examples for one operation selected by math.search.",
+    description=(
+        "Get schema and argument examples for one operation selected by math.search. "
+        "Examples are arguments objects; nest one under math.run.arguments and pass its id as math.run.operation."
+    ),
     annotations=_READ_ONLY,
     structured_output=True,
 )
@@ -238,6 +254,7 @@ def _install_generated_tool_contracts() -> None:
     search_tool.parameters["additionalProperties"] = False
     describe_tool.parameters["additionalProperties"] = False
     run_tool.parameters = run_tool_parameters(schemas)
+    describe_tool.parameters = describe_tool_parameters(schemas)
     run_tool.__dict__["output_schema"] = RUN_TOOL_OUTPUT_SCHEMA
     batch_tool.parameters = batch_tool_parameters()
     batch_tool.__dict__["output_schema"] = BATCH_RESULT_SCHEMA

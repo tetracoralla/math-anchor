@@ -237,8 +237,10 @@ def test_batch_coalesces_identical_items_without_changing_logical_results(monkey
 
 def test_batch_output_abort_signals_running_siblings(monkeypatch) -> None:
     cancelled: list[str] = []
+    all_started = threading.Barrier(3)
 
     def fake_run(operation, arguments, *, cancel_event, **_limits):
+        all_started.wait(timeout=1)
         if arguments["value"] == "large":
             return {
                 "status": "ok",
@@ -304,6 +306,26 @@ def test_runtime_telemetry_records_only_operational_aggregates(monkeypatch) -> N
     assert snapshot["counters"]["requests.single"] == 1
     assert snapshot["timings"]["requests.totalMs"]["count"] == 1
     assert "secret-value" not in repr(snapshot)
+
+
+def test_cancelled_worker_start_is_not_reported_as_provider_failure(monkeypatch) -> None:
+    def cancelled_start(*_args, **_kwargs):
+        return None, sandbox._error("E_CANCELLED", "startup cancelled")
+
+    RUNTIME_TELEMETRY.reset()
+    monkeypatch.setattr(sandbox, "_start_worker_impl", cancelled_start)
+    worker, error = sandbox._start_worker(
+        sandbox.DEFAULT_MEMORY_MB * 1024 * 1024,
+        deadline=time.monotonic() + 1,
+        timeout_ms=1_000,
+        cancel_event=threading.Event(),
+    )
+
+    assert worker is None
+    assert error is not None and error["error"]["code"] == "E_CANCELLED"
+    counters = RUNTIME_TELEMETRY.snapshot()["counters"]
+    assert counters["workers.startCancelled"] == 1
+    assert "workers.startFailed" not in counters
 
 
 def test_worker_recycles_after_bounded_request_count_and_adaptively_refills(

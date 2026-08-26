@@ -48,6 +48,12 @@ def test_expression_is_secondary_only_after_evaluation() -> None:
 
     assert "if store.isShowingResult" in display
     assert 'accessibilityLabel(store.isShowingResult ? "Result" : "Expression")' in display
+    # The visual secondary expression is intentionally folded into the
+    # primary Result value. This avoids SwiftUI's accidental Expression-only
+    # flattening while keeping one concise VoiceOver focus stop.
+    assert ".accessibilityHidden(true)" in display
+    assert '"\\(store.expressionForDisplay) equals \\(store.display)"' in display
+    assert ".accessibilityValue(displayAccessibilityValue)" in display
 
 
 def test_mode_menu_uses_the_visible_rounded_rectangle_as_its_trigger() -> None:
@@ -159,7 +165,18 @@ def test_conversion_popovers_and_text_editing_own_keyboard_focus() -> None:
         ROOT / "Sources/MathAnchor/Support/CalculatorKeyboardMonitor.swift"
     ).read_text()
     content = (ROOT / "Sources/MathAnchor/Views/ContentView.swift").read_text()
+    transition = (
+        ROOT / "Sources/MathAnchor/Support/CalculatorModeTransition.swift"
+    ).read_text()
+    commands = (ROOT / "Sources/MathAnchor/App/CalculatorCommands.swift").read_text()
 
     assert "shouldDeferToFocusedTextInput" in keyboard
     assert "conversionStore.dismissActivePopover()" in keyboard
-    assert "conversionStore.dismissActivePopover()" in content
+    assert "modeTransition.select" in content
+    assert "modeTransition.toggleModeMenu" in content
+    assert "isPopoverDismissalSettling" in transition
+    assert "Task.sleep(for: delay)" in transition
+    assert transition.index("conversionStore.dismissActivePopover()") < transition.index("deferAction")
+    assert transition.index("deferAction") < transition.index("calculatorStore.selectMode(mode)")
+    assert "store.selectMode(" not in commands
+    assert commands.count("modeTransition.select(") == 3

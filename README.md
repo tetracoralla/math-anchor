@@ -3,9 +3,9 @@
 Math Anchor is one product with two quiet entry points:
 
 - a native macOS calculator for people, with familiar basic/scientific input, lightweight offline physical-unit conversion, ECB reference currency conversion with visible source and freshness, a read-only calculator display, optional exact-value copy, and local history;
-- a safe scientific runtime for Agents, with one-call typed execution through `math.run` and optional discovery or batch tools.
+- a safe scientific runtime for Agents, with one-call execution for known operations through a Codex-host-safe `math.run` envelope and exact per-operation contracts available on demand.
 
-Both surfaces use the same Python calculation core. The Agent catalog currently provides 44 typed operations spanning exact and high-precision arithmetic, explicit decimal rounding and integer-division conventions, fixed-width machine arithmetic, programmer representations and bit operations, IEEE-754 inspection, algebra and calculus, verification, numerical methods, exact and diagnostic numerical linear algebra, number theory, combinatorics, finance, probability and statistical inference, covariance-based measurement-uncertainty propagation, stable unit discovery and conversion, unit-bearing expressions, and symbolic dimensional analysis. The project reuses SymPy, NumPy, mpmath, and Pint for mathematics; its own work is the safe parser, capability catalog, structured result contract, isolation boundary, human app, and Agent-facing interface.
+Both surfaces use the same Python calculation core. The Agent catalog currently provides 44 typed operations spanning exact and high-precision arithmetic, explicit decimal rounding and integer-division conventions, fixed-width machine arithmetic, programmer representations and bit operations, IEEE-754 inspection, symbolic and vector calculus, verification, numerical methods, exact eigenspaces and matrix decompositions, diagnostic numerical linear algebra, number theory, combinatorics, finance, probability and statistical inference, covariance-based measurement-uncertainty propagation, stable unit discovery and conversion, unit-bearing expressions, and symbolic dimensional analysis. The safe expression grammar includes registered Airy, Bessel, beta/gamma, error, Lambert W, polygamma, and zeta functions without admitting arbitrary code. The project reuses SymPy, NumPy, mpmath, and Pint for mathematics; its own work is the safe parser, capability catalog, structured result contract, isolation boundary, human app, and Agent-facing interface.
 
 Currency conversion is an online, human-app feature calculated from the European Central Bank's daily euro reference rates. The interface shows the source, publication time, and current or expired state; cached rates remain explicitly marked when a refresh cannot complete. These rates are informational and are not transaction quotes. Currency conversion remains an app-internal request and does not add another public MCP tool or Agent operation.
 
@@ -28,14 +28,20 @@ Currency conversion is an online, human-app feature calculated from the European
   and are never presented as civil date arithmetic.
 - Exact vector/matrix algebra is separate from binary64 least squares, QR, SVD,
   and pseudoinverse operations with rank, condition, and residual diagnostics.
+- `calculus.multivariate` now adds unnormalized directional derivatives,
+  divergence, curl, and the Laplacian without adding another public operation.
+  `matrix.reduce` adds exact eigenspaces with diagonalizability plus LU and
+  Cholesky decompositions while continuing to reject approximate structural
+  claims.
 - Probability and inference add Beta, Gamma, lognormal, paired/two-sample t,
   and chi-square methods. `measurement.propagate` adds first-order covariance
   propagation with positive-semidefinite correlation validation.
 - Agent execution now has bounded admission, a 4 GiB weighted request-memory
   budget, a reserved interactive lane during batches, safe duplicate batch
   coalescing, real sibling cancellation, adaptive worker recycling/prewarming,
-  a provider circuit breaker, and stable retry guidance. The four-tool listing
-  remains below its 40,000-byte discovery veto.
+  a provider circuit breaker, and stable retry guidance. Every always-listed
+  input schema remains below the current Codex host's lossy-compaction boundary,
+  and the complete four-tool listing remains below a 10,000-byte regression.
 
 ## What's new in 0.2
 
@@ -111,10 +117,10 @@ grows:
 
 | Tool | Use |
 | --- | --- |
-| `math.run` | Run one known typed operation. This is the normal one-call route. |
+| `math.run` | Run one known operation from the complete stable-id enum. This is the normal one-call route. |
 | `math.batch` | Run 1 to 32 independent operations in input order. |
 | `math.search` | Find an operation only when its stable id is not already known. |
-| `math.describe` | Retrieve the exact schema and examples for one selected unfamiliar operation. |
+| `math.describe` | Retrieve the exact closed argument schema and examples for one selected unfamiliar operation. |
 
 Exact and approximate results remain separate. Mathematical and dimensional
 expressions pass explicit AST allowlists rather than Python evaluation, and
@@ -125,6 +131,14 @@ High-frequency structured callers should keep one MCP session open and call the
 same four tools directly; they do not need a model turn per calculation. See
 [docs/agent-runtime.md](docs/agent-runtime.md) for admission, retries, load
 evidence, and direct-host usage.
+
+Coding Agent adoption and conditional utility are measured through the
+repo-owned paired corpus in [docs/agent-evaluation.md](docs/agent-evaluation.md),
+including a single-Plugin installed Skill/MCP smoke kept separate from
+transport conformance, ambient user configuration, and direct-host performance.
+The zero-model structured route has its own cold direct-host smoke via
+`script/direct_host_eval.py`; repeated production calls should reuse one MCP
+session or use `math.batch`, not start one Agent turn per calculation.
 
 The installable Codex Plugin source is in `plugins/math-anchor/`.
 

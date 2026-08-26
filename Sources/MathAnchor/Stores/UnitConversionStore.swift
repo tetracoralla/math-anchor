@@ -18,7 +18,13 @@ final class UnitConversionStore: ObservableObject {
     @Published private(set) var distinctExactResult: String?
     @Published private(set) var rateMetadata: CurrencyRateMetadata?
     @Published private(set) var rateMessage: String?
-    @Published private(set) var activePopover: ConversionPopover?
+    @Published private(set) var activePopover: ConversionPopover? {
+        didSet {
+            if oldValue != nil, activePopover == nil {
+                lastPopoverDismissal = popoverClock.now
+            }
+        }
+    }
     @Published private(set) var isShowingDelayedProgress = false
 
     private let runtime: any UnitConverting
@@ -31,6 +37,8 @@ final class UnitConversionStore: ObservableObject {
     private var inputComesFromResult = false
     private var completedSourceUnit: UnitDefinition?
     private var completedTargetUnit: UnitDefinition?
+    private let popoverClock = ContinuousClock()
+    private var lastPopoverDismissal: ContinuousClock.Instant?
 
     init(
         runtime: any UnitConverting,
@@ -175,6 +183,11 @@ final class UnitConversionStore: ObservableObject {
         guard activePopover != nil else { return false }
         activePopover = nil
         return true
+    }
+
+    func isPopoverDismissalSettling(for duration: Duration) -> Bool {
+        guard let lastPopoverDismissal else { return false }
+        return lastPopoverDismissal.duration(to: popoverClock.now) < duration
     }
 
     func copyResult() {

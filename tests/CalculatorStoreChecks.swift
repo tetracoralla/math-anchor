@@ -559,10 +559,47 @@ struct CalculatorStoreChecks {
             "value-only currency edits keep the previous result and rate footer stable"
         )
         await waitForConversion(currencyStore)
-        currencyStore.setPopover(.sourceUnit, presented: true)
-        check(currencyStore.activePopover == .sourceUnit, "conversion owns one active popover")
-        check(currencyStore.dismissActivePopover(), "escape path can dismiss the active conversion popover")
-        check(currencyStore.activePopover == nil, "dismissal leaves no popover across a mode transition")
+        failureStore.selectMode(.conversion)
+        currencyStore.setPopover(.rateDetails, presented: true)
+        check(currencyStore.activePopover == .rateDetails, "conversion owns one active popover")
+        let modeTransition = CalculatorModeTransition(popoverSettleDelay: .milliseconds(20))
+        modeTransition.select(
+            .basic,
+            calculatorStore: failureStore,
+            conversionStore: currencyStore
+        )
+        check(currencyStore.activePopover == nil, "mode transition dismisses the conversion popover")
+        check(failureStore.mode == .conversion, "mode transition retains the popover anchor while dismissal settles")
+        try? await Task.sleep(for: .milliseconds(30))
+        check(failureStore.mode == .basic, "mode transition completes after popover dismissal")
+
+        failureStore.selectMode(.conversion)
+        currencyStore.setPopover(.rateDetails, presented: true)
+        modeTransition.toggleModeMenu(
+            calculatorStore: failureStore,
+            conversionStore: currencyStore
+        )
+        check(!failureStore.isModePopoverPresented, "mode menu waits for the previous popover to settle")
+        try? await Task.sleep(for: .milliseconds(30))
+        check(failureStore.isModePopoverPresented, "mode menu opens after the previous popover settles")
+
+        failureStore.isModePopoverPresented = false
+        currencyStore.setPopover(.rateDetails, presented: true)
+        currencyStore.setPopover(.rateDetails, presented: false)
+        modeTransition.select(
+            .basic,
+            calculatorStore: failureStore,
+            conversionStore: currencyStore
+        )
+        check(
+            failureStore.mode == .conversion,
+            "mode transition recognizes an AppKit-initiated popover dismissal"
+        )
+        try? await Task.sleep(for: .milliseconds(30))
+        check(
+            failureStore.mode == .basic,
+            "mode transition waits after an AppKit-initiated popover dismissal"
+        )
 
         let expiredCurrencyStore = UnitConversionStore(
             runtime: SuccessfulUnitRuntime(),
@@ -901,6 +938,48 @@ struct CalculatorStoreChecks {
             "abandoned evaluation does not occupy the runtime until its timeout"
         )
         _ = await abandonedEvaluation.value
+
+        // A mode transition is also an explicit abandonment boundary. The
+        // real app shares one local runtime between expression evaluation and
+        // physical conversion, so this composed sequence must cancel the old
+        // CPU-heavy request before activating conversion.
+        let modeSwitchRuntime = MathRuntimeService(requestTimeout: 3)
+        let modeSwitchWarmup = try? await modeSwitchRuntime.evaluate(
+            expression: "1+1",
+            precision: 16
+        )
+        check(modeSwitchWarmup?.exact == "2", "mode-switch runtime starts warm")
+        let modeSwitchStore = CalculatorStore(
+            runtime: modeSwitchRuntime,
+            historyStore: history,
+            clipboard: clipboard
+        )
+        let modeSwitchConversionStore = UnitConversionStore(
+            runtime: modeSwitchRuntime,
+            clipboard: clipboard
+        )
+        modeSwitchStore.selectMode(.scientific)
+        modeSwitchStore.replaceExpression("factorial(5000)^10000")
+        modeSwitchStore.evaluate()
+        try? await Task.sleep(for: .milliseconds(50))
+        let modeSwitchStart = Date()
+        let liveModeTransition = CalculatorModeTransition(popoverSettleDelay: .milliseconds(20))
+        liveModeTransition.select(
+            .conversion,
+            calculatorStore: modeSwitchStore,
+            conversionStore: modeSwitchConversionStore
+        )
+        await waitForConversion(modeSwitchConversionStore)
+        let modeSwitchElapsed = Date().timeIntervalSince(modeSwitchStart)
+        check(modeSwitchStore.mode == .conversion, "heavy evaluation switches to conversion mode")
+        check(!modeSwitchStore.isEvaluating, "mode switch clears calculator progress")
+        check(modeSwitchConversionStore.errorMessage == nil, "first conversion survives the mode switch")
+        check(modeSwitchConversionStore.output != "—", "first conversion produces a result")
+        check(
+            modeSwitchElapsed < 1.5,
+            "mode switch releases the shared runtime before the old evaluation deadline"
+        )
+
         let warmStart = Date()
         for _ in 0..<20 {
             let result = try? await liveRuntime.evaluate(expression: "6*7", precision: 16)

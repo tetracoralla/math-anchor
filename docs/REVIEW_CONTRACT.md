@@ -36,14 +36,16 @@ benchmark number.
 
 1. **One operation model, four public tools.** The public MCP surface is exactly
    `math.search`, `math.describe`, `math.run`, and `math.batch`.
-   `math.run` accepts the operation-specific closed schema generated from the
-   registry. `math.batch` stays compact while validating each item against the
+   `math.run` advertises the complete stable operation-id enum in a compact,
+   closed top-level envelope that survives the current Codex host. The exact
+   closed argument schema comes from the registry through `math.describe` and
+   is enforced before execution; `math.batch` validates each item against that
    same registry contract. Add mathematics to the registry, not as another
    public tool. The operation count is derived from current source, not frozen
    in prose.
 2. **Direct routing stays cheap.** A caller that knows the operation ID can use
-   `math.run` in one call. Search and describe are for genuine discovery, not a
-   mandatory preflight. Batch takes 1–32 independent items, preserves input
+   `math.run` in one call. Search and describe are for genuinely unknown ids or
+   unfamiliar argument contracts, not a mandatory preflight for known work. Batch takes 1–32 independent items, preserves input
    order, and returns per-item failure without converting a valid partial batch
    into a whole-call transport failure.
 3. **Exactness and provenance remain typed.** Exact and approximate values stay
@@ -73,8 +75,11 @@ benchmark number.
    oversized workers are evicted. Repeated infrastructure faults open the
    circuit and return `E_UNAVAILABLE`; a half-open probe and later healthy call
    restore service without a process restart.
-8. **Output and discovery costs are explicit.** The complete listed MCP tool
-   envelope remains below the repository budget of 40,000 encoded bytes. The
+8. **Output and discovery costs are explicit.** Every always-listed input
+   schema remains below the 4,800-byte current-Codex compatibility regression,
+   the root `math.run` schema must retain typed operation and arguments fields
+   after host normalization, and the complete listed tool envelope remains
+   below 10,000 encoded bytes. The
    default single and batch result limits remain 64 KiB and 128 KiB, with the
    documented 1 KiB–1 MiB caller range. `resultMode` may remove redundant
    representations but cannot change mathematical meaning or hide uncertainty.
@@ -112,6 +117,8 @@ the normal suite:
 - packaged runtime startup without a source checkout or development-only
   environment, current installed-plugin routing, and a cold natural-language
   task that reaches the intended public tool;
+- the current `evals/agent/` routing smoke before any larger paired run, then a
+  reviewed three-repeat utility estimate when making an Agent-value claim;
 - macOS launch, keyboard-only calculation, history, human-only currency cache
   and stale/failure paths, app relaunch, and visible error recovery.
 
@@ -136,15 +143,38 @@ protocol probe, a bounded load/recovery run, plugin packaging, and release
 hygiene. For focused iteration, use the owning narrow test first, then return to
 the complete command before closeout.
 
-The load harness is:
+The bounded representative load harness is:
 
 ```sh
-python3 script/load_check.py --calls 1000
+.venv/bin/python script/load_check.py --calls 1000
 ```
 
-Its default development run is not a universal production SLA. Use the longer
-documented soak and a representative concurrent profile when making an actual
-capacity claim.
+Its default Coding Agent profile verifies 13 deterministic operation families
+through serial, concurrent, failure, cancellation, crash, recovery, and cleanup
+phases. It is not a universal production SLA. A capacity claim also requires a
+current explicit wall-clock soak such as:
+
+```sh
+.venv/bin/python script/load_check.py --calls 10000 --concurrency 8 --sustained-seconds 300
+```
+
+Report the observed machine, profile, operation mix, throughput, tails, queue
+time, error/recovery state, RSS trend, and cleanup residue; do not generalize
+the receipt beyond those conditions.
+
+The paired Coding Agent route and its exact model-call confirmations are
+documented in `docs/agent-evaluation.md`. A valid report controls only the
+named Agent, suite, harness, driver, budgets, versions, and conditions. A
+correct final answer without treatment tool use is no adoption, and a baseline
+target call invalidates comparison.
+
+The direct-host lane is separate: it accepts only already structured provider
+invocations, has no Agent or paired conditions, and cannot claim routing,
+adoption, token savings, or utility deltas. Its cold per-process latency is not
+warm-session throughput. Review its deterministic grading, provider/driver
+identity, oracle denial, bounds, unknown-cost handling, and report semantics
+through `.venv/bin/python script/direct_host_eval.py validate`; use the representative
+load harness for persistent-session frequency and cleanup evidence.
 
 Keep evidence lanes separate:
 

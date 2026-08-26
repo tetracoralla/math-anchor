@@ -364,7 +364,7 @@ _SPECS = (
         id="expression.evaluate",
         category="expression",
         summary="Evaluate an arithmetic or scientific expression.",
-        description="Evaluate a safe expression with exact symbolic arithmetic where possible and an explicit approximation.",
+        description="Evaluate a safe expression with exact symbolic arithmetic where possible and an explicit approximation, including registered Airy, Bessel, beta, gamma, error, Lambert W, polygamma, and zeta functions.",
         input_schema=_object(
             {
                 "expression": _EXPRESSION,
@@ -379,10 +379,11 @@ _SPECS = (
         ),
         examples=(
             {"expression": "sqrt(2)", "precision": 50},
+            {"expression": "airyai(0) + bessely(0, 1) + polygamma(1, 1)", "precision": 40},
             {"expression": "power * hours * days", "variables": {"power": 72, "hours": 9.5, "days": 30}},
         ),
         handler=expression.evaluate,
-        keywords=("calculate", "arithmetic", "scientific", "trigonometry", "logarithm", "计算", "算术", "科学计算"),
+        keywords=("calculate", "arithmetic", "scientific", "trigonometry", "logarithm", "Airy", "Bessel", "beta", "gamma", "polygamma", "special functions", "计算", "算术", "科学计算", "特殊函数"),
     ),
     OperationSpec(
         id="expression.simplify",
@@ -681,13 +682,13 @@ _SPECS = (
     OperationSpec(
         id="calculus.multivariate",
         category="calculus",
-        summary="Compute a gradient, Jacobian, or Hessian.",
-        description="Differentiate one scalar expression or a vector of expressions with respect to an ordered variable list.",
+        summary="Compute scalar or vector multivariate derivatives.",
+        description="Compute a gradient, Jacobian, Hessian, unnormalized directional derivative, divergence, curl, or Laplacian with respect to an ordered variable list.",
         input_schema={
             "oneOf": [
                 _object(
                     {
-                        "action": {"type": "string", "enum": ["gradient", "hessian"]},
+                        "action": {"type": "string", "enum": ["gradient", "hessian", "laplacian"]},
                         "expression": _EXPRESSION,
                         "variables": {**_VARIABLES, "maxItems": 8},
                         "precision": _PRECISION,
@@ -696,7 +697,7 @@ _SPECS = (
                 ),
                 _object(
                     {
-                        "action": {"const": "jacobian"},
+                        "action": {"type": "string", "enum": ["jacobian", "divergence", "curl"]},
                         "expressions": {
                             "type": "array",
                             "items": _EXPRESSION,
@@ -708,14 +709,30 @@ _SPECS = (
                     },
                     ("action", "expressions", "variables"),
                 ),
+                _object(
+                    {
+                        "action": {"const": "directional_derivative"},
+                        "expression": _EXPRESSION,
+                        "variables": {**_VARIABLES, "maxItems": 8},
+                        "direction": {
+                            **_EXACT_VECTOR,
+                            "maxItems": 8,
+                            "description": "Exact vector applied as supplied; it is not normalized.",
+                        },
+                        "precision": _PRECISION,
+                    },
+                    ("action", "expression", "variables", "direction"),
+                ),
             ]
         },
         examples=(
             {"action": "gradient", "expression": "x^2 + x*y + y^2", "variables": ["x", "y"]},
             {"action": "jacobian", "expressions": ["x*y", "x+y"], "variables": ["x", "y"]},
+            {"action": "curl", "expressions": ["y*z", "x*z", "x*y"], "variables": ["x", "y", "z"]},
+            {"action": "directional_derivative", "expression": "x^2 + y^2", "variables": ["x", "y"], "direction": [3, 4]},
         ),
         handler=calculus.multivariate,
-        keywords=("gradient", "Jacobian", "Hessian", "multivariable", "梯度", "雅可比", "海森矩阵", "多元微分"),
+        keywords=("gradient", "Jacobian", "Hessian", "directional derivative", "divergence", "curl", "Laplacian", "multivariable", "梯度", "雅可比", "海森矩阵", "方向导数", "散度", "旋度", "拉普拉斯算子", "多元微分"),
     ),
     OperationSpec(
         id="numeric.root",
@@ -1256,11 +1273,11 @@ _SPECS = (
     OperationSpec(
         id="matrix.reduce",
         category="matrix",
-        summary="Compute exact rank, RREF, nullspace, or column space.",
-        description="Apply one exact structural matrix operation; approximate floating entries are rejected because rank and basis classification require an explicit tolerance policy.",
+        summary="Compute exact matrix structure, eigenspaces, or a decomposition.",
+        description="Compute rank, RREF, nullspace, column space, eigenspaces with diagonalizability, LU, or Cholesky over exact entries; approximate floating entries are rejected.",
         input_schema=_object(
             {
-                "action": {"type": "string", "enum": ["rank", "rref", "nullspace", "columnspace"]},
+                "action": {"type": "string", "enum": ["rank", "rref", "nullspace", "columnspace", "eigenspaces", "lu", "cholesky"]},
                 "matrix": _EXACT_MATRIX,
                 "precision": _PRECISION,
             },
@@ -1269,9 +1286,11 @@ _SPECS = (
         examples=(
             {"action": "rref", "matrix": [[1, 2, 3], [2, 4, 6]]},
             {"action": "nullspace", "matrix": [[1, 2], [2, 4]]},
+            {"action": "eigenspaces", "matrix": [[2, 1], [0, 2]]},
+            {"action": "cholesky", "matrix": [[4, 2], [2, 3]]},
         ),
         handler=matrix.reduce,
-        keywords=("rank", "row reduce", "RREF", "null space", "column space", "秩", "行最简形", "零空间", "列空间"),
+        keywords=("rank", "row reduce", "RREF", "null space", "column space", "eigenvectors", "eigenspaces", "diagonalizable", "LU", "Cholesky", "秩", "行最简形", "零空间", "列空间", "特征向量", "特征空间", "可对角化", "LU分解", "Cholesky分解"),
     ),
     OperationSpec(
         id="linear_algebra.exact",

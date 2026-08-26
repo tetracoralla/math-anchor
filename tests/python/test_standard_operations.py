@@ -38,6 +38,9 @@ def test_catalog_contains_the_explicit_standard_operation_set() -> None:
     assert search_operations("质因数分解")["operations"][0]["id"] == "integer.factorization"
     assert search_operations("线性方程组")["operations"][0]["id"] == "matrix.solve"
     assert search_operations("泰勒展开")["operations"][0]["id"] == "calculus.series"
+    assert search_operations("旋度")["operations"][0]["id"] == "calculus.multivariate"
+    assert search_operations("特征空间")["operations"][0]["id"] == "matrix.reduce"
+    assert search_operations("Airy special function")["operations"][0]["id"] == "expression.evaluate"
 
 
 def test_algebra_transform_has_explicit_semantics() -> None:
@@ -166,6 +169,60 @@ def test_matrix_reduction_is_exact_and_rejects_implicit_float_tolerance() -> Non
     assert decimal_text.value.code == "E_INPUT"
 
 
+def test_exact_eigenspaces_report_multiplicity_and_diagonalizability() -> None:
+    diagonal = execute_direct(
+        "matrix.reduce",
+        {"action": "eigenspaces", "matrix": [[2, 0], [0, 3]]},
+    )
+    assert diagonal["kind"] == "exact_eigenspaces"
+    assert diagonal["diagonalizable"] is True
+    assert [space["eigenvalue"]["exact"] for space in diagonal["eigenspaces"]] == ["2", "3"]
+    assert [space["algebraicMultiplicity"] for space in diagonal["eigenspaces"]] == [1, 1]
+    assert [space["geometricMultiplicity"] for space in diagonal["eigenspaces"]] == [1, 1]
+
+    defective = execute_direct(
+        "matrix.reduce",
+        {"action": "eigenspaces", "matrix": [[2, 1], [0, 2]]},
+    )
+    assert defective["diagonalizable"] is False
+    assert defective["eigenspaces"][0]["algebraicMultiplicity"] == 2
+    assert defective["eigenspaces"][0]["geometricMultiplicity"] == 1
+    assert defective["warnings"]
+
+    with pytest.raises(CalculatorError) as nonsquare:
+        execute_direct("matrix.reduce", {"action": "eigenspaces", "matrix": [[1, 2, 3]]})
+    assert nonsquare.value.code == "E_INPUT"
+
+
+def test_exact_lu_and_cholesky_return_explicit_factor_relations() -> None:
+    lu = execute_direct(
+        "matrix.reduce",
+        {"action": "lu", "matrix": [[0, 1], [2, 3]]},
+    )
+    assert lu["kind"] == "exact_matrix_decomposition"
+    assert lu["relation"] == "P*A = L*U"
+    assert lu["pivotSwaps"] == [[0, 1]]
+    assert lu["permutation"]["exact"] == [["0", "1"], ["1", "0"]]
+    assert lu["factors"][0]["name"] == "L"
+    assert lu["factors"][1]["exact"] == [["2", "3"], ["0", "1"]]
+
+    cholesky = execute_direct(
+        "matrix.reduce",
+        {"action": "cholesky", "matrix": [[4, 2], [2, 3]]},
+    )
+    assert cholesky["relation"] == "A = L*L.H"
+    assert cholesky["factors"][0]["exact"] == [["2", "0"], ["1", "sqrt(2)"]]
+    assert cholesky["permutation"] is None
+
+    with pytest.raises(CalculatorError) as nonsymmetric:
+        execute_direct("matrix.reduce", {"action": "cholesky", "matrix": [[1, 2], [0, 1]]})
+    assert nonsymmetric.value.code == "E_DOMAIN"
+
+    with pytest.raises(CalculatorError) as indefinite:
+        execute_direct("matrix.reduce", {"action": "cholesky", "matrix": [[1, 2], [2, 1]]})
+    assert indefinite.value.code == "E_DOMAIN"
+
+
 def test_series_and_multivariate_derivatives_preserve_symbolic_results() -> None:
     series = execute_direct(
         "calculus.series",
@@ -191,6 +248,92 @@ def test_series_and_multivariate_derivatives_preserve_symbolic_results() -> None
         {"action": "hessian", "expression": "x^2 + x*y + y^2", "variables": ["x", "y"]},
     )
     assert hessian["exact"] == [["2", "1"], ["1", "2"]]
+
+    directional = execute_direct(
+        "calculus.multivariate",
+        {
+            "action": "directional_derivative",
+            "expression": "x^2 + y^2",
+            "variables": ["x", "y"],
+            "direction": [3, 4],
+        },
+    )
+    assert directional["exact"] == [["6*x + 8*y"]]
+
+    divergence = execute_direct(
+        "calculus.multivariate",
+        {
+            "action": "divergence",
+            "expressions": ["x^2", "x*y", "z^2"],
+            "variables": ["x", "y", "z"],
+        },
+    )
+    assert divergence["exact"] == [["3*x + 2*z"]]
+
+    curl = execute_direct(
+        "calculus.multivariate",
+        {
+            "action": "curl",
+            "expressions": ["y*z", "x*z", "x*y"],
+            "variables": ["x", "y", "z"],
+        },
+    )
+    assert curl["exact"] == [["0"], ["0"], ["0"]]
+
+    laplacian = execute_direct(
+        "calculus.multivariate",
+        {"action": "laplacian", "expression": "x^2 + y^2 + z^2", "variables": ["x", "y", "z"]},
+    )
+    assert laplacian["exact"] == [["6"]]
+
+
+@pytest.mark.parametrize(
+    ("arguments", "code"),
+    [
+        (
+            {
+                "action": "directional_derivative",
+                "expression": "x^2 + y^2",
+                "variables": ["x", "y"],
+                "direction": [1],
+            },
+            "E_INPUT",
+        ),
+        (
+            {
+                "action": "directional_derivative",
+                "expression": "x^2 + y^2",
+                "variables": ["x", "y"],
+                "direction": [0, 0],
+            },
+            "E_DOMAIN",
+        ),
+        (
+            {
+                "action": "directional_derivative",
+                "expression": "x^2 + y^2",
+                "variables": ["x", "y"],
+                "direction": [0.5, 1],
+            },
+            "E_INPUT",
+        ),
+        (
+            {"action": "divergence", "expressions": ["x", "y"], "variables": ["x", "y", "z"]},
+            "E_INPUT",
+        ),
+        (
+            {"action": "curl", "expressions": ["y", "x"], "variables": ["x", "y"]},
+            "E_INPUT",
+        ),
+    ],
+)
+def test_multivariate_vector_calculus_rejects_ambiguous_shapes(
+    arguments: dict[str, object],
+    code: str,
+) -> None:
+    with pytest.raises(CalculatorError) as raised:
+        execute_direct("calculus.multivariate", arguments)
+    assert raised.value.code == code
 
 
 def test_statistics_contract_now_returns_the_advertised_range() -> None:

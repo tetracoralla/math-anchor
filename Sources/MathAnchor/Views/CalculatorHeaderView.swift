@@ -2,6 +2,8 @@ import SwiftUI
 
 struct CalculatorHeaderView: View {
     @ObservedObject var store: CalculatorStore
+    let onToggleModeMenu: () -> Void
+    let onSelectMode: (CalculatorMode) -> Void
 
     var body: some View {
         HStack(spacing: 9) {
@@ -64,7 +66,7 @@ struct CalculatorHeaderView: View {
 
     private var modeMenu: some View {
         Button {
-            store.isModePopoverPresented.toggle()
+            onToggleModeMenu()
         } label: {
             modeHeaderControl
         }
@@ -93,7 +95,7 @@ struct CalculatorHeaderView: View {
         VStack(spacing: 4) {
             ForEach(CalculatorMode.allCases) { mode in
                 Button {
-                    store.selectMode(mode)
+                    onSelectMode(mode)
                 } label: {
                     HStack(spacing: 10) {
                         CalculatorModeIcon(mode: mode, size: 12)

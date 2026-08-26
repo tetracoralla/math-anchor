@@ -12,6 +12,7 @@ _INPUT_CODES = {
     "E_LIMIT",
     "E_NAME",
     "E_OPERATION",
+    "E_SYNTAX",
     "E_UNIT",
 }
 

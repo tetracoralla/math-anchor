@@ -70,6 +70,20 @@ def test_undefined_expression_is_a_domain_error(expression: str) -> None:
     assert caught.value.code == "E_DOMAIN"
 
 
+def test_syntax_error_is_a_correctable_input_failure() -> None:
+    # Negative regression: malformed but safe input used to inherit the
+    # execution/stop fallback, telling an Agent to abandon a request it can
+    # correct locally.
+    with pytest.raises(CalculatorError) as caught:
+        execute_direct("expression.evaluate", {"expression": "1+"})
+
+    assert caught.value.code == "E_SYNTAX"
+    payload = caught.value.as_dict()
+    assert payload["phase"] == "input"
+    assert payload["suggestedAction"] == "correct_input"
+    assert payload["retryable"] is False
+
+
 def test_symbolic_solve_and_calculus() -> None:
     solved = execute_direct(
         "algebra.solve",

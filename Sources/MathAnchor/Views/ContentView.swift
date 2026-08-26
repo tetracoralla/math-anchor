@@ -3,6 +3,7 @@ import SwiftUI
 struct ContentView: View {
     @ObservedObject var store: CalculatorStore
     @ObservedObject var conversionStore: UnitConversionStore
+    let modeTransition: CalculatorModeTransition
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var calculatorWidth: CGFloat {
@@ -25,7 +26,22 @@ struct ContentView: View {
 
             HStack(spacing: 0) {
                 VStack(spacing: 0) {
-                    CalculatorHeaderView(store: store)
+                    CalculatorHeaderView(
+                        store: store,
+                        onToggleModeMenu: {
+                            modeTransition.toggleModeMenu(
+                                calculatorStore: store,
+                                conversionStore: conversionStore
+                            )
+                        },
+                        onSelectMode: { mode in
+                            modeTransition.select(
+                                mode,
+                                calculatorStore: store,
+                                conversionStore: conversionStore
+                            )
+                        }
+                    )
                     if store.mode == .conversion {
                         ConversionDisplayView(store: conversionStore)
                     } else {
@@ -89,11 +105,5 @@ struct ContentView: View {
             )
         )
         .calculatorKeyboard(store, conversionStore: conversionStore)
-        .onChange(of: store.mode) { _, mode in
-            conversionStore.dismissActivePopover()
-            if mode == .conversion {
-                conversionStore.activate()
-            }
-        }
     }
 }

@@ -9,6 +9,29 @@ and Apple notarization record exist.
 
 ### Added
 
+- Expanded the existing `calculus.multivariate` operation with exact
+  unnormalized directional derivatives, divergence, three-dimensional curl,
+  and the Laplacian. Expanded `matrix.reduce` with exact eigenspaces and
+  diagonalizability plus row-pivoted LU and positive-definite Hermitian
+  Cholesky decompositions, including explicit factor relations and negative
+  shape/domain regressions. The registry remains at 44 operations and the MCP
+  boundary remains four tools.
+- Added safe-expression registrations for Airy Ai/Bi, Bessel Y, beta, and
+  polygamma alongside the existing Bessel J, gamma, error, Lambert W, and zeta
+  functions; calls still pass the explicit AST/function whitelist.
+- Added a 30-task paired Coding Agent evaluation corpus, independent
+  Controller-side expected-value checks, natural-routing smoke, and an
+  exact-model-call-confirmed runner that keeps reports out of source control;
+  separate unassisted and provider-neutral-policy lanes prevent spontaneous MCP
+  discovery from being conflated with policy-guided routing. A disposable
+  single-Plugin Codex lane separately measures installed Skill/MCP activation
+  without unrelated user Plugin contamination.
+- Added a separate zero-model direct-host cold-smoke lane for 13 structured
+  Coding Agent workloads. It fingerprints the local driver, OS-denies the
+  provider from Controller oracles, grades typed Math Anchor results, preserves
+  unknown cost, and stays structurally separate from Agent routing and utility
+  claims.
+
 - Expanded the typed Agent registry from 34 to 44 operations without adding a
   fifth MCP tool: programmer integer/bitwise semantics, decimal quantization,
   explicit signed division, stable unit search, exact vector algebra,
@@ -26,12 +49,40 @@ and Apple notarization record exist.
   average-duration policy with a non-civil-calendar warning.
 - Added a repeatable supervisor load/soak gate (`script/load_check.py`, a
   10,000-call default lane; the complete development verification runs the
-  1,000-call form) covering serial and 8-way traffic, batch
-  ordering/coalescing, cancellation storms, worker-crash recovery, and parent
-  process/thread/file-descriptor/RSS cleanup.
+  1,000-call form) whose 13-case Coding Agent profile verifies representative
+  programmer, numeric, unit, uncertainty, finance, and dimension results under
+  serial and concurrent traffic, mixed caller failures, batch
+  ordering/coalescing, cancellation storms, worker-crash recovery, bounded
+  latency sampling, process-tree RSS trend, and final resource cleanup.
 
 ### Fixed
 
+- Kept the installed Codex `math.run` declaration typed by replacing the
+  oversized always-listed 44-branch union with a 1.8 KB host-safe envelope
+  carrying every stable operation id and execution limit. Exact closed
+  argument schemas remain registry-owned, are returned by `math.describe`, and
+  are still enforced before execution; current Codex no longer compacts the
+  entire model-facing call into `args: unknown`.
+- Gave this expanded capability milestone the distinct `0.4.0` package
+  identity and added byte-for-byte source-versus-cache validation plus a fresh
+  Codex Skill-path check to the installation workflow, preventing an older
+  runtime from remaining active behind the same version.
+- Serialized conversion-popover dismissal, mode-menu presentation, and every
+  pointer/menu/shortcut mode transition so the anchor remains mounted until
+  AppKit finishes closing its panel, preventing an AX-invisible ECB rate
+  popover from remaining over the Basic keypad until app restart.
+
+- Kept matrix-valued `exact` and `approx` results valid in the compact advertised
+  `math.run` output contract, closing a carrier rejection that affected existing
+  gradient, Jacobian, and Hessian results as well as the new vector-calculus lane.
+- Cancel and join an in-flight adaptive worker prewarm during runtime shutdown,
+  classify the cancellation separately from provider startup failure, and make
+  the load gate require zero residual child, thread, and file-descriptor deltas.
+- Made the installed calculation Skill explicitly classify fixed-width,
+  wrapping/saturating, bit-operation, and IEEE-754 tasks as nontrivial machine
+  semantics, and repeated the required `{operation, arguments}` nesting at the
+  Skill and MCP discovery boundaries so an Agent does not flatten a known
+  operation into an invalid `math.run` call.
 - Returned exact positive infinity for valid Beta and Gamma density
   singularities at support boundaries instead of leaking an internal
   `E_RUNTIME` failure.

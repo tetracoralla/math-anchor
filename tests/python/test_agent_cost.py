@@ -6,8 +6,9 @@ import threading
 
 import pytest
 from pydantic import ValidationError
+from jsonschema import Draft202012Validator
 
-from math_anchor.catalog import OPERATIONS
+from math_anchor.catalog import OPERATIONS, describe_operation
 from math_anchor.contracts import (
     RUN_RESULT_SCHEMA,
     RUN_TOOL_OUTPUT_SCHEMA,
@@ -40,7 +41,7 @@ def _tool_payload(name: str) -> dict:
     }
 
 
-def test_tool_discovery_keeps_the_full_input_contract_without_republishing_every_result_kind() -> None:
+def test_tool_discovery_survives_current_codex_host_compaction() -> None:
     payloads = [
         _tool_payload(name)
         for name in ("math.search", "math.describe", "math.run", "math.batch")
@@ -48,21 +49,24 @@ def test_tool_discovery_keeps_the_full_input_contract_without_republishing_every
     listed_bytes = len(json.dumps(payloads, separators=(",", ":")).encode())
     run_tool = mcp._tool_manager.get_tool("math.run")
     assert run_tool is not None
-    assert "One successful ordinary call is sufficient" in run_tool.description
+    assert "one successful ordinary call is sufficient" in run_tool.description
+    assert "{operation, arguments}; never flatten" in run_tool.description
     output_bytes = len(
         json.dumps(run_tool.output_schema, separators=(",", ":")).encode()
     )
 
-    assert len(run_tool.parameters["oneOf"]) == len(OPERATIONS)
-    assert "enum" not in run_tool.parameters["properties"]["operation"]
-    assert {
-        variant["properties"]["operation"]["const"]
-        for variant in run_tool.parameters["oneOf"]
-    } == set(OPERATIONS)
-    assert all("type" not in variant for variant in run_tool.parameters["oneOf"])
-    assert all("required" not in variant for variant in run_tool.parameters["oneOf"])
+    input_bytes = len(
+        json.dumps(run_tool.parameters, separators=(",", ":")).encode()
+    )
+    assert input_bytes < 4_800
+    assert not ({"oneOf", "anyOf", "allOf", "$defs"} & set(run_tool.parameters))
+    assert set(run_tool.parameters["properties"]["operation"]["enum"]) == set(OPERATIONS)
+    assert run_tool.parameters["properties"]["arguments"]["type"] == "object"
     assert output_bytes < 2_000
-    assert listed_bytes < 40_000
+    # Codex currently applies lossy model-facing compaction above roughly 5 KB
+    # per input schema. Stay below it so math.run never degrades to an opaque
+    # args object in the installed host.
+    assert listed_bytes < 10_000
     assert run_tool.parameters["properties"]["maxOutputBytes"]["default"] == DEFAULT_MAX_OUTPUT_BYTES
     batch_tool = mcp._tool_manager.get_tool("math.batch")
     assert batch_tool is not None
@@ -74,13 +78,87 @@ def test_tool_discovery_keeps_the_full_input_contract_without_republishing_every
     assert describe_tool is not None
     assert search_tool.parameters["properties"]["query"]["maxLength"] == 256
     assert search_tool.parameters["properties"]["category"]["anyOf"][0]["maxLength"] == 64
-    assert describe_tool.parameters["properties"]["operation"]["maxLength"] == 128
+    assert set(describe_tool.parameters["properties"]["operation"]["enum"]) == set(OPERATIONS)
     for name in ("math.search", "math.describe", "math.run", "math.batch"):
         tool = mcp._tool_manager.get_tool(name)
         assert tool is not None
         assert tool.parameters["additionalProperties"] is False
         with pytest.raises(ValidationError):
             tool.fn_metadata.arg_model.model_validate({"unexpected": True})
+
+
+def test_compact_run_output_schema_accepts_scalar_and_matrix_lanes_only() -> None:
+    run_tool = mcp._tool_manager.get_tool("math.run")
+    assert run_tool is not None
+    validator = Draft202012Validator(run_tool.output_schema)
+
+    for result in (
+        {"status": "ok", "exact": "sqrt(2)", "approx": "1.414"},
+        {
+            "status": "ok",
+            "exact": [["1", "0"], ["0", "1"]],
+            "approx": [["1", "0"], ["0", "1"]],
+        },
+    ):
+        assert not list(validator.iter_errors(result))
+
+    assert list(
+        validator.iter_errors({"status": "ok", "exact": {"unexpected": True}})
+    )
+
+
+def test_registry_preserves_every_operation_schema_behind_the_host_safe_envelope() -> None:
+    run_tool = mcp._tool_manager.get_tool("math.run")
+    assert run_tool is not None
+    envelope_validator = Draft202012Validator(run_tool.parameters)
+
+    for operation, spec in OPERATIONS.items():
+        for arguments in spec.examples:
+            request = {"operation": operation, "arguments": arguments}
+            assert not list(envelope_validator.iter_errors(request)), operation
+            assert not list(Draft202012Validator(spec.input_schema).iter_errors(arguments)), operation
+
+        # The always-listed host envelope deliberately leaves the selected
+        # arguments object open; the registry remains the execution authority
+        # and must still reject unknown fields before engine work.
+        invalid = {
+            "operation": operation,
+            "arguments": {**spec.examples[0], "__unexpected": True},
+        }
+        assert not list(envelope_validator.iter_errors(invalid)), operation
+        assert list(
+            Draft202012Validator(spec.input_schema).iter_errors(invalid["arguments"])
+        ), operation
+
+        # Discovery prose and the complete expanded operation schema remain
+        # available on demand even though the always-listed union is compact.
+        described = describe_operation(operation)["operation"]
+        assert described["description"] == spec.description
+        assert described["inputSchema"] == spec.input_schema
+
+    assert list(
+        envelope_validator.iter_errors(
+            {"operation": "expression.evaluate", "arguments": "1+1"}
+        )
+    )
+
+
+def test_math_run_envelope_keeps_operation_arguments_nested() -> None:
+    run_tool = mcp._tool_manager.get_tool("math.run")
+    assert run_tool is not None
+    valid = {
+        "operation": "integer.machine_arithmetic",
+        "arguments": {
+            "action": "add",
+            "left": "250",
+            "right": "20",
+            "bitWidth": 8,
+            "overflowBehavior": "wrapping",
+        },
+    }
+    assert run_tool.fn_metadata.arg_model.model_validate(valid).operation == valid["operation"]
+    with pytest.raises(ValidationError):
+        run_tool.fn_metadata.arg_model.model_validate(valid["arguments"])
 
 
 def test_advertised_budgets_match_executed_defaults() -> None:

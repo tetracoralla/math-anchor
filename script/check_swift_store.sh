@@ -29,6 +29,7 @@ swiftc \
   "$ROOT_DIR/Sources/MathAnchor/Support/ConversionDisplayFormatting.swift" \
   "$ROOT_DIR/Sources/MathAnchor/Support/MathDisplayFormatting.swift" \
   "$ROOT_DIR/Sources/MathAnchor/Support/CalculatorKeyboardMonitor.swift" \
+  "$ROOT_DIR/Sources/MathAnchor/Support/CalculatorModeTransition.swift" \
   "$ROOT_DIR/Sources/MathAnchor/Stores/HistoryStore.swift" \
   "$ROOT_DIR/Sources/MathAnchor/Stores/CalculatorStore.swift" \
   "$ROOT_DIR/Sources/MathAnchor/Stores/UnitConversionStore.swift" \

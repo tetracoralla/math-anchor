@@ -46,9 +46,10 @@ additional curated physical categories listed below.
   remain the related flows. No additional public MCP tool is introduced.
 - Every operation is one registry entry with a bounded, discriminated input
   schema, a safe handler, an internally enforced strict result schema,
-  examples, and multilingual discovery terms. The MCP listing advertises only
-  the common result envelope so Agents do not pay for the entire result union
-  before each call.
+  examples, and multilingual discovery terms. The always-listed `math.run`
+  envelope advertises every stable id but keeps exact per-operation arguments
+  in `math.describe`, so current Codex hosts preserve the typed root instead of
+  compacting a large union to an opaque object.
 - Symbolic expressions continue through the explicit AST translator. Unit
   expressions and symbolic dimension expressions use separate smaller AST
   whitelists because a name means a unit in the former and a declared symbol
@@ -56,8 +57,8 @@ additional curated physical categories listed below.
 - Exact values, decimal/binary approximations, error bounds, residuals, and
   method-dependent conclusions remain distinct fields.
 - The current catalog contains 44 operations, but the public surface remains
-  four tools. The complete listing stays below the enforced 40,000-byte schema
-  budget through deterministic local references rather than weaker validation.
+  four tools. Every listed input stays below the current Codex 4,800-byte
+  compatibility regression; registry validation remains complete and closed.
 
 ## Sequencing and acceptance
 

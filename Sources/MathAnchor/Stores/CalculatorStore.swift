@@ -54,6 +54,12 @@ final class CalculatorStore: ObservableObject {
     }
 
     func selectMode(_ mode: CalculatorMode) {
+        if self.mode != mode {
+            // A calculation belongs to the mode in which it was submitted.
+            // Letting it survive a mode change can occupy the shared serial
+            // app runtime and make the first conversion request time out.
+            invalidatePendingEvaluation()
+        }
         self.mode = mode
         isModePopoverPresented = false
         if mode == .conversion {

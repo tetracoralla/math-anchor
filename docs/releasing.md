@@ -97,10 +97,13 @@ use:
 
 ```bash
 codex plugin marketplace add .
-codex plugin add math-anchor@openadam
+./script/install_plugin.sh
 ```
 
-The installed Plugin is healthy only when its loaded
+`install_plugin.sh` packages the runtime, installs the versioned Plugin,
+compares every regular file and executable bit against the source artifact,
+runs the MCP suite through the installed copy, and starts a fresh no-model
+Codex process to verify the loaded Skill path. The installed Plugin is healthy only when its loaded
 Skill and all four tools (`math.search`, `math.describe`, `math.run`, and
 `math.batch`) are visible together. A source checkout without the generated
 runtime is intentionally not an installable Plugin artifact.
@@ -124,11 +127,11 @@ identity and a configured `notarytool` keychain profile:
 2. Merge the release commit through the protected `main` branch and wait for
    both architecture jobs to pass.
 3. From a clean checkout of that commit, create an annotated tag such as
-   `git tag -a v0.3.0 -m "Math Anchor 0.3.0"`.
+   `git tag -a v0.4.0 -m "Math Anchor 0.4.0"`.
 4. Run the release command below on the matching architecture.
 
 ```bash
-export MATH_ANCHOR_APP_VERSION=0.3.0
+export MATH_ANCHOR_APP_VERSION=0.4.0
 export MATH_ANCHOR_BUILD_NUMBER=1
 export MATH_ANCHOR_CODESIGN_IDENTITY="Developer ID Application: Example (TEAMID)"
 export MATH_ANCHOR_NOTARY_PROFILE="math-anchor-notary"

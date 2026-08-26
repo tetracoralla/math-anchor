@@ -173,6 +173,8 @@ class _WorkerPool:
         self.total = 0
         self.generation = 0
         self.prewarm_generation: int | None = None
+        self.prewarm_cancel: threading.Event | None = None
+        self.prewarm_thread: threading.Thread | None = None
         # Start conservatively with one warm process. Real concurrent demand
         # raises this target, so later recycling restores observed capacity
         # without prestarting four heavyweight symbolic runtimes for a client
@@ -317,12 +319,28 @@ class _WorkerPool:
             if (
                 self.total >= self.desired_warm
                 or self.prewarm_generation is not None
+                or self.prewarm_thread is not None
             ):
                 return None
             generation = self.generation
             self.total += 1
             self.prewarm_generation = generation
+            self.prewarm_cancel = threading.Event()
             return generation
+
+    def prewarm_cancel_event(self, generation: int) -> threading.Event | None:
+        with self.condition:
+            if self.prewarm_generation != generation:
+                return None
+            return self.prewarm_cancel
+
+    def start_prewarm_thread(self, thread: threading.Thread, generation: int) -> bool:
+        with self.condition:
+            if self.prewarm_generation != generation or self.prewarm_thread is not None:
+                return False
+            self.prewarm_thread = thread
+            thread.start()
+            return True
 
     def owns_prewarm(self, generation: int) -> bool:
         with self.condition:
@@ -339,6 +357,7 @@ class _WorkerPool:
             owns_reservation = self.prewarm_generation == generation
             if owns_reservation:
                 self.prewarm_generation = None
+                self.prewarm_cancel = None
             if (
                 owns_reservation
                 and generation == self.generation
@@ -354,6 +373,10 @@ class _WorkerPool:
             self.condition.notify_all()
         if terminate and worker is not None:
             worker.terminate()
+        with self.condition:
+            if self.prewarm_thread is threading.current_thread():
+                self.prewarm_thread = None
+            self.condition.notify_all()
 
     def shutdown(self) -> None:
         with self.condition:
@@ -361,13 +384,23 @@ class _WorkerPool:
             workers = self.available
             self.available = []
             self.total -= len(workers)
+            prewarm_thread = self.prewarm_thread
             if self.prewarm_generation is not None:
                 self.total -= 1
                 self.prewarm_generation = None
+            if self.prewarm_cancel is not None:
+                self.prewarm_cancel.set()
+                self.prewarm_cancel = None
             self.desired_warm = 1
             self.condition.notify_all()
         for worker in workers:
             worker.terminate()
+        if prewarm_thread is not None and prewarm_thread is not threading.current_thread():
+            # Startup observes the cancellation event inside the same bounded
+            # worker boundary. Join it so shutdown does not return while its
+            # child pipes, diagnostics descriptor, and output-reader thread are
+            # still alive.
+            prewarm_thread.join(timeout=2)
 
 
 _WORKER_POOL = _WorkerPool()
@@ -389,6 +422,9 @@ def warm_worker_pool() -> None:
     generation = _WORKER_POOL.reserve_prewarm()
     if generation is None:
         return
+    prewarm_cancel = _WORKER_POOL.prewarm_cancel_event(generation)
+    if prewarm_cancel is None:
+        return
 
     def warm() -> None:
         worker: _ReusableWorker | None = None
@@ -400,14 +436,15 @@ def warm_worker_pool() -> None:
                     DEFAULT_MEMORY_MB * 1024 * 1024,
                     deadline=time.monotonic() + WORKER_PREWARM_BUDGET_SECONDS,
                     timeout_ms=DEFAULT_TIMEOUT_MS,
-                    cancel_event=None,
+                    cancel_event=prewarm_cancel,
                 )
         except Exception:
             pass
         finally:
             _WORKER_POOL.finish_prewarm(worker, generation=generation)
 
-    threading.Thread(target=warm, name="calculator-worker-prewarm", daemon=True).start()
+    thread = threading.Thread(target=warm, name="calculator-worker-prewarm", daemon=True)
+    _WORKER_POOL.start_prewarm_thread(thread, generation)
 
 
 def run_operation(
@@ -680,9 +717,13 @@ def _start_worker(
             timeout_ms=timeout_ms,
             cancel_event=cancel_event,
         )
-        RUNTIME_TELEMETRY.increment(
-            "workers.started" if worker is not None else "workers.startFailed"
-        )
+        if worker is not None:
+            counter = "workers.started"
+        elif error is not None and error.get("error", {}).get("code") == "E_CANCELLED":
+            counter = "workers.startCancelled"
+        else:
+            counter = "workers.startFailed"
+        RUNTIME_TELEMETRY.increment(counter)
         return worker, error
     finally:
         RUNTIME_TELEMETRY.observe("workers.startupMs", (time.monotonic() - started) * 1000)

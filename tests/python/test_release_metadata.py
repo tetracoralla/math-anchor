@@ -35,6 +35,11 @@ def write_project(root: Path, project_version: str, plugin_version: str) -> None
         json.dumps({"name": "math-anchor", "version": plugin_version}),
         encoding="utf-8",
     )
+    package = root / "src" / "math_anchor"
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_text(
+        f'__version__ = "{project_version}"\n', encoding="utf-8"
+    )
 
 
 def write_runtime(bundle: Path, version: str) -> None:
@@ -66,6 +71,16 @@ def test_canonical_version_rejects_plugin_drift(tmp_path: Path) -> None:
     write_project(tmp_path, "0.1.0", "0.2.0")
 
     with pytest.raises(SystemExit, match="Plugin and Python project versions differ"):
+        release_metadata.canonical_version(tmp_path)
+
+
+def test_canonical_version_rejects_runtime_package_drift(tmp_path: Path) -> None:
+    write_project(tmp_path, "0.1.0", "0.1.0")
+    (tmp_path / "src" / "math_anchor" / "__init__.py").write_text(
+        '__version__ = "0.2.0"\n', encoding="utf-8"
+    )
+
+    with pytest.raises(SystemExit, match="Python runtime and project versions differ"):
         release_metadata.canonical_version(tmp_path)
 
 

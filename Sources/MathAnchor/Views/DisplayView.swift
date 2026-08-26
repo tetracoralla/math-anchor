@@ -6,6 +6,12 @@ struct DisplayView: View {
     @State private var showsPlaceholder = false
     @State private var placeholderTask: Task<Void, Never>?
 
+    private var displayAccessibilityValue: String {
+        store.isShowingResult
+            ? "\(store.expressionForDisplay) equals \(store.display)"
+            : store.display
+    }
+
     var body: some View {
         VStack(alignment: .trailing, spacing: 3) {
             HStack(alignment: .firstTextBaseline, spacing: 7) {
@@ -30,8 +36,10 @@ struct DisplayView: View {
                         .foregroundStyle(CalculatorPalette.secondaryText)
                         .lineLimit(1)
                         .truncationMode(.head)
-                        .accessibilityLabel("Expression")
-                        .accessibilityValue(store.expressionForDisplay)
+                        // The primary result below owns the combined spoken
+                        // expression/result value, avoiding a duplicate focus
+                        // stop while preserving unambiguous result semantics.
+                        .accessibilityHidden(true)
                         .transition(.opacity)
                 }
             }
@@ -49,7 +57,7 @@ struct DisplayView: View {
                     value: store.display
                 )
                 .accessibilityLabel(store.isShowingResult ? "Result" : "Expression")
-                .accessibilityValue(store.display)
+                .accessibilityValue(displayAccessibilityValue)
                 .contextMenu {
                     Button("Copy Result", action: store.copyResult)
                     if store.distinctExactResult != nil {

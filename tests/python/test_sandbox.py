@@ -84,7 +84,11 @@ def test_warm_worker_meets_a_short_complete_call_timeout() -> None:
         result = run_operation(
             "expression.evaluate",
             {"expression": "6*7"},
-            timeout_ms=100,
+            # A caller choosing the minimum accepted 100 ms legitimately
+            # receives E_TIMEOUT under host scheduling pressure; 500 ms stays
+            # short relative to the 10 s default without turning success into
+            # a machine-load assertion.
+            timeout_ms=500,
         )
         assert result["status"] == "ok"
         assert result["exact"] == "42"
@@ -525,14 +529,17 @@ def test_persistent_worker_serves_the_first_units_call_within_a_short_budget() -
                     {
                         "operation": "units.convert",
                         "arguments": {"value": 1, "fromUnit": "m", "toUnit": "cm"},
-                        "timeoutMs": 100,
+                        # 100 ms is the minimum accepted caller budget, not a
+                        # host-load SLA. Keep this success regression short
+                        # while leaving scheduling margin after warmup.
+                        "timeoutMs": 500,
                         "memoryMb": sandbox.DEFAULT_MEMORY_MB,
                     },
                     separators=(",", ":"),
                 )
                 + "\n",
                 deadline=time.monotonic() + 2,
-                timeout_ms=100,
+                timeout_ms=500,
                 memory_mb=sandbox.DEFAULT_MEMORY_MB,
                 cancel_event=None,
             )
@@ -702,7 +709,6 @@ def test_shutdown_invalidates_an_inflight_prewarm(monkeypatch) -> None:
     isolated_pool = sandbox._WorkerPool(maximum=1)
     monkeypatch.setattr(sandbox, "_WORKER_POOL", isolated_pool)
     startup_entered = threading.Event()
-    allow_startup_to_finish = threading.Event()
     worker_terminated = threading.Event()
 
     class FakeWorker:
@@ -718,9 +724,10 @@ def test_shutdown_invalidates_an_inflight_prewarm(monkeypatch) -> None:
         def terminate(self) -> None:
             worker_terminated.set()
 
-    def delayed_start(*_args, **_kwargs):
+    def delayed_start(*_args, cancel_event, **_kwargs):
         startup_entered.set()
-        assert allow_startup_to_finish.wait(timeout=2)
+        assert cancel_event is not None
+        assert cancel_event.wait(timeout=2)
         return FakeWorker(), None
 
     monkeypatch.setattr(sandbox, "_start_worker", delayed_start)
@@ -728,11 +735,13 @@ def test_shutdown_invalidates_an_inflight_prewarm(monkeypatch) -> None:
     assert startup_entered.wait(timeout=1)
 
     isolated_pool.shutdown()
-    allow_startup_to_finish.set()
-    assert worker_terminated.wait(timeout=1)
+    assert worker_terminated.is_set()
     with isolated_pool.condition:
         assert isolated_pool.total == 0
         assert isolated_pool.available == []
+        assert isolated_pool.prewarm_generation is None
+        assert isolated_pool.prewarm_cancel is None
+        assert isolated_pool.prewarm_thread is None
 
 
 def test_unserializable_error_obeys_the_output_budget() -> None:

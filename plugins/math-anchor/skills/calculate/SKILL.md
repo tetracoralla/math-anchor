@@ -1,6 +1,6 @@
 ---
 name: calculate
-description: "Use Math Anchor for reliability-sensitive mathematics: exact or high-precision evaluation, explicit integer/rounding conventions, verification, algebra, calculus, linear algebra, finance, probability, statistics, measurement uncertainty, physical quantities, and dimensional analysis. Its four tools are already registered; for a known operation call math.run directly. Do not load it for trivial, low-risk arithmetic the model can immediately verify; trigger when precision, exactness, units, diagnostics, reuse, or consequences justify deterministic calculation."
+description: "Use Math Anchor for reliability-sensitive mathematics: fixed-width wrapping/saturating arithmetic, bit operations and fields, IEEE-754 representation, exact or high-precision evaluation, explicit decimal rounding and integer-division conventions, verification, algebra, calculus, linear algebra, finance, probability, statistics, measurement uncertainty, physical quantities, and dimensional analysis. Its four tools are already registered; for a known operation call math.run directly with {operation, arguments}, nesting every operation-specific field inside arguments. Do not load it for trivial, low-risk arithmetic the model can immediately verify; trigger when machine semantics, precision, exactness, units, diagnostics, reuse, or consequences justify deterministic calculation."
 ---
 
 # Calculate
@@ -9,6 +9,10 @@ Let reasoning translate the user's request into mathematics, then use the runtim
 
 ## Decide whether to call
 
+- Call Math Anchor whenever the result depends on a fixed bit width, signedness,
+  wrapping or saturation, bit-field/shift/rotate behavior, or IEEE-754 format.
+  These are machine-semantics tasks even when the visible arithmetic is small;
+  do not classify them as trivial arithmetic.
 - Answer trivial, low-risk arithmetic directly when it is immediately verifiable, needs no units or special convention, and is not feeding a consequential decision. Examples include a single small addition or multiplication.
 - Call Math Anchor when the user asks for exact or high-precision output, symbolic work, units, matrices, statistics, probability, financial math, verification, repeated calculations, or a result whose correctness affects a consequential next step.
 - Call Math Anchor when the alternative would be mentally simulating a multi-step calculation or a standard scientific algorithm.
@@ -17,7 +21,11 @@ Let reasoning translate the user's request into mathematics, then use the runtim
 ## Select the operation
 
 - The four Math Anchor tools are already registered. Never call `list_mcp_resources`, inspect a source checkout, or use a shell command to discover them.
-- For an ordinary supported request, call `math.run` directly. Its executable schema contains the stable operation ids and each operation's current arguments.
+- For an ordinary known request, call `math.run` directly. Its host-safe schema contains every stable operation id and the execution envelope. If the exact argument contract is unfamiliar, call `math.describe` once for that selected id instead of guessing; runtime validation remains closed.
+- Every `math.run` call uses the outer envelope `{operation, arguments}`. Put
+  `action`, operands, widths, expressions, matrices, units, and every other
+  operation-specific field inside `arguments`; never flatten them beside
+  `operation`.
 - Use `units.search` when a conversion unit's stable ID or compound runtime spelling is unknown. `units.convert` accepts those stable IDs directly.
 - Use `quantity.evaluate` for concrete unit-bearing arithmetic such as `3 * meter + 25 * centimeter`. Use `dimension.check` for symbolic formula consistency, `dimension.infer` when declared symbol dimensions are unknown, and `dimension.pi_groups` for a Buckingham Pi basis of dimensionless products. These are known operations and do not require search or describe.
 - Call `math.search` only when the mathematical operation is genuinely unfamiliar or ambiguous. Search using the user's task language.
@@ -37,7 +45,8 @@ Let reasoning translate the user's request into mathematics, then use the runtim
 - Use `float.ieee754` when a request depends on binary32/binary64 fields, signed zero, subnormals, infinity/NaN, the exact represented value, adjacent values, ULP size or distance, or numeric-versus-bit equality. Do not use ordinary decimal evaluation to infer those machine facts.
 - For matrix solving, rank, RREF, and basis operations, send exact integers or rational text such as `1/10`. Do not silently turn approximate decimal matrices into exact structural claims.
 - Use `matrix.solve_approximate` for decimal matrices only when the tolerance is meaningful to the request; preserve its condition, residual, backward-error, and stability fields.
-- Use `linear_algebra.exact` for matrix multiplication and transpose over exact inputs, or dot/cross products, norms, and projection over provably real exact vectors. Use `linear_algebra.numeric` for decimal-text least squares, QR, SVD, or pseudoinverse; preserve its binary64 provenance, singular-value tolerance, rank, condition, residual diagnostics, and the least-squares uniqueness/minimum-norm convention.
+- Use `matrix.reduce` for exact eigenspaces and diagonalizability, LU, or Cholesky as well as rank, RREF, nullspace, and column space. Preserve the returned multiplicities, basis, pivot permutation, and factor relation. Use `linear_algebra.exact` for matrix multiplication and transpose over exact inputs, or dot/cross products, norms, and projection over provably real exact vectors. Use `linear_algebra.numeric` for decimal-text least squares, QR, SVD, or pseudoinverse; preserve its binary64 provenance, singular-value tolerance, rank, condition, residual diagnostics, and the least-squares uniqueness/minimum-norm convention.
+- Use `calculus.multivariate` for gradients, Jacobians, Hessians, unnormalized directional derivatives, divergence, curl, and the Laplacian. Preserve the declared variable order; divergence requires one field component per variable and curl is explicitly three-dimensional.
 - Use `numeric.integrate` when a symbolic definite integral is unavailable or a numerical interval is requested. Preserve that its `resultInterval` is estimate-based whenever `errorBoundCertified` is false. A result with `status: uncertain` met only the local error estimate; do not call it converged. Supply `breakpoints` only when they identify every material discontinuity or localized feature, or `featureScale` only when the user can bound the minimum material feature width.
 - Use `expression.equivalent` instead of comparing formatted strings. Keep its default strict definedness policy unless the user explicitly means equality only where both expressions are defined.
 - Use `numeric.minimize` when a global minimum or maximum over a bracket is requested. Its `valueEnclosure` and `extremumIntervals` are rigorous interval-arithmetic results; treat `status: uncertain` as the best certified bound, not a finished answer. The bracket must avoid undefined points; supply a narrower bracket when it does not.
