@@ -119,6 +119,11 @@ def _execute_payload(
 
 
 def _write_response(response: dict[str, Any]) -> None:
+    # The supervisor and worker share the host's monotonic clock. Stamp the
+    # internal envelope before writing so a descheduled supervisor can tell an
+    # in-budget completion from a response that actually crossed its deadline.
+    # This field never enters the public operation result.
+    response["_completedAtMonotonic"] = time.monotonic()
     json.dump(response, sys.stdout, ensure_ascii=False, separators=(",", ":"))
     sys.stdout.write("\n")
     sys.stdout.flush()

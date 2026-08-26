@@ -458,10 +458,11 @@ def test_response_arriving_after_the_deadline_is_rejected(monkeypatch) -> None:
             sys.executable,
             "-c",
             (
-                "import sys,time; sys.stdin.readline(); time.sleep(0.15); "
-                "sys.stdout.write('{\"ok\":true,\"result\":{\"status\":\"ok\","
-                "\"operation\":\"expression.evaluate\",\"kind\":\"scalar\","
-                "\"exact\":\"42\"}}\\n'); sys.stdout.flush()"
+                "import json,sys,time; sys.stdin.readline(); time.sleep(0.15); "
+                "json.dump({'ok':True,'_completedAtMonotonic':time.monotonic(),"
+                "'result':{'status':'ok','operation':'expression.evaluate',"
+                "'kind':'scalar','exact':'42'}},sys.stdout,separators=(',',':')); "
+                "sys.stdout.write('\\n'); sys.stdout.flush()"
             ),
         ],
         stdin=subprocess.PIPE,

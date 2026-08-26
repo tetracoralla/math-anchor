@@ -293,6 +293,16 @@ def _execute_worker(
         response = json.loads(response_line)
     except json.JSONDecodeError:
         return _error("E_RUNTIME", "worker returned an invalid response"), False, False
+    completed_at = response.pop("_completedAtMonotonic", None)
+    if (
+        isinstance(completed_at, bool)
+        or not isinstance(completed_at, (int, float))
+    ):
+        process.kill()
+        return _error("E_RUNTIME", "worker response omitted completion timing"), False, False
+    if completed_at >= deadline:
+        process.kill()
+        return _error("E_TIMEOUT", f"operation exceeded {timeout_ms} ms"), False, False
     if response.get("ok") is True:
         return response["result"], True, True
     error = response.get("error")
