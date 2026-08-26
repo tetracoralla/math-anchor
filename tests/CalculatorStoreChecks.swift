@@ -58,7 +58,7 @@ private struct DelayedUnitRuntime: UnitConverting {
         precision: Int
     ) async throws -> UnitConversionResult {
         if value == "12" {
-            try? await Task.sleep(for: .milliseconds(120))
+            try? await Task.sleep(for: .milliseconds(350))
         } else {
             try? await Task.sleep(for: .milliseconds(10))
         }
@@ -501,7 +501,9 @@ struct CalculatorStoreChecks {
         await waitForConversion(slowRetentionStore)
         check(slowRetentionStore.output == "1", "slow-retention baseline result lands")
         slowRetentionStore.appendDigit("2")
-        try? await Task.sleep(for: .milliseconds(200))
+        await waitUntil(timeout: .seconds(1)) {
+            slowRetentionStore.isShowingDelayedProgress
+        }
         check(
             slowRetentionStore.isShowingDelayedProgress,
             "a slow replacement stops presenting the retained result as current"
