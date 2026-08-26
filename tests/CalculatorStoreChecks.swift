@@ -570,7 +570,7 @@ struct CalculatorStoreChecks {
         )
         check(currencyStore.activePopover == nil, "mode transition dismisses the conversion popover")
         check(failureStore.mode == .conversion, "mode transition retains the popover anchor while dismissal settles")
-        try? await Task.sleep(for: .milliseconds(30))
+        await waitUntil { failureStore.mode == .basic }
         check(failureStore.mode == .basic, "mode transition completes after popover dismissal")
 
         failureStore.selectMode(.conversion)
@@ -580,7 +580,7 @@ struct CalculatorStoreChecks {
             conversionStore: currencyStore
         )
         check(!failureStore.isModePopoverPresented, "mode menu waits for the previous popover to settle")
-        try? await Task.sleep(for: .milliseconds(30))
+        await waitUntil { failureStore.isModePopoverPresented }
         check(failureStore.isModePopoverPresented, "mode menu opens after the previous popover settles")
 
         failureStore.isModePopoverPresented = false
@@ -595,7 +595,7 @@ struct CalculatorStoreChecks {
             failureStore.mode == .conversion,
             "mode transition recognizes an AppKit-initiated popover dismissal"
         )
-        try? await Task.sleep(for: .milliseconds(30))
+        await waitUntil { failureStore.mode == .basic }
         check(
             failureStore.mode == .basic,
             "mode transition waits after an AppKit-initiated popover dismissal"
@@ -1008,6 +1008,18 @@ struct CalculatorStoreChecks {
     private static func waitForConversion(_ store: UnitConversionStore) async {
         while store.isConverting {
             await Task.yield()
+        }
+    }
+
+    @MainActor
+    private static func waitUntil(
+        timeout: Duration = .seconds(1),
+        _ condition: @escaping @MainActor () -> Bool
+    ) async {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: timeout)
+        while !condition(), clock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(5))
         }
     }
 
