@@ -316,6 +316,84 @@ def test_concurrent_request_waits_until_the_refreshed_cache_is_published(
     assert not second.is_alive()
     assert errors == []
     assert sorted(result["approx"] for result in results) == ["120", "60"]
+    # Negative regression: the coalesced waiter received the publication the
+    # leader refreshed while it waited, so nothing is deferred for it.
+    assert all(result["rate"]["refreshDeferred"] is False for result in results)
+
+
+def test_coalesced_refresh_uses_explicit_outcome_and_ignores_spurious_wakes(
+    tmp_path: Path,
+) -> None:
+    cache_path = tmp_path / "rates.json"
+    ECBRateService(
+        cache_path=cache_path,
+        opener=response_opener(),
+        clock=lambda: NOW,
+    ).convert(conversion_arguments())
+
+    entered = threading.Event()
+    release = threading.Event()
+    waiter_loaded_cache = threading.Event()
+    waiter_finished = threading.Event()
+    calls: list[str] = []
+    results: list[dict] = []
+    errors: list[BaseException] = []
+
+    def blocking_failure(request, *, timeout):
+        calls.append(request.full_url)
+        assert timeout == 4.0
+        entered.set()
+        assert release.wait(timeout=2)
+        raise OSError("network is offline")
+
+    service = ECBRateService(
+        cache_path=cache_path,
+        opener=blocking_failure,
+        clock=lambda: NOW + timedelta(hours=25),
+    )
+    original_load = service._load_cache
+
+    def observed_load():
+        cached = original_load()
+        if threading.current_thread().name == "currency-waiter":
+            waiter_loaded_cache.set()
+        return cached
+
+    service._load_cache = observed_load
+
+    def convert(value: str) -> None:
+        try:
+            results.append(service.convert(conversion_arguments(value=value)))
+        except BaseException as error:
+            errors.append(error)
+        finally:
+            if threading.current_thread().name == "currency-waiter":
+                waiter_finished.set()
+
+    leader = threading.Thread(target=convert, args=("10",), name="currency-leader")
+    waiter = threading.Thread(target=convert, args=("20",), name="currency-waiter")
+    leader.start()
+    assert entered.wait(timeout=2)
+    waiter.start()
+    assert waiter_loaded_cache.wait(timeout=2)
+
+    # A condition may wake without the refresh having completed. The waiter
+    # must observe `_refreshing` again instead of returning the stale snapshot.
+    with service._refresh_condition:
+        service._refresh_condition.notify_all()
+    assert not waiter_finished.wait(timeout=0.1)
+
+    release.set()
+    leader.join(timeout=2)
+    waiter.join(timeout=2)
+
+    assert not leader.is_alive()
+    assert not waiter.is_alive()
+    assert errors == []
+    assert len(calls) == 1
+    assert len(results) == 2
+    assert all(result["rate"]["refreshFailed"] is True for result in results)
+    assert all(result["rate"]["refreshDeferred"] is False for result in results)
 
 
 def test_no_cache_and_network_failure_is_sanitized(tmp_path: Path) -> None:

@@ -70,6 +70,20 @@ def test_undefined_expression_is_a_domain_error(expression: str) -> None:
     assert caught.value.code == "E_DOMAIN"
 
 
+def test_syntax_error_is_a_correctable_input_failure() -> None:
+    # Negative regression: malformed but safe input used to inherit the
+    # execution/stop fallback, telling an Agent to abandon a request it can
+    # correct locally.
+    with pytest.raises(CalculatorError) as caught:
+        execute_direct("expression.evaluate", {"expression": "1+"})
+
+    assert caught.value.code == "E_SYNTAX"
+    payload = caught.value.as_dict()
+    assert payload["phase"] == "input"
+    assert payload["suggestedAction"] == "correct_input"
+    assert payload["retryable"] is False
+
+
 def test_symbolic_solve_and_calculus() -> None:
     solved = execute_direct(
         "algebra.solve",
@@ -118,6 +132,57 @@ def test_numeric_matrix_statistics_and_units() -> None:
     )
     assert units["exact"] == "1"
     assert units["unit"] == "km"
+
+
+def test_inverse_timeout_is_not_misreported_as_a_singular_matrix() -> None:
+    # Negative regression: an in-process evaluation timeout raised inside
+    # matrix.inv() must surface as E_TIMEOUT, never as a false singular-matrix
+    # domain claim.
+    hilbert = [
+        [f"1/{row + column + 1}" for column in range(50)]
+        for row in range(50)
+    ]
+    with pytest.raises(CalculatorError) as raised:
+        execute_direct("matrix.inverse", {"matrix": hilbert}, timeout_ms=100)
+    assert raised.value.code == "E_TIMEOUT"
+
+    with pytest.raises(CalculatorError) as singular:
+        execute_direct("matrix.inverse", {"matrix": [[1, 2], [2, 4]]})
+    assert singular.value.code == "E_DOMAIN"
+
+
+def test_unprintable_exact_integer_is_an_output_limit_not_a_runtime_failure() -> None:
+    # Negative regression: a node-bounded expression whose exact result exceeds
+    # the interpreter's integer-string limit is an output limit, and the
+    # interpreter's remediation hint must not leak into the message. The code
+    # and envelope must agree with that: output phase and reduce_request, not
+    # an instruction to fix mathematically valid input.
+    with pytest.raises(CalculatorError) as raised:
+        execute_direct("expression.evaluate", {"expression": "(10**10000)**2"})
+    assert raised.value.code == "E_OUTPUT_LIMIT"
+    assert "set_int_max_str_digits" not in raised.value.message
+    payload = raised.value.as_dict()
+    assert payload["phase"] == "output"
+    assert payload["suggestedAction"] == "reduce_request"
+    assert payload["retryable"] is False
+
+
+def test_integer_text_accepts_only_ascii_digit_strings() -> None:
+    # Negative regression: isdigit()-style acceptance let Unicode digits and
+    # multi-sign text through to int() (E_RUNTIME or silent success).
+    for bad in ["٥", "²", "+-5"]:
+        with pytest.raises(CalculatorError) as raised:
+            execute_direct("integer.factorization", {"value": bad})
+        assert raised.value.code == "E_INPUT"
+
+
+def test_variable_names_are_capped_at_sixty_four_characters() -> None:
+    with pytest.raises(CalculatorError) as raised:
+        execute_direct(
+            "expression.equivalent",
+            {"left": "a", "right": "a", "variables": ["a" * 65]},
+        )
+    assert raised.value.code == "E_LIMIT"
 
 
 def test_numeric_provenance_is_explicit_for_statistics_and_units() -> None:

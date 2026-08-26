@@ -1,8 +1,11 @@
 import SwiftUI
+import MathAnchorCore
 
 struct ContentView: View {
     @ObservedObject var store: CalculatorStore
     @ObservedObject var conversionStore: UnitConversionStore
+    let modeTransition: CalculatorModeTransition
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var calculatorWidth: CGFloat {
         store.mode == .scientific ? CalculatorLayout.scientificWidth : CalculatorLayout.basicWidth
@@ -24,7 +27,22 @@ struct ContentView: View {
 
             HStack(spacing: 0) {
                 VStack(spacing: 0) {
-                    CalculatorHeaderView(store: store)
+                    CalculatorHeaderView(
+                        store: store,
+                        onToggleModeMenu: {
+                            modeTransition.toggleModeMenu(
+                                calculatorStore: store,
+                                conversionStore: conversionStore
+                            )
+                        },
+                        onSelectMode: { mode in
+                            modeTransition.select(
+                                mode,
+                                calculatorStore: store,
+                                conversionStore: conversionStore
+                            )
+                        }
+                    )
                     if store.mode == .conversion {
                         ConversionDisplayView(store: conversionStore)
                     } else {
@@ -36,28 +54,47 @@ struct ContentView: View {
 
                     if store.mode == .conversion {
                         ConversionKeypadView(store: conversionStore)
+                            .equatable()
                             .padding(.horizontal, CalculatorLayout.contentInset)
-                            .padding(.bottom, 14)
+                            .padding(.bottom, CalculatorLayout.keypadBottomInset)
                     } else {
-                        HStack(alignment: .bottom, spacing: 12) {
+                        HStack(alignment: .bottom, spacing: CalculatorLayout.keySpacing) {
                             if store.mode == .scientific {
                                 ScientificKeypadView(store: store)
+                                    .equatable()
+                                    .transition(.opacity)
                             }
                             BasicKeypadView(store: store)
+                                .equatable()
                         }
                         .padding(.horizontal, CalculatorLayout.contentInset)
-                        .padding(.bottom, 14)
+                        .padding(.bottom, CalculatorLayout.keypadBottomInset)
                     }
                 }
                 .frame(width: calculatorWidth, height: calculatorHeight)
+                .animation(
+                    reduceMotion
+                        ? nil
+                        : .easeInOut(duration: CalculatorLayout.modeTransitionDuration),
+                    value: store.mode
+                )
 
                 if store.isHistoryPresented {
                     Rectangle()
                         .fill(CalculatorPalette.border)
                         .frame(width: 1)
+                        .transition(.opacity)
+
                     HistoryView(store: store)
+                        .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
             }
+            .animation(
+                reduceMotion
+                    ? nil
+                    : .easeInOut(duration: CalculatorLayout.modeTransitionDuration),
+                value: store.isHistoryPresented
+            )
         }
         .frame(width: totalWidth, height: calculatorHeight)
         .background(
@@ -69,11 +106,5 @@ struct ContentView: View {
             )
         )
         .calculatorKeyboard(store, conversionStore: conversionStore)
-        .onChange(of: store.mode) { _, mode in
-            conversionStore.dismissActivePopover()
-            if mode == .conversion {
-                conversionStore.activate()
-            }
-        }
     }
 }

@@ -1,7 +1,9 @@
 import SwiftUI
+import MathAnchorCore
 
 struct ConversionDisplayView: View {
     @ObservedObject var store: UnitConversionStore
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(spacing: 0) {
@@ -84,6 +86,10 @@ struct ConversionDisplayView: View {
                 .minimumScaleFactor(0.42)
                 .frame(maxWidth: .infinity, alignment: .trailing)
                 .contentTransition(.numericText())
+                .animation(
+                    reduceMotion ? nil : .snappy(duration: 0.2),
+                    value: value
+                )
                 .accessibilityLabel(accessibilityLabel)
                 .accessibilityValue(value)
         }

@@ -7,6 +7,21 @@ PLUGIN_RUNTIME="$PLUGIN_RUNTIME_BUNDLE/math-anchor-runtime"
 APP_BUNDLE="$ROOT_DIR/dist/Math Anchor.app"
 EXPECTED_ARCH="${MATH_ANCHOR_EXPECTED_ARCH:-$(uname -m)}"
 
+verify_project_legal_files() {
+  local bundle="$1"
+  local legal_file
+  for legal_file in LICENSE NOTICE; do
+    if [[ ! -s "$bundle/$legal_file" ]]; then
+      echo "Project legal material is missing from the runtime bundle: $bundle/$legal_file" >&2
+      exit 1
+    fi
+    if ! cmp -s "$ROOT_DIR/$legal_file" "$bundle/$legal_file"; then
+      echo "Project legal material does not match source: $bundle/$legal_file" >&2
+      exit 1
+    fi
+  done
+}
+
 "$ROOT_DIR/script/check_source_layout.sh" --development
 
 for required in \
@@ -14,6 +29,8 @@ for required in \
   "$ROOT_DIR/requirements-dev.lock" \
   "$ROOT_DIR/SECURITY.md" \
   "$ROOT_DIR/.github/workflows/ci.yml" \
+  "$PLUGIN_RUNTIME_BUNDLE/LICENSE" \
+  "$PLUGIN_RUNTIME_BUNDLE/NOTICE" \
   "$PLUGIN_RUNTIME_BUNDLE/THIRD_PARTY_NOTICES.txt" \
   "$PLUGIN_RUNTIME_BUNDLE/sbom.spdx.json"; do
   if [[ ! -s "$required" ]]; then
@@ -21,6 +38,8 @@ for required in \
     exit 1
   fi
 done
+
+verify_project_legal_files "$PLUGIN_RUNTIME_BUNDLE"
 
 PROJECT_VERSION="$(
   "$ROOT_DIR/.venv/bin/python" "$ROOT_DIR/script/release_metadata.py" version \
@@ -74,6 +93,7 @@ if [[ "${MATH_ANCHOR_VERIFY_APP_BUNDLE:-0}" == "1" ]]; then
     exit 1
   fi
   APP_RUNTIME_BUNDLE="$APP_BUNDLE/Contents/Resources/Runtime/math-anchor-runtime"
+  verify_project_legal_files "$APP_RUNTIME_BUNDLE"
   APP_METADATA_ARGUMENTS=(
     check
     --root "$ROOT_DIR"

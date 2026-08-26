@@ -1,4 +1,5 @@
 import SwiftUI
+import MathAnchorCore
 
 struct CalculatorModeIcon: View {
     let mode: CalculatorMode

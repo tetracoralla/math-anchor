@@ -68,10 +68,17 @@ def test_special_functions_are_registered_and_accurate() -> None:
     assert lambert["exact"] == "1"
     log_ten = execute_direct("expression.evaluate", {"expression": "log10(100)", "precision": 30})
     assert log_ten["exact"] == "2"
+    beta_value = execute_direct("expression.evaluate", {"expression": "beta(2, 3)", "precision": 30})
+    assert beta_value["exact"] == "1/12"
+    trigamma = execute_direct("expression.evaluate", {"expression": "polygamma(1, 1)", "precision": 30})
+    assert trigamma["exact"] == "pi**2/6"
 
     for expression, truth in {
+        "airyai(0)": lambda: mp.airyai(0),
+        "airybi(0)": lambda: mp.airybi(0),
         "erf(1)": lambda: mp.erf(1),
         "besselj(0, 1)": lambda: mp.besselj(0, 1),
+        "bessely(0, 1)": lambda: mp.bessely(0, 1),
         "zeta(3)": lambda: mp.zeta(3),
         "log2(8)": lambda: mp.mpf(3),
     }.items():
@@ -86,3 +93,7 @@ def test_special_functions_are_registered_and_accurate() -> None:
 
         make_symbols(["erf"])
     assert reserved.value.code == "E_INPUT"
+
+    with pytest.raises(CalculatorError) as invalid_arity:
+        execute_direct("expression.evaluate", {"expression": "bessely(1)"})
+    assert invalid_arity.value.code == "E_INPUT"

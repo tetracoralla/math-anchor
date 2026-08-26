@@ -24,7 +24,18 @@ def _allow_bounded_large_integer_output() -> None:
 
 def _text(value: sp.Expr) -> str:
     _allow_bounded_large_integer_output()
-    return sp.sstr(value)
+    try:
+        return sp.sstr(value)
+    except ValueError as error:
+        # CPython refuses int→str conversion past the interpreter digit limit.
+        # The result is mathematically valid but not printable within the
+        # output bound. Callers must not be told to fix their input, so this
+        # is an output-limit condition and the interpreter's remediation hint
+        # must not leak.
+        raise CalculatorError(
+            "E_OUTPUT_LIMIT",
+            "exact result is too large to print within the output limit",
+        ) from error
 
 
 def _require_defined(values: list[sp.Expr]) -> None:

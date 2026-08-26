@@ -1,4 +1,5 @@
 import SwiftUI
+import MathAnchorCore
 
 struct MemoryRowView: View {
     @ObservedObject var store: CalculatorStore
@@ -6,21 +7,22 @@ struct MemoryRowView: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            memoryButton("mc", enabled: store.memory != nil, action: store.memoryClear)
-            memoryButton("m+", action: store.memoryAdd)
-            memoryButton("m−", action: store.memorySubtract)
-            memoryButton("mr", enabled: store.memory != nil, action: store.memoryRecall)
+            memoryButton("mc", label: "Memory clear", enabled: store.memory != nil, action: store.memoryClear)
+            memoryButton("m+", label: "Memory add", action: store.memoryAdd)
+            memoryButton("m−", label: "Memory subtract", action: store.memorySubtract)
+            memoryButton("mr", label: "Memory recall", enabled: store.memory != nil, action: store.memoryRecall)
         }
     }
 
     private func memoryButton(
         _ title: String,
+        label: String,
         enabled: Bool = true,
         action: @escaping () -> Void
     ) -> some View {
         CalculatorKeyButton(
             title: title,
-            accessibilityLabel: title,
+            accessibilityLabel: label,
             tone: .scientific,
             width: keyWidth,
             isEnabled: enabled,

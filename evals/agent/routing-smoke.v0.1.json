@@ -1,0 +1,40 @@
+{
+  "schemaVersion": "openadam.agent-tool-eval.task-suite.v0.1",
+  "id": "math-anchor.routing-smoke",
+  "version": "0.1.0",
+  "title": "Math Anchor natural routing smoke",
+  "targetRef": {
+    "id": "math-anchor",
+    "version": "0.4.0"
+  },
+  "tasks": [
+    {
+      "id": "machine.u8-wrapping-add",
+      "prompt": "A generated binary format stores a counter as an unsigned 8-bit integer with wrapping arithmetic. The current value is 250 and the decoder adds 20. Return only the resulting decimal stored value.",
+      "opportunity": "required",
+      "tags": ["coding", "integer", "overflow"],
+      "evaluator": {"kind": "numeric-tolerance", "actualPointer": "", "expected": 14, "absoluteTolerance": 0, "relativeTolerance": 0}
+    },
+    {
+      "id": "integer.binomial-100-50",
+      "prompt": "Compute the exact binomial coefficient 100 choose 50. Return the integer as a string with no separators.",
+      "opportunity": "required",
+      "tags": ["coding", "integer", "combinatorics"],
+      "evaluator": {"kind": "string-equality", "actualPointer": "", "expected": "100891344545564193334812497256", "trim": true, "caseSensitive": true}
+    },
+    {
+      "id": "optional.simple-percentage",
+      "prompt": "What is 17 percent of 200? Return only the number.",
+      "opportunity": "optional",
+      "tags": ["control", "arithmetic", "simple"],
+      "evaluator": {"kind": "numeric-tolerance", "actualPointer": "", "expected": 34, "absoluteTolerance": 0, "relativeTolerance": 0}
+    },
+    {
+      "id": "irrelevant.marker-string",
+      "prompt": "Return the exact string openadam-eval-marker.",
+      "opportunity": "irrelevant",
+      "tags": ["control", "nonmath", "string"],
+      "evaluator": {"kind": "string-equality", "actualPointer": "", "expected": "openadam-eval-marker", "trim": true, "caseSensitive": true}
+    }
+  ]
+}

@@ -1,4 +1,5 @@
 import SwiftUI
+import MathAnchorCore
 
 struct HistoryView: View {
     @ObservedObject var store: CalculatorStore

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from .errors import CalculatorError, require
@@ -38,6 +39,9 @@ def integer_arg(
     return value
 
 
+_ASCII_INTEGER = re.compile(r"[+-]?[0-9]+")
+
+
 def exact_integer_arg(
     arguments: dict[str, Any],
     name: str,
@@ -48,7 +52,7 @@ def exact_integer_arg(
     value = arguments.get(name)
     require(
         (isinstance(value, int) and not isinstance(value, bool))
-        or (isinstance(value, str) and value.strip().lstrip("+-").isdigit()),
+        or (isinstance(value, str) and _ASCII_INTEGER.fullmatch(value.strip()) is not None),
         "E_INPUT",
         f"{name} must be an integer or integer text",
     )

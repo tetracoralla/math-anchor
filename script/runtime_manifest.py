@@ -22,13 +22,20 @@ def sha256(path: Path) -> str:
 
 
 def inventory(bundle: Path) -> list[dict[str, Any]]:
+    bundle_paths = sorted(bundle.rglob("*"))
+    symlinks = [str(path.relative_to(bundle)) for path in bundle_paths if path.is_symlink()]
+    if symlinks:
+        raise SystemExit(
+            "runtime bundle contains symbolic links that are not installation-stable: "
+            + ", ".join(symlinks)
+        )
     return [
         {
             "path": str(path.relative_to(bundle)),
             "bytes": path.stat().st_size,
             "sha256": sha256(path),
         }
-        for path in sorted(bundle.rglob("*"))
+        for path in bundle_paths
         if path.is_file() and path.name != MANIFEST_NAME
     ]
 
@@ -40,6 +47,7 @@ def source_digest(source_root: Path) -> str:
         source_root / relative
         for relative in (
             "LICENSE",
+            "NOTICE",
             "pyproject.toml",
             "requirements-runtime.lock",
             "script/package_runtime.sh",

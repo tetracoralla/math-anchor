@@ -1,5 +1,8 @@
 @preconcurrency import AppKit
 import SwiftUI
+#if canImport(MathAnchorCore)
+import MathAnchorCore
+#endif
 
 @MainActor
 final class CalculatorKeyboardMonitor {
@@ -23,6 +26,10 @@ final class CalculatorKeyboardMonitor {
                 if conversionStore.dismissActivePopover() {
                     return nil
                 }
+                if store.isHistoryPresented {
+                    store.isHistoryPresented = false
+                    return nil
+                }
                 if Self.shouldDeferToFocusedTextInput(focusedResponder) {
                     return event
                 }
@@ -38,6 +45,13 @@ final class CalculatorKeyboardMonitor {
 
             if Self.shouldDeferToFocusedTextInput(focusedResponder) {
                 return event
+            }
+
+            // Any calculator keystroke closes an open popover so digits and
+            // operators never edit the value invisibly behind it.
+            if store.isModePopoverPresented || conversionStore.activePopover != nil {
+                store.isModePopoverPresented = false
+                conversionStore.dismissActivePopover()
             }
 
             switch event.keyCode {

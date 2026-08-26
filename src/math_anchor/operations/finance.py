@@ -248,8 +248,6 @@ def _bracketed_irr(
         return lower, Decimal(0), Decimal(0), 0
     if upper_value == 0:
         return upper, Decimal(0), Decimal(0), 0
-    midpoint = (lower + upper) / Decimal(2)
-    midpoint_value = _npv(cash_flows, midpoint)
     for iteration in range(1, max_iterations + 1):
         midpoint = (lower + upper) / Decimal(2)
         midpoint_value = _npv(cash_flows, midpoint)

@@ -18,9 +18,18 @@ from .catalog import (
     operation_schemas,
     search_operations,
 )
-from .contracts import BATCH_RESULT_SCHEMA, RUN_TOOL_OUTPUT_SCHEMA, batch_item_parameters, batch_tool_parameters, run_tool_parameters
-from .errors import CalculatorError
+from .contracts import (
+    BATCH_RESULT_SCHEMA,
+    RUN_TOOL_OUTPUT_SCHEMA,
+    batch_item_parameters,
+    batch_tool_parameters,
+    describe_tool_parameters,
+    run_tool_parameters,
+)
+from .errors import CalculatorError, error_payload
 from .output_policy import DEFAULT_BATCH_MAX_OUTPUT_BYTES, DEFAULT_MAX_OUTPUT_BYTES
+from .runtime_control import MAX_ACTIVE_REQUESTS, MAX_QUEUED_REQUESTS
+from .runtime_telemetry import RUNTIME_TELEMETRY
 from .sandbox import run_batch, run_operation, warm_worker_pool
 
 
@@ -30,6 +39,8 @@ _READ_ONLY = ToolAnnotations(
     idempotentHint=True,
     openWorldHint=False,
 )
+_MCP_INGRESS_LIMIT = MAX_ACTIVE_REQUESTS + MAX_QUEUED_REQUESTS
+_MCP_INGRESS = threading.BoundedSemaphore(_MCP_INGRESS_LIMIT)
 
 # PyInstaller freezes the postponed annotations used by FastMCP's Settings
 # model before pydantic-settings can always resolve them itself. Rebuild with
@@ -64,7 +75,15 @@ def _caught(callable_: Any, *arguments: Any) -> dict[str, Any]:
 @mcp.tool(
     name="math.run",
     title="Run a mathematical operation",
-    description="Calculate, solve, verify, differentiate, integrate, analyze dimensions, convert units, or run another supported typed operation. Exact and approximate results stay separate. One successful ordinary call is sufficient.",
+    description=(
+        "Use for exact or reliability-sensitive mathematics, especially fixed-width overflow and bits, "
+        "IEEE-754, named rounding or division conventions, large integers, matrices, units and dimensions, "
+        "uncertainty, probability, numerical methods, or finance. Do not use for trivial low-risk arithmetic. "
+        "Always pass operation-specific fields inside the arguments object: {operation, arguments}; never flatten them. "
+        "Known direct shapes need no describe call: integer.machine_arithmetic arguments include action, left, right, "
+        "bitWidth, signedness, inputMode, and overflowBehavior; combinatorics.count arguments use action, n, and k. "
+        "The typed operation keeps exact and approximate results separate; one successful ordinary call is sufficient."
+    ),
     annotations=_READ_ONLY,
     structured_output=True,
 )
@@ -132,7 +151,11 @@ def math_search(
 @mcp.tool(
     name="math.describe",
     title="Describe a mathematical operation",
-    description="Get schema and examples for one operation selected by math.search.",
+    description=(
+        "Get schema and argument examples only for one unfamiliar operation selected by math.search. "
+        "Do not call this for known integer.machine_arithmetic or combinatorics.count shapes. "
+        "Examples are arguments objects; nest one under math.run.arguments and pass its id as math.run.operation."
+    ),
     annotations=_READ_ONLY,
     structured_output=True,
 )
@@ -146,17 +169,43 @@ def math_describe(
 
 
 async def _run_cancellable(callable_: Any, *arguments: Any, **keywords: Any) -> dict[str, Any]:
+    if not _MCP_INGRESS.acquire(blocking=False):
+        RUNTIME_TELEMETRY.increment("mcp.ingressOverloaded")
+        return {
+            "status": "error",
+            "error": error_payload(
+                "E_OVERLOADED",
+                "MCP calculation ingress is full; retry after the current burst",
+                {"inflightLimit": _MCP_INGRESS_LIMIT},
+                phase="admission",
+                retry_after_ms=100,
+            ),
+        }
     cancel_event = threading.Event()
-    worker = asyncio.create_task(
-        asyncio.to_thread(
-            callable_,
-            *arguments,
-            cancel_event=cancel_event,
-            **keywords,
-        )
-    )
+    released = False
+
+    def release_ingress(_completed: asyncio.Task[dict[str, Any]] | None = None) -> None:
+        nonlocal released
+        if not released:
+            released = True
+            _MCP_INGRESS.release()
+
     try:
-        return await asyncio.shield(worker)
+        worker = asyncio.create_task(
+            asyncio.to_thread(
+                callable_,
+                *arguments,
+                cancel_event=cancel_event,
+                **keywords,
+            )
+        )
+    except BaseException:
+        release_ingress()
+        raise
+    try:
+        result = await asyncio.shield(worker)
+        release_ingress()
+        return result
     except asyncio.CancelledError:
         # The request was cancelled at the transport. Cleanup — killing the
         # active child and returning the pool worker — continues on the
@@ -164,6 +213,13 @@ async def _run_cancellable(callable_: Any, *arguments: Any, **keywords: Any) -> 
         # runtime) every await inside this handler is immediately
         # re-cancelled, so deliberately do not wait for the drain here.
         cancel_event.set()
+        # Do not free ingress while the executor thread still owns its worker;
+        # otherwise a cancellation storm can exceed the advertised in-flight
+        # bound even though every request appears cancelled to its caller.
+        worker.add_done_callback(release_ingress)
+        raise
+    except BaseException:
+        release_ingress()
         raise
 
 
@@ -177,8 +233,10 @@ def _tool_result(result: dict[str, Any]) -> CallToolResult:
     return CallToolResult(
         content=[TextContent(type="text", text=summary)],
         structuredContent=result,
-        # MCP execution errors must not be mistaken for successful provider
-        # results by a host that preserves the transport error boundary.
+        # MCP reports tool execution errors — including domain and input
+        # errors — through isError so host frameworks cannot mistake a failed
+        # call for a successful one. A partial batch is a valid batch result;
+        # its per-item envelopes carry their own statuses.
         isError=failed,
     )
 
@@ -199,6 +257,7 @@ def _install_generated_tool_contracts() -> None:
     search_tool.parameters["additionalProperties"] = False
     describe_tool.parameters["additionalProperties"] = False
     run_tool.parameters = run_tool_parameters(schemas)
+    describe_tool.parameters = describe_tool_parameters(schemas)
     run_tool.__dict__["output_schema"] = RUN_TOOL_OUTPUT_SCHEMA
     batch_tool.parameters = batch_tool_parameters()
     batch_tool.__dict__["output_schema"] = BATCH_RESULT_SCHEMA

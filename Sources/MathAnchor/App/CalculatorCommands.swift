@@ -1,8 +1,10 @@
 import SwiftUI
+import MathAnchorCore
 
 struct CalculatorCommands: Commands {
     @ObservedObject var store: CalculatorStore
     @ObservedObject var conversionStore: UnitConversionStore
+    let modeTransition: CalculatorModeTransition
 
     var body: some Commands {
         CommandGroup(replacing: .newItem) {}
@@ -57,13 +59,28 @@ struct CalculatorCommands: Commands {
         }
 
         CommandMenu("Mode") {
-            Button("Basic") { store.selectMode(.basic) }
+            Button("Basic") {
+                modeTransition.select(
+                    .basic,
+                    calculatorStore: store,
+                    conversionStore: conversionStore
+                )
+            }
                 .keyboardShortcut("1", modifiers: [.command])
-            Button("Scientific") { store.selectMode(.scientific) }
+            Button("Scientific") {
+                modeTransition.select(
+                    .scientific,
+                    calculatorStore: store,
+                    conversionStore: conversionStore
+                )
+            }
                 .keyboardShortcut("2", modifiers: [.command])
             Button("Convert") {
-                store.selectMode(.conversion)
-                conversionStore.activate()
+                modeTransition.select(
+                    .conversion,
+                    calculatorStore: store,
+                    conversionStore: conversionStore
+                )
             }
             .keyboardShortcut("3", modifiers: [.command])
             Divider()

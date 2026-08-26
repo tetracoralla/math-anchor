@@ -6,7 +6,7 @@ import sys
 from typing import Any
 
 from .catalog import describe_operation, search_operations
-from .errors import CalculatorError
+from .errors import CalculatorError, error_payload
 from .output_policy import DEFAULT_MAX_OUTPUT_BYTES
 from .sandbox import run_batch, run_operation
 
@@ -80,7 +80,7 @@ def main() -> None:
     except CalculatorError as error:
         result = {"status": "error", "error": error.as_dict()}
     except json.JSONDecodeError as error:
-        result = {"status": "error", "error": {"code": "E_INPUT", "message": f"invalid JSON: {error}"}}
+        result = {"status": "error", "error": error_payload("E_INPUT", f"invalid JSON: {error}")}
     json.dump(result, sys.stdout, ensure_ascii=False, indent=2)
     sys.stdout.write("\n")
     if result.get("status") == "error":

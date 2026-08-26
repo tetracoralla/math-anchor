@@ -3,8 +3,11 @@ Copyright 2026 openAdam
 
 The source repository does not contain generated Python runtime bundles.
 Every runtime produced by script/package_runtime.sh contains a generated
-THIRD_PARTY_NOTICES.txt with the license material for the exact locked runtime
-dependencies and an SPDX 2.3 software bill of materials in sbom.spdx.json.
+THIRD_PARTY_NOTICES.txt with the license material for the exact bundled
+runtime dependencies drawn from the lock, and an SPDX 2.3 software bill of
+materials in sbom.spdx.json. It also carries this project's LICENSE and NOTICE
+so recipients retain the source license and attribution with the executable
+distribution.
 
 Currency reference data is provided by the European Central Bank. Calculated
 cross-rates in this application are derived from ECB euro reference rates and

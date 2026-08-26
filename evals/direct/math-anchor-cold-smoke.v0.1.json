@@ -1,0 +1,28 @@
+{
+  "$schema": "../../../agent-tool-evals/schemas/direct-plan.schema.json",
+  "schemaVersion": "openadam.agent-tool-eval.direct-plan.v0.1",
+  "executionMode": "direct-host",
+  "id": "math-anchor.direct-host.cold-smoke",
+  "title": "Math Anchor structured direct-host cold smoke",
+  "purpose": "development-smoke",
+  "suiteRef": {"id": "math-anchor.direct-host.coding-agent-profile", "version": "0.1.0"},
+  "targetRef": {"id": "math-anchor", "version": "0.4.0"},
+  "providerRef": {"id": "math-anchor-local-runtime", "version": "0.4.0"},
+  "repeats": 1,
+  "budget": {
+    "perCallTimeoutMs": 15000,
+    "maxRequestBytes": 131072,
+    "maxStdoutBytes": 262144,
+    "maxStderrBytes": 65536,
+    "maxReportBytes": 8388608
+  },
+  "capture": {"answer": "digest"},
+  "driver": {
+    "id": "math-anchor-direct-driver",
+    "version": "0.1.0",
+    "root": "/MATH_ANCHOR_ROOT",
+    "command": "/MATH_ANCHOR_DIRECT_DRIVER",
+    "args": []
+  },
+  "oracleIsolation": {"mode": "deny-read-roots"}
+}

@@ -1,10 +1,11 @@
 import SwiftUI
+import MathAnchorCore
 
 struct CurrencyRateStatusView: View {
     @ObservedObject var store: UnitConversionStore
 
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 60)) { context in
+        TimelineView(.periodic(from: .now, by: 15)) { context in
             Button {
                 store.setPopover(.rateDetails, presented: true)
             } label: {
@@ -90,7 +91,11 @@ struct CurrencyRateStatusView: View {
                 .foregroundStyle(CalculatorPalette.secondaryText)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Button(store.isConverting ? "Updating…" : "Refresh rates") {
+            Button(
+                store.isAwaitingFirstResult || store.isShowingDelayedProgress
+                    ? "Updating…"
+                    : "Refresh rates"
+            ) {
                 store.refreshRates()
             }
             .buttonStyle(.bordered)
@@ -134,7 +139,7 @@ struct CurrencyRateStatusView: View {
         if store.errorMessage != nil {
             return ("UNAVAILABLE", CalculatorPalette.error)
         }
-        if store.isConverting && store.rateMetadata == nil {
+        if store.isAwaitingFirstResult || store.isShowingDelayedProgress {
             return ("UPDATING", CalculatorPalette.accent)
         }
         guard let metadata = store.rateMetadata else {
@@ -142,9 +147,6 @@ struct CurrencyRateStatusView: View {
         }
         if metadata.isExpired(at: date) {
             return ("EXPIRED", CalculatorPalette.warning)
-        }
-        if store.isConverting {
-            return ("UPDATING", CalculatorPalette.accent)
         }
         return ("CURRENT", CalculatorPalette.accent)
     }

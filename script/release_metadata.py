@@ -50,6 +50,18 @@ def canonical_version(root: Path) -> str:
             "Plugin and Python project versions differ: "
             f"project={version!r}, plugin={plugin_version!r}"
         )
+    package_path = root / "src" / "math_anchor" / "__init__.py"
+    try:
+        package_text = package_path.read_text(encoding="utf-8")
+    except OSError as error:
+        fail(f"could not read the runtime package version from {package_path}: {error}")
+    package_match = re.search(r'^__version__\s*=\s*"([^"]+)"\s*$', package_text, re.MULTILINE)
+    package_version = package_match.group(1) if package_match else None
+    if package_version != version:
+        fail(
+            "Python runtime and project versions differ: "
+            f"project={version!r}, runtime={package_version!r}"
+        )
     return version
 
 

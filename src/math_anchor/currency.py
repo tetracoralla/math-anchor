@@ -60,6 +60,8 @@ class ECBRateService:
         self.timeout = timeout
         self._refresh_condition = threading.Condition()
         self._refreshing = False
+        self._refresh_generation = 0
+        self._last_refresh_succeeded: bool | None = None
         self._next_refresh_attempt_at: datetime | None = None
 
     def convert(self, arguments: dict[str, Any]) -> dict[str, Any]:
@@ -138,6 +140,7 @@ class ECBRateService:
         force_refresh: bool,
     ) -> tuple[RateSnapshot, bool, bool, bool]:
         coalesced = False
+        wait_started_generation: int | None = None
         wait_deadline = monotonic_time.monotonic() + self.timeout
         while True:
             cached = self._load_cache()
@@ -147,10 +150,6 @@ class ECBRateService:
                         cached.next_refresh_attempt_at,
                         self._next_refresh_attempt_at or cached.next_refresh_attempt_at,
                     )
-                if cached is not None and coalesced:
-                    return cached, False, False, now < cached.next_refresh_attempt_at
-                if cached is not None and not force_refresh and now < cached.expires_at:
-                    return cached, False, False, False
                 if self._refreshing:
                     remaining = wait_deadline - monotonic_time.monotonic()
                     if remaining <= 0:
@@ -160,9 +159,37 @@ class ECBRateService:
                             "E_PROVIDER",
                             "Currency rates are unavailable. Try again.",
                         )
+                    if not coalesced:
+                        wait_started_generation = self._refresh_generation
                     self._refresh_condition.wait(timeout=remaining)
                     coalesced = True
                     continue
+                if cached is not None and coalesced:
+                    # Only reach this branch after the leader has actually
+                    # finished. Condition waits may wake spuriously, and cache
+                    # fields cannot identify a successful forced refresh when
+                    # the provider and test clock legitimately return the same
+                    # publication metadata.
+                    refresh_completed = (
+                        wait_started_generation is not None
+                        and self._refresh_generation > wait_started_generation
+                    )
+                    refresh_succeeded = (
+                        refresh_completed and self._last_refresh_succeeded is True
+                    )
+                    refresh_failed = (
+                        refresh_completed and self._last_refresh_succeeded is False
+                    )
+                    return (
+                        cached,
+                        False,
+                        refresh_failed,
+                        not refresh_succeeded
+                        and not refresh_failed
+                        and now < cached.next_refresh_attempt_at,
+                    )
+                if cached is not None and not force_refresh and now < cached.expires_at:
+                    return cached, False, False, False
                 next_attempt = (
                     cached.next_refresh_attempt_at
                     if cached is not None
@@ -179,10 +206,12 @@ class ECBRateService:
                 break
 
         published_next_attempt_at: datetime | None = None
+        refresh_succeeded = False
         try:
             snapshot = self._fetch(now)
             self._save_cache(snapshot)
             published_next_attempt_at = snapshot.next_refresh_attempt_at
+            refresh_succeeded = True
             return snapshot, True, False, False
         except Exception as error:
             next_attempt = now + REFRESH_RETRY_INTERVAL
@@ -199,6 +228,8 @@ class ECBRateService:
             with self._refresh_condition:
                 if published_next_attempt_at is not None:
                     self._next_refresh_attempt_at = published_next_attempt_at
+                self._refresh_generation += 1
+                self._last_refresh_succeeded = refresh_succeeded
                 self._refreshing = False
                 self._refresh_condition.notify_all()
 

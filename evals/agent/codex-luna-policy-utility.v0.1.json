@@ -1,0 +1,43 @@
+{
+  "schemaVersion": "openadam.agent-tool-eval.experiment.v0.1",
+  "id": "math-anchor.codex-luna.policy-coding-agent-utility-0-3",
+  "title": "Math Anchor 0.4 policy-assisted Coding Agent utility estimate in Codex Luna",
+  "purpose": "utility-estimate",
+  "suiteRef": {"id": "math-anchor.coding-agent-utility", "version": "0.1.0"},
+  "targetRef": {"id": "math-anchor", "version": "0.4.0"},
+  "agent": {"provider": "openai", "model": "gpt-5.6-luna"},
+  "harness": {"id": "codex-cli", "version": "0.150.0-alpha.8"},
+  "repeats": 3,
+  "seed": "math-anchor-policy-coding-agent-utility-2026-08-24",
+  "budget": {
+    "perRunTimeoutMs": 120000,
+    "maxStdoutBytes": 131072,
+    "maxStderrBytes": 65536,
+    "maxReportBytes": 67108864,
+    "maxTotalTokens": 100000,
+    "maxOutputTokens": 2000,
+    "maxToolCalls": 4
+  },
+  "capture": {"answer": "digest", "toolArguments": "digest", "toolResults": "digest"},
+  "driver": {
+    "id": "codex-cli-driver",
+    "version": "0.4.1",
+    "command": "node",
+    "args": [
+      "src/adapters/codex-driver.mjs",
+      "--model", "gpt-5.6-luna",
+      "--config", "model_reasoning_effort=\"low\"",
+      "--target-plugin-id", "math-anchor@openadam",
+      "--target-mcp-server-id", "math-anchor",
+      "--target-tool-prefix", "math.",
+      "--target-tool-prefix", "math-anchor.",
+      "--shared-instructions-file", "${MATH_ANCHOR_CODING_AGENT_POLICY}"
+    ],
+    "cwd": "."
+  },
+  "oracleIsolation": {"mode": "deny-read-roots"},
+  "conditions": {
+    "baseline": {"capabilityAvailable": false, "declaredDifference": "target-capability-availability"},
+    "treatment": {"capabilityAvailable": true, "declaredDifference": "target-capability-availability"}
+  }
+}

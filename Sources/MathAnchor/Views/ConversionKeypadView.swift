@@ -1,4 +1,5 @@
 import SwiftUI
+import MathAnchorCore
 
 struct ConversionKeypadView: View {
     let store: UnitConversionStore
@@ -67,5 +68,11 @@ struct ConversionKeypadView: View {
             textYOffset: textYOffset,
             action: action
         )
+    }
+}
+
+extension ConversionKeypadView: Equatable {
+    nonisolated static func == (lhs: ConversionKeypadView, rhs: ConversionKeypadView) -> Bool {
+        lhs.store === rhs.store
     }
 }

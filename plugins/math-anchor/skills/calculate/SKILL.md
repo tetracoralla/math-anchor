@@ -1,67 +1,92 @@
 ---
 name: calculate
-description: "Use Math Anchor for reliability-sensitive mathematics: exact or high-precision evaluation, verification, algebra, calculus, number theory, combinatorics, linear algebra, financial math, probability, statistics, physical quantities, and symbolic dimensional analysis. Its four tools are already registered; for a known operation call math.run directly without listing MCP resources. Do not load it for trivial, low-risk arithmetic the model can immediately verify; trigger when precision, exactness, units, diagnostics, reuse, or consequences justify a deterministic calculation."
+description: "Use Math Anchor for reliability-sensitive mathematics. MUST load and use it for fixed-width wrapping/saturating arithmetic, bit operations and fields, IEEE-754 representation, and large exact combinatorial counts; never answer those from mental arithmetic. Also use it for exact or high-precision evaluation, explicit rounding/division conventions, verification, calculus, linear algebra, finance, probability, statistics, measurement uncertainty, units, and dimensional analysis. For a known operation call math.run directly with {operation, arguments}. Skip only genuinely trivial low-risk arithmetic."
 ---
 
 # Calculate
 
-Let reasoning translate the user's request into mathematics, then use the runtime when a deterministic calculation materially improves reliability.
+Translate the user's request into explicit mathematics, then use Math Anchor
+when deterministic execution materially improves reliability.
 
-## Decide whether to call
+## Decide and route
 
-- Answer trivial, low-risk arithmetic directly when it is immediately verifiable, needs no units or special convention, and is not feeding a consequential decision. Examples include a single small addition or multiplication.
-- Call Math Anchor when the user asks for exact or high-precision output, symbolic work, units, matrices, statistics, probability, financial math, verification, repeated calculations, or a result whose correctness affects a consequential next step.
-- Call Math Anchor when the alternative would be mentally simulating a multi-step calculation or a standard scientific algorithm.
-- If a missing assumption changes the mathematical problem, ask for it before calling. Do not use a tool call to hide ambiguity.
+- Do not load it for trivial, low-risk arithmetic the model can immediately
+  verify.
+- Always use it for fixed-width or IEEE-754 facts; do not classify them as trivial arithmetic
+  merely because the visible numbers are small.
+- Call Math Anchor for machine semantics, exact or high-precision output,
+  symbolic work, matrices, units, statistics, probability, finance,
+  verification, repeated calculations, standard scientific algorithms, or a
+  result that affects a consequential next step.
+- Ask for a missing assumption when it changes the mathematical problem. Do
+  not use a call to hide ambiguity.
+- The four tools are already registered. Never call `list_mcp_resources`,
+  inspect source, or use a shell to discover them.
+- For a known request, call `math.run` directly. Use `math.search` only when
+  the operation is genuinely unfamiliar or ambiguous, then `math.describe`
+  once for the selected unfamiliar operation if its exact argument contract is
+  still needed.
+- Every run uses the outer envelope `{operation, arguments}`. Put all
+  operation-specific fields inside `arguments`; never flatten them beside
+  `operation`.
 
-## Select the operation
+Two common routes are fully known. Call `math.run` directly; never search or
+describe these shapes first:
 
-- The four Math Anchor tools are already registered. Never call `list_mcp_resources`, inspect a source checkout, or use a shell command to discover them.
-- For an ordinary supported request, call `math.run` directly. Its executable schema contains the stable operation ids and each operation's current arguments.
-- Use `quantity.evaluate` for concrete unit-bearing arithmetic such as `3 * meter + 25 * centimeter`. Use `dimension.check` for symbolic formula consistency, `dimension.infer` when declared symbol dimensions are unknown, and `dimension.pi_groups` for a Buckingham Pi basis of dimensionless products. These are known operations and do not require search or describe.
-- Call `math.search` only when the mathematical operation is genuinely unfamiliar or ambiguous. Search using the user's task language.
-- Call `math.describe` only for the selected unfamiliar operation when its contract still needs inspection.
+- Fixed-width arithmetic: `{"operation":"integer.machine_arithmetic","arguments":{"action":"add","left":"255","right":"2","bitWidth":8,"signedness":"unsigned","inputMode":"value","overflowBehavior":"wrapping"}}`
+- Exact combinations/permutations: `{"operation":"combinatorics.count","arguments":{"action":"binomial","n":52,"k":5}}`
 
-## Execute
+## Execute economically
 
-- Call `math.run` for one calculation.
-- Call `math.batch` for 2 to 32 independent calculations when they can run without consuming one another's output. Preserve input order when matching results back to the request.
-- For large matrices or other bulky results, prefer `resultMode: "exact"` or `resultMode: "approx"` when only one representation is needed. Increase `maxOutputBytes` only when the additional content is genuinely useful. `math.batch` keeps a compact generic item contract; use `math.describe` only if an item's operation schema is unfamiliar.
-- Control output digits with the selected operation's `arguments.precision` field (2-200 significant decimal digits, default 16); `precision` is not a top-level `math.run` field. Exact values are exact regardless of precision; only the approximate field follows it. Do not request extreme precision reflexively: high precision slows evaluation and bloats results, and most inputs only carry a few trustworthy digits.
-- `arguments.precision` counts significant digits, not decimal places. When the user requests decimal places, include the expected integer digits plus at least two guard digits in the first call, then round once for presentation; do not make a preliminary lower-precision call.
-- Use `function.sample` to evaluate one expression at many points in a single call (explicit point list or an even grid) instead of issuing repeated single-point evaluations.
+- Use `math.run` for one calculation and `math.batch` for 2–32 independent
+  calculations. Batch preserves input order and does not form a dependency
+  graph.
+- Use `function.sample` for one expression at many points instead of repeated
+  single-point calls.
+- Use `resultMode: "exact"` or `resultMode: "approx"` for bulky output when
+  one representation is sufficient. Raise `maxOutputBytes` only when the added
+  content is useful.
+- Control digits with `arguments.precision`; `precision` is not a top-level `math.run` field.
+  It counts significant digits, not decimal places. Exact
+  fields remain exact. For requested decimal places, allow integer digits plus
+  at least two guard digits in the first call and round once for presentation.
+- Supply all material assumptions explicitly: variables, bounds, units,
+  conventions, brackets, data, and tolerances. Do not invent one that changes
+  the answer.
 
-- Supply all business assumptions explicitly as expressions, variables, bounds, units, or data. Do not invent a missing unit, equation, time period, statistical convention, root bracket, or variable meaning when it changes the answer.
-- For matrix solving, rank, RREF, and basis operations, send exact integers or rational text such as `1/10`. Do not silently turn approximate decimal matrices into exact structural claims.
-- Use `matrix.solve_approximate` for decimal matrices only when the tolerance is meaningful to the request; preserve its condition, residual, backward-error, and stability fields.
-- Use `numeric.integrate` when a symbolic definite integral is unavailable or a numerical interval is requested. Preserve that its `resultInterval` is estimate-based whenever `errorBoundCertified` is false. A result with `status: uncertain` met only the local error estimate; do not call it converged. Supply `breakpoints` only when they identify every material discontinuity or localized feature, or `featureScale` only when the user can bound the minimum material feature width.
-- Use `expression.equivalent` instead of comparing formatted strings. Keep its default strict definedness policy unless the user explicitly means equality only where both expressions are defined.
-- Use `numeric.minimize` when a global minimum or maximum over a bracket is requested. Its `valueEnclosure` and `extremumIntervals` are rigorous interval-arithmetic results; treat `status: uncertain` as the best certified bound, not a finished answer. The bracket must avoid undefined points; supply a narrower bracket when it does not.
-- Use `numeric.root` with `findAll` when every sign-changing root in a bracket is requested; report the honest limitation that even-multiplicity roots or roots closer together than the resolution can be missed.
+Load only the relevant reference when the request needs its policy:
 
-- Use `solution.verify` to check supplied roots or assignments. Do not describe candidates as exhaustive unless `omissionRisk` is `none_proven`.
-- Write unit arithmetic with explicit multiplication, such as `80 * kg * 9.81 * m / s^2`, and use `toUnit` when a named result unit matters.
-- For symbolic checks and inference, declare every expression symbol with a unit or canonical dimension vector. Preserve `scope: dimensional_consistency_only`: consistency does not prove a physical law or coefficient is correct. `dimension.infer` returns dimensions, not a preferred unit. An `underdetermined` result can still contain parameter-independent entries in `inferred`; treat only `unresolved` symbols as unresolved, and never guess past them or an `inconsistent` classification. For `dimension.pi_groups`, declare each variable with a unit expression; it returns one exact primitive-integer basis, not a unique named physical quantity, so preserve its non-uniqueness warning.
-- For financial work, pass decimal text and preserve the returned period, timing, IRR-bracket, and rounding conventions. The runtime is a calculator, not a transaction quote.
-- If the runtime returns `E_INPUT`, `E_DOMAIN`, or `E_UNIT`, correct the mathematical input or ask for the missing choice. Do not replace the calculation with a mental estimate.
-- If it returns `E_TIMEOUT` or `E_MEMORY`, reduce a genuinely oversized request or explain the execution limit. Do not claim a result.
+- [machine-semantics.md](references/machine-semantics.md) for fixed-width,
+  bits, IEEE-754, rounding, and integer division.
+- [scientific-math.md](references/scientific-math.md) for symbolic work,
+  calculus, numerical methods, matrices, linear algebra, and verification.
+- [statistics-units-dimensions.md](references/statistics-units-dimensions.md)
+  for probability, statistics, uncertainty, quantities, dimensional analysis,
+  and finance. Use `dimension.check` for symbolic formula consistency and
+  `dimension.pi_groups` for a Buckingham Pi basis; preserve
+  `scope: dimensional_consistency_only`.
+- [result-error-policy.md](references/result-error-policy.md) for result
+  presentation, errors, retries, limits, uncertainty, and consequential use.
 
-## Present the result
+## Present and check
 
-- Prefer `exact` when the user needs a symbolic answer. Include `approx` only when it helps or when the user requested a decimal value.
-- Never describe `approx` as exact. Preserve the returned precision, unit, solution branch, and warnings when they affect use of the answer.
-- Preserve explicit operation actions, linear-system classification, matrix pivots or basis vectors, and series order when they affect interpretation.
-- Preserve returned statistical methods and degrees of freedom when they affect interpretation. For exact decimal statistics or unit conversion, send decimal inputs as strings rather than JSON floating-point numbers.
-- Preserve distribution support, inferential assumptions, sample size, and approximate provenance for probability and statistics results.
-- Explain the mathematical setup briefly when it helps the user verify that the right problem was computed; keep engine names, worker limits, schemas, and protocol fields out of the ordinary answer.
-- For a conceptual explanation that needs no calculation, answer normally without calling the tools.
-
-## Check the result
-
-- A successful tool response proves that the declared operation ran; it does not prove that the Agent translated the user's problem correctly.
-- Stop after the first successful call for an ordinary calculation. A rejected malformed call may be corrected once, but do not repeat an identical successful call as validation; it exercises the same implementation with the same inputs and is not independent evidence.
-- Before presenting a consequential result, check the cheapest relevant invariant: units and dimensions, sign and plausible magnitude, probability support, matrix residual or condition, root residual and omission risk, statistical method and sample size, or financial period and timing convention.
-- Prefer diagnostics already returned by that call. Make an additional call only when a consequential result needs a materially different operation or independent invariant that the first response does not provide.
-- Preserve `status: uncertain`, warnings, residuals, error bounds, and stability diagnostics. Do not turn them into an unqualified answer.
-- If the result conflicts with an invariant, do not rationalize it. Correct the declared inputs or operation and call again; if the conflict remains, report that the calculation could not be validated.
-- For high-consequence decisions, treat Math Anchor as calculation support rather than the sole authority and use an independent review or domain source appropriate to the decision.
+- Prefer `exact` for symbolic answers. Include `approx` when useful or
+  requested, and never describe it as exact.
+- Preserve precision, units, conventions, assumptions, warnings, uncertainty,
+  residuals, error bounds, stability diagnostics, branches, and omission risk
+  when they affect interpretation.
+- Explain the mathematical setup briefly when useful; omit engine, worker,
+  schema, and protocol details from the ordinary answer.
+- Stop after the first successful call for an ordinary calculation. Repeating
+  identical input is not independent validation.
+- A successful tool response proves that the declared operation ran; it does
+  not prove that the user's problem was translated correctly.
+- Before presenting a consequential result, check the cheapest relevant
+  invariant already available: dimensions, sign and magnitude, support,
+  residual or condition, sample size and method, or period and timing.
+- If an invariant conflicts with the result, correct the declared input or
+  operation once. If the conflict remains, report that the calculation could
+  not be validated.
+- For conceptual explanation without calculation, answer normally without the
+  tools. For high-consequence decisions, use Math Anchor as calculation
+  support rather than the sole authority.

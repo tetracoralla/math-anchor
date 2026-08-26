@@ -192,6 +192,19 @@ struct CalculatorStoreChecks {
                 == "Calculation failed.",
             "runtime internals are not exposed in the calculator display"
         )
+        check(
+            MathRuntimeError.runtimeNotInstalled.errorDescription
+                == "The calculation engine could not be started.",
+            "startup failure copy stays free of developer instructions"
+        )
+        check(
+            MathDisplayFormatting.expression("2*pi") == "2×π",
+            "the pi constant renders as a glyph on the display"
+        )
+        check(
+            EvaluationResult(exact: "103/20", approximate: "5.150000000000000").displayValue == "5.15",
+            "result display drops meaningless trailing zeros"
+        )
 
         let editableTextView = NSTextView()
         editableTextView.isEditable = true
@@ -236,8 +249,8 @@ struct CalculatorStoreChecks {
         check(inputStore.display == "1÷3", "human operator formatting")
         check(!inputStore.isShowingResult, "input state does not expose a secondary expression")
         inputStore.square()
-        inputStore.applyToCurrent("sqrt")
-        check(inputStore.expression == "sqrt((1/3)^2)", "scientific transform")
+        inputStore.applyFunction("sqrt")
+        check(inputStore.expression == "(1/3)^sqrt(2)", "scientific transform")
 
         let guardedInputStore = CalculatorStore(
             runtime: SuccessfulRuntime(result: EvaluationResult(exact: "0", approximate: "0")),
@@ -291,6 +304,20 @@ struct CalculatorStoreChecks {
         resultStore.memoryAdd()
         check(resultStore.memory != nil, "memory add")
 
+        let undoResultStore = CalculatorStore(
+            runtime: SuccessfulRuntime(result: EvaluationResult(exact: "220", approximate: "220")),
+            historyStore: history,
+            clipboard: clipboard
+        )
+        undoResultStore.replaceExpression("200+20")
+        undoResultStore.evaluate()
+        await waitForEvaluation(undoResultStore)
+        undoResultStore.backspace()
+        check(undoResultStore.expression == "220", "undo on a result edits the value instead of clearing")
+        check(!undoResultStore.isShowingResult, "undo on a result leaves result state")
+        undoResultStore.backspace()
+        check(undoResultStore.expression == "22", "further undo trims the edited value")
+
         let operandStore = CalculatorStore(
             runtime: SuccessfulRuntime(result: EvaluationResult(exact: "0", approximate: "0")),
             historyStore: history,
@@ -310,6 +337,54 @@ struct CalculatorStoreChecks {
         operandStore.replaceExpression("2+3")
         operandStore.cube()
         check(operandStore.expression == "(2+3)^3", "cube matches square scope")
+        operandStore.replaceExpression("2+3")
+        operandStore.reciprocal()
+        check(operandStore.expression == "2+1/(3)", "reciprocal matches the trailing-operand unary scope")
+        operandStore.replaceExpression("2+3")
+        operandStore.applyFunction("factorial")
+        check(operandStore.expression == "2+factorial(3)", "factorial matches the trailing-operand unary scope")
+
+        // Entry-machine regressions: each check pins a fix whose silent
+        // revert would otherwise leave the suite green.
+        let entryStore = CalculatorStore(
+            runtime: SuccessfulRuntime(result: EvaluationResult(exact: "0", approximate: "0")),
+            historyStore: history,
+            clipboard: clipboard
+        )
+        entryStore.append("0")
+        entryStore.append("0")
+        check(entryStore.expression == "0", "a second digit replaces a lone leading zero")
+        entryStore.append("5")
+        check(entryStore.expression == "5", "digits after a lone zero do not form 005")
+        entryStore.append("+")
+        entryStore.append("0")
+        entryStore.append("5")
+        check(entryStore.expression == "5+5", "a lone zero operand is replaced mid-expression")
+        entryStore.clear()
+        for _ in 0..<19 {
+            entryStore.append("1")
+        }
+        check(entryStore.expression.count == 18, "operand digit entry stops at the familiar limit")
+        entryStore.clear()
+        entryStore.append(")")
+        check(entryStore.expression.isEmpty, "a closing parenthesis without an opening one is ignored")
+        entryStore.appendFunction("sin")
+        entryStore.percent()
+        check(entryStore.expression == "sin(", "percent after an operator or open function is a no-op")
+        entryStore.clear()
+        entryStore.append("(")
+        entryStore.append("2")
+        entryStore.append("+")
+        entryStore.append("3")
+        entryStore.percent()
+        entryStore.append(")")
+        check(entryStore.expression == "(2+3%)", "percent keeps suffix notation inside a group")
+        entryStore.clear()
+        entryStore.append("2")
+        entryStore.append("*")
+        entryStore.append("3")
+        entryStore.copyResult()
+        check(clipboard.value == "2*3", "mid-entry copy stays plain ASCII")
 
         let memoryStore = CalculatorStore(
             runtime: SuccessfulRuntime(result: EvaluationResult(exact: "2", approximate: "2.000000000000000")),
@@ -410,6 +485,38 @@ struct CalculatorStoreChecks {
             "target picker exposes only compatible units"
         )
 
+        let retentionStore = UnitConversionStore(runtime: DelayedUnitRuntime())
+        retentionStore.clear()
+        await waitForConversion(retentionStore)
+        retentionStore.appendDigit("2")
+        try? await Task.sleep(for: .milliseconds(30))
+        check(retentionStore.isConverting, "a value edit keeps a conversion in flight")
+        check(retentionStore.output == "0", "the previous result stays visible while a value edit converts")
+        check(!retentionStore.isAwaitingFirstResult, "a retained result is not presented as a first result")
+        await waitForConversion(retentionStore)
+        check(retentionStore.output == "2", "the replaced result lands")
+
+        let slowRetentionStore = UnitConversionStore(runtime: DelayedUnitRuntime())
+        slowRetentionStore.activate()
+        await waitForConversion(slowRetentionStore)
+        check(slowRetentionStore.output == "1", "slow-retention baseline result lands")
+        slowRetentionStore.appendDigit("2")
+        try? await Task.sleep(for: .milliseconds(200))
+        check(
+            slowRetentionStore.isShowingDelayedProgress,
+            "a slow replacement stops presenting the retained result as current"
+        )
+        check(
+            slowRetentionStore.resultForDisplay == "…",
+            "a slow replacement exposes progress instead of pairing old output with new input"
+        )
+        await waitForConversion(slowRetentionStore)
+        check(slowRetentionStore.output == "12", "slow replacement result lands")
+        check(
+            !slowRetentionStore.isShowingDelayedProgress,
+            "replacement completion clears delayed progress"
+        )
+
         let staleConversionStore = UnitConversionStore(runtime: DelayedUnitRuntime())
         staleConversionStore.clear()
         staleConversionStore.appendDigit("1")
@@ -445,10 +552,54 @@ struct CalculatorStoreChecks {
         currencyStore.refreshRates()
         await waitForConversion(currencyStore)
         check(currencyRuntime.recordedRefreshFlags.last == true, "manual refresh bypasses a current cache")
-        currencyStore.setPopover(.sourceUnit, presented: true)
-        check(currencyStore.activePopover == .sourceUnit, "conversion owns one active popover")
-        check(currencyStore.dismissActivePopover(), "escape path can dismiss the active conversion popover")
-        check(currencyStore.activePopover == nil, "dismissal leaves no popover across a mode transition")
+        currencyStore.appendDigit("2")
+        try? await Task.sleep(for: .milliseconds(30))
+        check(
+            currencyStore.rateMetadata != nil && currencyStore.output == "0.85",
+            "value-only currency edits keep the previous result and rate footer stable"
+        )
+        await waitForConversion(currencyStore)
+        failureStore.selectMode(.conversion)
+        currencyStore.setPopover(.rateDetails, presented: true)
+        check(currencyStore.activePopover == .rateDetails, "conversion owns one active popover")
+        let modeTransition = CalculatorModeTransition(popoverSettleDelay: .milliseconds(20))
+        modeTransition.select(
+            .basic,
+            calculatorStore: failureStore,
+            conversionStore: currencyStore
+        )
+        check(currencyStore.activePopover == nil, "mode transition dismisses the conversion popover")
+        check(failureStore.mode == .conversion, "mode transition retains the popover anchor while dismissal settles")
+        await waitUntil { failureStore.mode == .basic }
+        check(failureStore.mode == .basic, "mode transition completes after popover dismissal")
+
+        failureStore.selectMode(.conversion)
+        currencyStore.setPopover(.rateDetails, presented: true)
+        modeTransition.toggleModeMenu(
+            calculatorStore: failureStore,
+            conversionStore: currencyStore
+        )
+        check(!failureStore.isModePopoverPresented, "mode menu waits for the previous popover to settle")
+        await waitUntil { failureStore.isModePopoverPresented }
+        check(failureStore.isModePopoverPresented, "mode menu opens after the previous popover settles")
+
+        failureStore.isModePopoverPresented = false
+        currencyStore.setPopover(.rateDetails, presented: true)
+        currencyStore.setPopover(.rateDetails, presented: false)
+        modeTransition.select(
+            .basic,
+            calculatorStore: failureStore,
+            conversionStore: currencyStore
+        )
+        check(
+            failureStore.mode == .conversion,
+            "mode transition recognizes an AppKit-initiated popover dismissal"
+        )
+        await waitUntil { failureStore.mode == .basic }
+        check(
+            failureStore.mode == .basic,
+            "mode transition waits after an AppKit-initiated popover dismissal"
+        )
 
         let expiredCurrencyStore = UnitConversionStore(
             runtime: SuccessfulUnitRuntime(),
@@ -521,6 +672,216 @@ struct CalculatorStoreChecks {
         check(liveSignStore.display == "-1", "sign change evaluates only the current operand")
         check(liveSignStore.history.first?.expression == "2-3", "history stores the readable sign change")
 
+        let liveParenPercentStore = CalculatorStore(runtime: liveRuntime, historyStore: history, clipboard: clipboard)
+        liveParenPercentStore.append("(")
+        liveParenPercentStore.append("5")
+        liveParenPercentStore.append("+")
+        liveParenPercentStore.append("3")
+        liveParenPercentStore.percent()
+        liveParenPercentStore.append(")")
+        liveParenPercentStore.evaluate()
+        await waitForEvaluation(liveParenPercentStore)
+        check(liveParenPercentStore.display == "5.15", "percent inside a group keeps familiar additive semantics")
+        check(
+            liveParenPercentStore.history.first?.executionExpression == "(5+(((5)*(3)/100)))",
+            "percent inside a group stores a balanced executable expression"
+        )
+
+        // Unary edits after a percent must stay faithful to the visible
+        // notation: the executable string is re-derived from the edited
+        // visible expression, never spliced onto the stale percent expansion.
+        let unaryPercentStore = CalculatorStore(
+            runtime: SuccessfulRuntime(result: EvaluationResult(exact: "0", approximate: "0")),
+            historyStore: history,
+            clipboard: clipboard
+        )
+        unaryPercentStore.replaceExpression("50")
+        unaryPercentStore.percent()
+        unaryPercentStore.applyFunction("sin")
+        check(
+            unaryPercentStore.expression == "sin(50%)",
+            "function after percent keeps the visible percent notation"
+        )
+        unaryPercentStore.evaluate()
+        await waitForEvaluation(unaryPercentStore)
+        check(
+            unaryPercentStore.history.first?.executionExpression == "sin((50)/100)",
+            "function after percent stores a faithful executable expression"
+        )
+        unaryPercentStore.clear()
+        unaryPercentStore.replaceExpression("50")
+        unaryPercentStore.percent()
+        unaryPercentStore.reciprocal()
+        check(
+            unaryPercentStore.expression == "1/(50%)",
+            "reciprocal after percent wraps the percent operand"
+        )
+        unaryPercentStore.evaluate()
+        await waitForEvaluation(unaryPercentStore)
+        check(
+            unaryPercentStore.history.first?.executionExpression == "1/((50)/100)",
+            "reciprocal after percent stores a faithful executable expression"
+        )
+        unaryPercentStore.clear()
+        unaryPercentStore.replaceExpression("200+10")
+        unaryPercentStore.percent()
+        unaryPercentStore.applyFunction("sin")
+        check(
+            unaryPercentStore.expression == "200+sin(10%)",
+            "function after an additive percent wraps only the percent operand"
+        )
+        unaryPercentStore.evaluate()
+        await waitForEvaluation(unaryPercentStore)
+        check(
+            unaryPercentStore.history.first?.executionExpression == "200+sin((10)/100)",
+            "function after an additive percent keeps the expansion on the correct operand"
+        )
+        unaryPercentStore.clear()
+        unaryPercentStore.replaceExpression("200+10")
+        unaryPercentStore.percent()
+        unaryPercentStore.toggleSign()
+        check(
+            unaryPercentStore.expression == "200-10%",
+            "sign change after percent stays human-readable"
+        )
+        unaryPercentStore.evaluate()
+        await waitForEvaluation(unaryPercentStore)
+        check(
+            unaryPercentStore.history.first?.executionExpression == "200-((200)*(10)/100)",
+            "sign change after percent keeps the additive expansion on the flipped operator"
+        )
+
+        let liveUnaryPercentStore = CalculatorStore(runtime: liveRuntime, historyStore: history, clipboard: clipboard)
+        liveUnaryPercentStore.replaceExpression("50")
+        liveUnaryPercentStore.percent()
+        liveUnaryPercentStore.applyFunction("sin")
+        liveUnaryPercentStore.evaluate()
+        await waitForEvaluation(liveUnaryPercentStore)
+        check(
+            liveUnaryPercentStore.display == "0.479425538604203",
+            "function after percent evaluates the displayed operand"
+        )
+        liveUnaryPercentStore.clear()
+        liveUnaryPercentStore.replaceExpression("50")
+        liveUnaryPercentStore.percent()
+        liveUnaryPercentStore.reciprocal()
+        liveUnaryPercentStore.evaluate()
+        await waitForEvaluation(liveUnaryPercentStore)
+        check(
+            liveUnaryPercentStore.display == "2",
+            "reciprocal after percent evaluates the displayed operand"
+        )
+        liveUnaryPercentStore.clear()
+        liveUnaryPercentStore.replaceExpression("200*10")
+        liveUnaryPercentStore.percent()
+        liveUnaryPercentStore.evaluate()
+        await waitForEvaluation(liveUnaryPercentStore)
+        check(liveUnaryPercentStore.display == "20", "multiplicative percent scales the operand")
+        check(
+            liveUnaryPercentStore.history.first?.executionExpression == "200*(10)/100",
+            "multiplicative percent stores the operand-scaled executable expansion"
+        )
+        liveUnaryPercentStore.clear()
+        liveUnaryPercentStore.replaceExpression("200+10")
+        liveUnaryPercentStore.percent()
+        liveUnaryPercentStore.append("+")
+        liveUnaryPercentStore.append("5")
+        liveUnaryPercentStore.percent()
+        liveUnaryPercentStore.evaluate()
+        await waitForEvaluation(liveUnaryPercentStore)
+        check(liveUnaryPercentStore.display == "231", "chained percent compounds on the accumulated value")
+
+        let liveLogStore = CalculatorStore(runtime: liveRuntime, historyStore: history, clipboard: clipboard)
+        liveLogStore.appendFunction("log")
+        liveLogStore.append("1")
+        liveLogStore.append("0")
+        liveLogStore.append("0")
+        liveLogStore.evaluate()
+        await waitForEvaluation(liveLogStore)
+        check(liveLogStore.display == "2", "the log key computes the familiar base-10 logarithm")
+        check(
+            liveLogStore.history.first?.executionExpression == "log10(100)",
+            "the log key submits the explicit base-10 executable name"
+        )
+        liveLogStore.clear()
+        liveLogStore.appendFunction("log")
+        liveLogStore.append("1")
+        liveLogStore.append("0")
+        liveLogStore.append("0")
+        liveLogStore.backspace()
+        check(
+            liveLogStore.expression == "log(10",
+            "backspace edits the still-open visible log argument"
+        )
+        liveLogStore.evaluate()
+        await waitForEvaluation(liveLogStore)
+        check(
+            liveLogStore.display == "1",
+            "backspace preserves base-10 semantics in a still-open log call"
+        )
+        check(
+            liveLogStore.history.first?.executionExpression == "log10(10)",
+            "re-derived log input keeps the explicit base-10 runtime spelling"
+        )
+        liveLogStore.clear()
+        liveLogStore.appendFunction("ln")
+        liveLogStore.append("1")
+        liveLogStore.append("0")
+        liveLogStore.append("0")
+        liveLogStore.evaluate()
+        await waitForEvaluation(liveLogStore)
+        check(liveLogStore.display == "4.605170185988091", "the ln key keeps the natural logarithm")
+
+        // The visible `log(` token is longer in the executable form (`log10(`).
+        // Clearing it one character at a time must not leave hidden runtime
+        // input that corrupts the next number.
+        liveLogStore.clear()
+        liveLogStore.appendFunction("log")
+        for _ in 0..<4 {
+            liveLogStore.backspace()
+        }
+        check(liveLogStore.expression.isEmpty, "backspace clears the visible log token")
+        liveLogStore.append("2")
+        liveLogStore.evaluate()
+        await waitForEvaluation(liveLogStore)
+        check(liveLogStore.display == "2", "backspace clears the hidden log10 spelling too")
+
+        let liveAutocloseStore = CalculatorStore(runtime: liveRuntime, historyStore: history, clipboard: clipboard)
+        liveAutocloseStore.replaceExpression("2*(3+4")
+        liveAutocloseStore.evaluate()
+        await waitForEvaluation(liveAutocloseStore)
+        check(liveAutocloseStore.display == "14", "an unmatched opening parenthesis closes at submission")
+        check(
+            liveAutocloseStore.history.first?.expression == "2*(3+4)",
+            "the submitted expression closes open groups in history too"
+        )
+
+        let repeatEqualsStore = CalculatorStore(runtime: liveRuntime, historyStore: history, clipboard: clipboard)
+        repeatEqualsStore.replaceExpression("6*7")
+        repeatEqualsStore.evaluate()
+        await waitForEvaluation(repeatEqualsStore)
+        let repeatHistoryCount = repeatEqualsStore.history.count
+        repeatEqualsStore.evaluate()
+        await waitForEvaluation(repeatEqualsStore)
+        check(
+            repeatEqualsStore.history.count == repeatHistoryCount,
+            "repeating equals on the shown result adds no history row"
+        )
+
+        // A slow conversion must not occupy the warm worker: an evaluation
+        // submitted while it is in flight still answers first on the shared
+        // runtime, because requests are matched by id rather than queued.
+        async let slowConversion = liveRuntime.convert(
+            value: "12",
+            fromUnit: "meter",
+            toUnit: "foot",
+            precision: 12
+        )
+        let interleavedEvaluation = try? await liveRuntime.evaluate(expression: "6*7", precision: 16)
+        check(interleavedEvaluation?.exact == "42", "evaluation does not queue behind a slower request")
+        let completedConversion = try? await slowConversion
+        check(completedConversion != nil, "the slower request still completes on the same worker")
+
         let liveDomainStore = CalculatorStore(runtime: liveRuntime, historyStore: history, clipboard: clipboard)
         let historyCountBeforeDomainError = liveDomainStore.history.count
         liveDomainStore.replaceExpression("1/0")
@@ -546,6 +907,86 @@ struct CalculatorStoreChecks {
         }
         let recovered = try? await boundedRuntime.evaluate(expression: "6*7", precision: 16)
         check(recovered?.exact == "42", "app runtime rebuilds after timeout")
+
+        // Abandoning a heavy expression must release the serial local runtime
+        // immediately. Keeping conversion requests warm is valuable, but the
+        // same policy for CPU-heavy evaluation made the next ordinary result
+        // wait for the abandoned operation's ten-second worker-side timeout.
+        let cancellationRuntime = MathRuntimeService(requestTimeout: 3)
+        let cancellationWarmup = try? await cancellationRuntime.evaluate(
+            expression: "1+1",
+            precision: 16
+        )
+        check(cancellationWarmup?.exact == "2", "cancellation runtime starts warm")
+        let abandonedEvaluation = Task {
+            try? await cancellationRuntime.evaluate(
+                expression: "factorial(5000)^10000",
+                precision: 16
+            )
+        }
+        try? await Task.sleep(for: .milliseconds(50))
+        cancellationRuntime.cancelPendingEvaluation()
+        let cancellationRecoveryStart = Date()
+        let cancellationRecovery = try? await cancellationRuntime.evaluate(
+            expression: "6*7",
+            precision: 16
+        )
+        let cancellationRecoveryElapsed = Date().timeIntervalSince(cancellationRecoveryStart)
+        check(cancellationRecovery?.exact == "42", "replacement evaluation succeeds after cancellation")
+        check(
+            cancellationRecoveryElapsed < 1.5,
+            "abandoned evaluation does not occupy the runtime until its timeout"
+        )
+        _ = await abandonedEvaluation.value
+
+        // A mode transition is also an explicit abandonment boundary. The
+        // real app shares one local runtime between expression evaluation and
+        // physical conversion, so this composed sequence must cancel the old
+        // CPU-heavy request before activating conversion.
+        let modeSwitchRequestTimeout: TimeInterval = 3
+        let modeSwitchRuntime = MathRuntimeService(requestTimeout: modeSwitchRequestTimeout)
+        let modeSwitchWarmup = try? await modeSwitchRuntime.evaluate(
+            expression: "1+1",
+            precision: 16
+        )
+        check(modeSwitchWarmup?.exact == "2", "mode-switch runtime starts warm")
+        let modeSwitchStore = CalculatorStore(
+            runtime: modeSwitchRuntime,
+            historyStore: history,
+            clipboard: clipboard
+        )
+        let modeSwitchConversionStore = UnitConversionStore(
+            runtime: modeSwitchRuntime,
+            clipboard: clipboard
+        )
+        modeSwitchStore.selectMode(.scientific)
+        modeSwitchStore.replaceExpression("factorial(5000)^10000")
+        modeSwitchStore.evaluate()
+        try? await Task.sleep(for: .milliseconds(50))
+        let modeSwitchStart = Date()
+        let liveModeTransition = CalculatorModeTransition(popoverSettleDelay: .milliseconds(20))
+        liveModeTransition.select(
+            .conversion,
+            calculatorStore: modeSwitchStore,
+            conversionStore: modeSwitchConversionStore
+        )
+        await waitForConversion(modeSwitchConversionStore)
+        let modeSwitchElapsed = Date().timeIntervalSince(modeSwitchStart)
+        check(modeSwitchStore.mode == .conversion, "heavy evaluation switches to conversion mode")
+        check(!modeSwitchStore.isEvaluating, "mode switch clears calculator progress")
+        check(modeSwitchConversionStore.errorMessage == nil, "first conversion survives the mode switch")
+        check(modeSwitchConversionStore.output != "—", "first conversion produces a result")
+        // This is a cancellation check, not a benchmark of first-use unit
+        // conversion on a shared hosted runner. If the old expression keeps
+        // the serial worker, this conversion reaches its own request deadline
+        // and the result checks above fail. Keep the elapsed guard tied to the
+        // same runtime contract instead of imposing a second, undocumented
+        // 1.5-second cold-path SLO.
+        check(
+            modeSwitchElapsed < modeSwitchRequestTimeout,
+            "mode switch releases the shared runtime before the old evaluation deadline"
+        )
+
         let warmStart = Date()
         for _ in 0..<20 {
             let result = try? await liveRuntime.evaluate(expression: "6*7", precision: 16)
@@ -555,7 +996,8 @@ struct CalculatorStoreChecks {
         check(warmElapsed < 1.0, "live runtime stays warm between evaluations")
 
         print(
-            "Swift store checks passed: visible/executable expression separation, unary scope, real domain errors, "
+            "Swift store checks passed: visible/executable expression separation, unary scope, unary edits after percent, "
+                + "multiplicative and chained percent, familiar log key semantics, real domain errors, "
                 + "large factorial output, stale-result rejection, isolated clipboard, warm runtime reuse "
                 + "(20 evaluations in \(Int(warmElapsed * 1_000)) ms), physical conversion, history, memory, "
                 + "and failure preservation."
@@ -573,6 +1015,18 @@ struct CalculatorStoreChecks {
     private static func waitForConversion(_ store: UnitConversionStore) async {
         while store.isConverting {
             await Task.yield()
+        }
+    }
+
+    @MainActor
+    private static func waitUntil(
+        timeout: Duration = .seconds(1),
+        _ condition: @escaping @MainActor () -> Bool
+    ) async {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: timeout)
+        while !condition(), clock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(5))
         }
     }
 

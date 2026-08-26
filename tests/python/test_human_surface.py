@@ -48,6 +48,12 @@ def test_expression_is_secondary_only_after_evaluation() -> None:
 
     assert "if store.isShowingResult" in display
     assert 'accessibilityLabel(store.isShowingResult ? "Result" : "Expression")' in display
+    # The visual secondary expression is intentionally folded into the
+    # primary Result value. This avoids SwiftUI's accidental Expression-only
+    # flattening while keeping one concise VoiceOver focus stop.
+    assert ".accessibilityHidden(true)" in display
+    assert '"\\(store.expressionForDisplay) equals \\(store.display)"' in display
+    assert ".accessibilityValue(displayAccessibilityValue)" in display
 
 
 def test_mode_menu_uses_the_visible_rounded_rectangle_as_its_trigger() -> None:
@@ -65,7 +71,7 @@ def test_mode_menu_uses_the_visible_rounded_rectangle_as_its_trigger() -> None:
 
 
 def test_conversion_is_a_lightweight_numeric_mode() -> None:
-    mode = (ROOT / "Sources/MathAnchor/Models/CalculatorMode.swift").read_text()
+    mode = (ROOT / "Sources/MathAnchorCore/Models/CalculatorMode.swift").read_text()
     icon = (ROOT / "Sources/MathAnchor/Views/CalculatorModeIcon.swift").read_text()
     content = (ROOT / "Sources/MathAnchor/Views/ContentView.swift").read_text()
     display = (ROOT / "Sources/MathAnchor/Views/ConversionDisplayView.swift").read_text()
@@ -88,8 +94,35 @@ def test_conversion_is_a_lightweight_numeric_mode() -> None:
     assert 'Image(systemName: "arrow.right")' not in display
 
 
+def test_fixed_window_height_includes_the_complete_keypad_and_bottom_inset() -> None:
+    layout = (ROOT / "Sources/MathAnchor/Views/CalculatorLayout.swift").read_text()
+    content = (ROOT / "Sources/MathAnchor/Views/ContentView.swift").read_text()
+    configurator = (
+        ROOT / "Sources/MathAnchor/Support/CalculatorWindowConfigurator.swift"
+    ).read_text()
+
+    # Negative regression: the prior hand-entered heights exactly matched the
+    # nominal row sum but clipped the last row in the real rounded app window.
+    assert "static let keypadBottomInset: CGFloat = 20" in layout
+    assert "keyHeight * 5 + keySpacing * 4" in layout
+    assert "headerHeight + displayHeight + displayKeypadSpacing + keypadHeight + keypadBottomInset" in layout
+    assert (
+        "headerHeight + conversionDisplayHeight + displayKeypadSpacing + keypadHeight + keypadBottomInset"
+        in layout
+    )
+    assert content.count(".padding(.bottom, CalculatorLayout.keypadBottomInset)") == 2
+    # Negative regression: after inserting fullSizeContentView, asking AppKit
+    # for frameRect(forContentRect:) discarded the titlebar safe area on the
+    # first mode switch and shrank a 524 pt window to 492 pt.
+    assert "window.frame.height - window.contentLayoutRect.height" in configurator
+    assert "height: contentSize.height + chromeHeight" in configurator
+    assert "let targetWindowSize = window.frameRect" not in configurator
+    assert "window.minSize = targetWindowSize" in configurator
+    assert "window.maxSize = targetWindowSize" in configurator
+
+
 def test_conversion_keeps_currency_status_human_facing_and_agent_catalog_unchanged() -> None:
-    runtime = (ROOT / "Sources/MathAnchor/Services/MathRuntimeService.swift").read_text()
+    runtime = (ROOT / "Sources/MathAnchorCore/Services/MathRuntimeService.swift").read_text()
     status = (ROOT / "Sources/MathAnchor/Views/CurrencyRateStatusView.swift").read_text()
     registry = (ROOT / "src/math_anchor/catalog.py").read_text()
 
@@ -104,12 +137,46 @@ def test_conversion_keeps_currency_status_human_facing_and_agent_catalog_unchang
     assert 'id="currency.convert"' not in registry
 
 
+def test_conversion_catalog_includes_data_and_engineering_units() -> None:
+    catalog = (ROOT / "Sources/MathAnchorCore/Models/UnitDefinition.swift").read_text()
+
+    for category in (
+        "case data",
+        'case dataRate = "data rate"',
+        "case frequency",
+        "case force",
+        "case acceleration",
+        "case torque",
+        "case density",
+    ):
+        assert category in catalog
+    for stable_id in (
+        'unit("gibibyte"',
+        'unit("megabit-per-second"',
+        '"standard-gravity"',
+        'unit("newton-meter"',
+        '"kilogram-per-cubic-meter"',
+    ):
+        assert stable_id in catalog
+
+
 def test_conversion_popovers_and_text_editing_own_keyboard_focus() -> None:
     keyboard = (
         ROOT / "Sources/MathAnchor/Support/CalculatorKeyboardMonitor.swift"
     ).read_text()
     content = (ROOT / "Sources/MathAnchor/Views/ContentView.swift").read_text()
+    transition = (
+        ROOT / "Sources/MathAnchorCore/Support/CalculatorModeTransition.swift"
+    ).read_text()
+    commands = (ROOT / "Sources/MathAnchor/App/CalculatorCommands.swift").read_text()
 
     assert "shouldDeferToFocusedTextInput" in keyboard
     assert "conversionStore.dismissActivePopover()" in keyboard
-    assert "conversionStore.dismissActivePopover()" in content
+    assert "modeTransition.select" in content
+    assert "modeTransition.toggleModeMenu" in content
+    assert "isPopoverDismissalSettling" in transition
+    assert "Task.sleep(for: delay)" in transition
+    assert transition.index("conversionStore.dismissActivePopover()") < transition.index("deferAction")
+    assert transition.index("deferAction") < transition.index("calculatorStore.selectMode(mode)")
+    assert "store.selectMode(" not in commands
+    assert commands.count("modeTransition.select(") == 3

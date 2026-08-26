@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 from datetime import datetime, timedelta, timezone
@@ -27,6 +28,14 @@ GENERATED_OUTPUTS = (
     "build/",
     "dist/",
 )
+
+RUNTIME_MANIFEST_SPEC = importlib.util.spec_from_file_location(
+    "math_anchor_runtime_manifest",
+    ROOT / "script" / "runtime_manifest.py",
+)
+assert RUNTIME_MANIFEST_SPEC is not None and RUNTIME_MANIFEST_SPEC.loader is not None
+runtime_manifest = importlib.util.module_from_spec(RUNTIME_MANIFEST_SPEC)
+RUNTIME_MANIFEST_SPEC.loader.exec_module(runtime_manifest)
 
 
 def _generated_gitignore() -> str:
@@ -76,8 +85,11 @@ def test_local_codex_marketplace_exposes_the_packaged_plugin() -> None:
 
 
 def test_calculation_skill_keeps_cost_and_trust_boundaries() -> None:
-    skill = (PLUGIN / "skills" / "calculate" / "SKILL.md").read_text()
+    skill_path = PLUGIN / "skills" / "calculate" / "SKILL.md"
+    skill = skill_path.read_text()
+    assert len(skill.encode("utf-8")) <= 6_000
     assert "Do not load it for trivial, low-risk arithmetic" in skill
+    assert "MUST load and use it for fixed-width" in skill
     assert "A successful tool response proves that the declared operation ran" in skill
     assert "Stop after the first successful call for an ordinary calculation" in skill
     assert "Never call `list_mcp_resources`" in skill
@@ -86,6 +98,14 @@ def test_calculation_skill_keeps_cost_and_trust_boundaries() -> None:
     assert "scope: dimensional_consistency_only" in skill
     assert "`precision` is not a top-level `math.run` field" in skill
     assert "at least two guard digits in the first call" in skill
+    for reference in (
+        "machine-semantics.md",
+        "scientific-math.md",
+        "statistics-units-dimensions.md",
+        "result-error-policy.md",
+    ):
+        assert f"(references/{reference})" in skill
+        assert (skill_path.parent / "references" / reference).is_file()
     agent_metadata = (
         PLUGIN / "skills" / "calculate" / "agents" / "openai.yaml"
     ).read_text()
@@ -112,11 +132,56 @@ def test_runtime_rebuild_check_ignores_generated_python_bytecode() -> None:
     assert "! -name '*.pyc'" in script
 
 
-def test_runtime_packaging_materializes_pyinstaller_loader_for_codex_copy() -> None:
+def test_runtime_packaging_accepts_both_supported_python_loader_layouts() -> None:
     script = (ROOT / "script" / "package_runtime.sh").read_text()
     assert 'PYTHON_RUNTIME_LOADER="$PLUGIN_RUNTIME_BUNDLE/_internal/Python"' in script
     assert 'cp -pL "$PYTHON_RUNTIME_LOADER"' in script
     assert '[[ -L "$PYTHON_RUNTIME_LOADER" ]]' in script
+    assert "-name 'libpython*.dylib'" in script
+    assert '[[ "$python_loader_count" -eq 0 ]]' in script
+    assert 'find "$PLUGIN_RUNTIME_BUNDLE" -type l' in script
+
+
+def test_runtime_manifest_rejects_installer_unsafe_symbolic_links(tmp_path: Path) -> None:
+    target = tmp_path / "target"
+    target.write_text("payload", encoding="utf-8")
+    (tmp_path / "alias").symlink_to(target.name)
+
+    with pytest.raises(SystemExit, match="not installation-stable"):
+        runtime_manifest.inventory(tmp_path)
+
+
+def test_python_resolver_canonicalizes_symlinked_interpreter_for_venv(
+    tmp_path: Path,
+) -> None:
+    interpreter = Path(sys.executable).resolve()
+    alias = tmp_path / "python3.11"
+    alias.symlink_to(interpreter)
+    command = (
+        f'source "{ROOT / "script" / "python_env.sh"}"; '
+        f'MATH_ANCHOR_PYTHON="{alias}"; '
+        'resolve_math_anchor_python "for the resolver regression"; '
+        'printf "%s" "$RESOLVED_MATH_ANCHOR_PYTHON"'
+    )
+    resolved = subprocess.run(
+        ["/bin/bash", "-c", command],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+
+    assert Path(resolved) == interpreter
+    venv = tmp_path / "probe-venv"
+    subprocess.run([resolved, "-m", "venv", str(venv)], check=True)
+    subprocess.run(
+        [str(venv / "bin" / "python"), "-c", "import encodings"],
+        check=True,
+    )
+
+
+def test_bootstrap_recovers_an_unusable_generated_venv() -> None:
+    script = (ROOT / "script" / "bootstrap.sh").read_text(encoding="utf-8")
+    assert '"$PYTHON" -m venv --clear "$VENV_DIR"' in script
 
 
 def test_generated_runtime_is_ignored_by_the_source_repository() -> None:
@@ -682,6 +747,29 @@ def test_signed_release_refreshes_embedded_materials_after_nested_signing() -> N
     assert 'shasum -a 256 "${ARCHIVE##*/}"' in script
 
 
+def test_release_workflow_gates_signing_on_green_ci_and_checksums_the_sbom() -> None:
+    workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+    script = (ROOT / "script" / "release_macos.sh").read_text(encoding="utf-8")
+
+    # Negative regression: signing must fail closed unless the tagged commit's
+    # CI runs are green, and must never publish a checksum-less SBOM.
+    gate_step = workflow.index("Require green CI on the tagged commit")
+    bootstrap = workflow.index("./script/bootstrap.sh")
+    assert gate_step < bootstrap
+    assert "actions: read" in workflow
+    assert "timeout-minutes: 90" in workflow
+    assert "compare/${GITHUB_SHA}...${default_branch}" in workflow
+    assert "not contained in ${default_branch}" in workflow
+    assert "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${GITHUB_SHA}" in workflow
+    assert "refusing to sign" in workflow
+
+    assert 'SBOM_CHECKSUM="$SBOM.sha256"' in script
+    assert 'shasum -a 256 "${SBOM##*/}"' in script
+    assert 'dist/Math-Anchor-*-${{ matrix.architecture }}.spdx.json.sha256' in workflow
+    assert "release-assets/*.sha256" in workflow
+    assert "release-assets/*.zip.sha256" not in workflow
+
+
 def test_release_scripts_require_versioned_signed_notarized_artifacts() -> None:
     local_build = (ROOT / "script" / "build_and_run.sh").read_text()
     release = (ROOT / "script" / "release_macos.sh").read_text()
@@ -742,17 +830,30 @@ def test_packaged_runtime_has_matching_manifest_notices_and_sbom() -> None:
     bundle = PLUGIN / "runtime" / "math-anchor-runtime"
     runtime = bundle / "math-anchor-runtime"
     manifest_path = bundle / ".math-anchor-build-manifest.json"
+    project_license_path = bundle / "LICENSE"
+    project_notice_path = bundle / "NOTICE"
     notice_path = bundle / "THIRD_PARTY_NOTICES.txt"
     sbom_path = bundle / "sbom.spdx.json"
     assert runtime.is_file()
-    loader = bundle / "_internal" / "Python"
-    assert loader.is_file()
-    assert not loader.is_symlink()
+    loaders = [
+        path
+        for path in (
+            bundle / "_internal" / "Python",
+            *(bundle / "_internal").rglob("libpython*.dylib"),
+        )
+        if path.is_file()
+    ]
+    assert loaders
+    assert all(not loader.is_symlink() for loader in loaders)
+    assert not any(path.is_symlink() for path in bundle.rglob("*"))
+    assert project_license_path.read_bytes() == (ROOT / "LICENSE").read_bytes()
+    assert project_notice_path.read_bytes() == (ROOT / "NOTICE").read_bytes()
     assert notice_path.stat().st_size > 10_000
     manifest = json.loads(manifest_path.read_text())
     assert manifest["buildArchitecture"] == platform.machine()
     assert platform.machine() in manifest["runtimeArchitectures"]
-    assert any(item["path"] == "THIRD_PARTY_NOTICES.txt" for item in manifest["files"])
+    manifest_paths = {item["path"] for item in manifest["files"]}
+    assert {"LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.txt", "sbom.spdx.json"} <= manifest_paths
     sbom = json.loads(sbom_path.read_text())
     assert sbom["spdxVersion"] == "SPDX-2.3"
     packages = {package["name"].lower(): package for package in sbom["packages"]}

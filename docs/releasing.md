@@ -28,9 +28,13 @@ the original archive before generating any local outputs:
 ./script/check_all.sh
 ```
 
-`check_all.sh` builds a runtime for the current host, generates third-party
-license material and an SPDX SBOM inside it, verifies the complete file
-inventory and architecture, then exercises the real Plugin transport.
+`check_all.sh` builds a runtime for the current host, copies the project's
+`LICENSE` and `NOTICE`, generates third-party license material and an SPDX SBOM
+inside it, verifies the complete file inventory and architecture, then
+exercises the real Plugin transport. Generated runtimes contain no symbolic
+links, because the Codex Plugin installer omits links when copying into its
+cache; the checked source artifact and installed artifact therefore retain the
+same regular-file inventory.
 The explicit `--archive-clean` lane rejects a metadata-free archive that already
 contains a virtual environment, Plugin runtime, Swift/build cache, benchmark
 receipt, or app artifact. `check_all.sh` uses the separate
@@ -93,10 +97,13 @@ use:
 
 ```bash
 codex plugin marketplace add .
-codex plugin add math-anchor@openadam
+./script/install_plugin.sh
 ```
 
-The installed Plugin is healthy only when its loaded
+`install_plugin.sh` packages the runtime, installs the versioned Plugin,
+compares every regular file and executable bit against the source artifact,
+runs the MCP suite through the installed copy, and starts a fresh no-model
+Codex process to verify the loaded Skill path. The installed Plugin is healthy only when its loaded
 Skill and all four tools (`math.search`, `math.describe`, `math.run`, and
 `math.batch`) are visible together. A source checkout without the generated
 runtime is intentionally not an installable Plugin artifact.
@@ -106,7 +113,7 @@ pass its path from `codex plugin add` back to the transport check:
 
 ```bash
 .venv/bin/python script/check_mcp.py \
-  --plugin-root ~/.codex/plugins/cache/openadam/math-anchor/0.2.0
+  --plugin-root ~/.codex/plugins/cache/openadam/math-anchor/<version>
 ```
 
 ## Signed macOS artifacts
@@ -120,11 +127,11 @@ identity and a configured `notarytool` keychain profile:
 2. Merge the release commit through the protected `main` branch and wait for
    both architecture jobs to pass.
 3. From a clean checkout of that commit, create an annotated tag such as
-   `git tag -a v0.2.0 -m "Math Anchor 0.2.0"`.
+   `git tag -a v0.4.0 -m "Math Anchor 0.4.0"`.
 4. Run the release command below on the matching architecture.
 
 ```bash
-export MATH_ANCHOR_APP_VERSION=0.2.0
+export MATH_ANCHOR_APP_VERSION=0.4.0
 export MATH_ANCHOR_BUILD_NUMBER=1
 export MATH_ANCHOR_CODESIGN_IDENTITY="Developer ID Application: Example (TEAMID)"
 export MATH_ANCHOR_NOTARY_PROFILE="math-anchor-notary"
@@ -140,13 +147,18 @@ number, runtime manifest, and target architecture. It signs nested Mach-O files
 with the hardened runtime, regenerates the embedded SBOM and file manifest from
 those final signed bytes before sealing the outer app, verifies the bundle, submits it for notarization,
 staples and validates the ticket, runs Gatekeeper assessment, and only then
-creates the final architecture-labelled zip, detached SHA-256 checksum, and
-architecture-labelled SPDX SBOM. Build arm64 and x86_64 artifacts
+creates the final architecture-labelled zip and SPDX SBOM, each with its own
+detached SHA-256 checksum. Build arm64 and x86_64 artifacts
 on matching hosts; do not relabel one architecture as another.
 
 Pushing the annotated release tag runs `.github/workflows/release.yml` on both
-matching GitHub macOS architectures and publishes a GitHub Release only after
-both signed artifacts pass notarization and checksum verification. Configure
+matching GitHub macOS architectures. The workflow first requires the tagged
+commit to be contained in the protected default branch and its CI runs to be
+green — waiting for an in-flight run and failing closed otherwise — before any
+signing secret is used. Its job timeout leaves the complete wait budget plus a
+separate build-and-notarization window. It publishes a GitHub Release only after
+both signed artifacts pass notarization and checksum verification of every
+detached checksum, the zips and the SBOMs alike. Configure
 these repository Actions secrets before pushing the tag:
 
 - `APPLE_DEVELOPER_ID_P12_BASE64`: base64-encoded Developer ID Application

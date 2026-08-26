@@ -7,7 +7,7 @@ import sympy as sp
 
 from ..errors import CalculatorError, require
 from ..formatting import matrix_value, scalar_result, typed_scalar_result
-from ..safe_expression import make_symbols, parse_expression
+from ..safe_expression import make_symbols, parse_expression, parse_matrix
 from ..validation import enum_arg, integer_arg, list_arg, string_arg, variables_arg
 
 
@@ -77,12 +77,25 @@ def series(arguments: dict[str, Any]) -> dict[str, Any]:
 
 
 def multivariate(arguments: dict[str, Any]) -> dict[str, Any]:
-    action = enum_arg(arguments, "action", ("gradient", "jacobian", "hessian"), default="gradient")
+    action = enum_arg(
+        arguments,
+        "action",
+        (
+            "gradient",
+            "jacobian",
+            "hessian",
+            "directional_derivative",
+            "divergence",
+            "curl",
+            "laplacian",
+        ),
+        default="gradient",
+    )
     variable_names = variables_arg(arguments, maximum=8)
     precision = integer_arg(arguments, "precision", default=16, minimum=2, maximum=200)
     symbols = make_symbols(variable_names)
     ordered_symbols = [symbols[name] for name in variable_names]
-    if action == "jacobian":
+    if action in {"jacobian", "divergence", "curl"}:
         expression_texts = list_arg(arguments, "expressions", maximum=16)
         require(
             all(isinstance(value, str) for value in expression_texts),
@@ -90,13 +103,68 @@ def multivariate(arguments: dict[str, Any]) -> dict[str, Any]:
             "expressions must contain strings",
         )
         expressions = [parse_expression(value, symbols=symbols) for value in expression_texts]
-        result = sp.Matrix(expressions).jacobian(ordered_symbols)
+        if action == "jacobian":
+            result = sp.Matrix(expressions).jacobian(ordered_symbols)
+        elif action == "divergence":
+            require(
+                len(expressions) == len(ordered_symbols),
+                "E_INPUT",
+                "divergence requires one vector-field component per variable",
+            )
+            result = sum(
+                sp.diff(value, symbol)
+                for value, symbol in zip(expressions, ordered_symbols)
+            )
+        else:
+            require(
+                len(expressions) == len(ordered_symbols) == 3,
+                "E_INPUT",
+                "curl requires exactly three vector-field components and three variables",
+            )
+            first, second, third = expressions
+            x, y, z = ordered_symbols
+            result = sp.Matrix(
+                [
+                    sp.diff(third, y) - sp.diff(second, z),
+                    sp.diff(first, z) - sp.diff(third, x),
+                    sp.diff(second, x) - sp.diff(first, y),
+                ]
+            )
     else:
         expression = parse_expression(string_arg(arguments, "expression"), symbols=symbols)
         if action == "gradient":
             result = sp.Matrix([sp.diff(expression, symbol) for symbol in ordered_symbols])
-        else:
+        elif action == "hessian":
             result = sp.hessian(expression, ordered_symbols)
+        elif action == "laplacian":
+            result = sum(sp.diff(expression, symbol, 2) for symbol in ordered_symbols)
+        else:
+            direction_values = list_arg(arguments, "direction", maximum=8)
+            require(
+                len(direction_values) == len(ordered_symbols),
+                "E_INPUT",
+                "direction must contain one component per variable",
+            )
+            direction = parse_matrix([direction_values])
+            require(
+                not any(value.atoms(sp.Float) for value in direction),
+                "E_INPUT",
+                "directional derivative requires exact direction components",
+            )
+            require(any(value != 0 for value in direction), "E_DOMAIN", "direction vector must be nonzero")
+            result = sum(
+                sp.diff(expression, symbol) * component
+                for symbol, component in zip(ordered_symbols, direction)
+            )
+    if action in {"directional_derivative", "divergence", "laplacian"}:
+        return typed_scalar_result(
+            "calculus.multivariate",
+            "derivative_scalar",
+            result,
+            precision,
+            action=action,
+            variables=variable_names,
+        )
     return {
         "status": "ok",
         "operation": "calculus.multivariate",
