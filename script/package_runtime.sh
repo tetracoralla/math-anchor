@@ -54,9 +54,12 @@ validate_write_paths() {
 # This must run before bootstrap, directory creation, or any generated-path read.
 validate_write_paths
 
-if [[ ! -x "$VENV_PYTHON" ]] || ! "$VENV_PYTHON" -c 'import PyInstaller' >/dev/null 2>&1; then
-  "$ROOT_DIR/script/bootstrap.sh"
-fi
+# Reinstall the project before inspecting or building generated runtime
+# artifacts. A copied/File Provider virtualenv is not relocatable, and Python
+# may ignore editable-install .pth metadata carrying the macOS hidden flag.
+# The locked dependency install is idempotent; the project wheel copy makes
+# this entrypoint self-healing after a repository move and current after edits.
+"$ROOT_DIR/script/bootstrap.sh"
 PROJECT_VERSION="$(
   "$VENV_PYTHON" "$ROOT_DIR/script/release_metadata.py" version --root "$ROOT_DIR"
 )"

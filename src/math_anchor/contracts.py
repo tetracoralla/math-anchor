@@ -44,6 +44,18 @@ RUN_TOOL_OUTPUT_SCHEMA = {
         "precision": {"type": "integer", "minimum": 2},
         "unit": _TEXT_OR_NULL,
         "warnings": {"type": "array", "items": {"type": "string"}},
+        "assurance": {
+            "enum": ["heuristic", "deterministic", "diagnostic", "certified", "kernel_checked"]
+        },
+        "claim": {"type": "string"},
+        "scope": {"type": "string"},
+        "assumptions": {"type": "array"},
+        # The complete per-kind contract below remains strict. Keep this
+        # always-listed projection shallow so ordinary callers do not pay the
+        # certificate/provenance schema on every unrelated calculation.
+        "provenance": {"type": "object"},
+        "certificate": {"type": ["object", "null"]},
+        "checkedBy": {"type": ["object", "null"]},
         "error": ERROR_RESULT_SCHEMA["properties"]["error"],
     },
     "required": ["status"],
@@ -137,7 +149,7 @@ def run_tool_parameters(operation_schemas: list[tuple[str, dict[str, Any]]]) -> 
     """Return the always-listed, Codex-host-safe execution envelope.
 
     Current Codex hosts compact input schemas larger than roughly 5 KB. A full
-    44-branch tagged union crosses that boundary and loses its argument surface
+    45-branch tagged union crosses that boundary and loses its argument surface
     before the model sees it. Keep the stable operation IDs and execution
     limits fully typed here; ``math.describe`` publishes the exact closed
     argument schema for one selected operation, and runtime validation still

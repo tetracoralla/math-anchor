@@ -9,12 +9,21 @@ and Apple notarization record exist.
 
 ### Added
 
+- Added one runtime-owned assurance envelope to every successful Agent result,
+  including claim scope, assumptions, runtime/backend versions, certificate
+  presence, and actual kernel-check identity. Added the bounded
+  `certificate.polynomial_identity` operation plus a separate standard-library
+  checker that recomputes its rational-polynomial statement and coefficients
+  without importing SymPy or the producing operation.
+- Added verified wheel and source-archive builds, x86_64 and arm64 Linux CI,
+  and a digest-pinned non-root OCI runtime definition. Versioned GitHub releases
+  now collect the headless Python artifacts beside the signed macOS assets.
 - Expanded the existing `calculus.multivariate` operation with exact
   unnormalized directional derivatives, divergence, three-dimensional curl,
   and the Laplacian. Expanded `matrix.reduce` with exact eigenspaces and
   diagonalizability plus row-pivoted LU and positive-definite Hermitian
   Cholesky decompositions, including explicit factor relations and negative
-  shape/domain regressions. The registry remains at 44 operations and the MCP
+  shape/domain regressions. The registry now contains 45 operations and the MCP
   boundary remains four tools.
 - Added safe-expression registrations for Airy Ai/Bi, Bessel Y, beta, and
   polygamma alongside the existing Bessel J, gamma, error, Lambert W, and zeta
@@ -62,7 +71,7 @@ and Apple notarization record exist.
   Jacobian, Hessian, and curl. This keeps mathematical rank aligned across the
   registry, runtime, and MCP result schema.
 - Kept the installed Codex `math.run` declaration typed by replacing the
-  oversized always-listed 44-branch union with a 1.8 KB host-safe envelope
+  oversized always-listed 45-branch union with a compact host-safe envelope
   carrying every stable operation id and execution limit. Exact closed
   argument schemas remain registry-owned, are returned by `math.describe`, and
   are still enforced before execution; current Codex no longer compacts the

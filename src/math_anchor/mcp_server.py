@@ -81,7 +81,8 @@ def _caught(callable_: Any, *arguments: Any) -> dict[str, Any]:
         "uncertainty, probability, numerical methods, or finance. Do not use for trivial low-risk arithmetic. "
         "Always pass operation-specific fields inside the arguments object: {operation, arguments}; never flatten them. "
         "Known direct shapes need no describe call: integer.machine_arithmetic arguments include action, left, right, "
-        "bitWidth, signedness, inputMode, and overflowBehavior; combinatorics.count arguments use action, n, and k. "
+        "bitWidth, signedness, inputMode, and overflowBehavior; combinatorics.count arguments use action, n, and k; "
+        "certificate.polynomial_identity arguments use left, right, and variables. "
         "The typed operation keeps exact and approximate results separate; one successful ordinary call is sufficient."
     ),
     annotations=_READ_ONLY,

@@ -64,9 +64,6 @@ fi
 source "$ROOT_DIR/script/swift_env.sh"
 configure_swift_environment "$ROOT_DIR"
 
-if [[ ! -x "$ROOT_DIR/.venv/bin/math-anchor" ]]; then
-  "$ROOT_DIR/script/bootstrap.sh"
-fi
 "$ROOT_DIR/script/package_runtime.sh"
 
 swift build --package-path "$ROOT_DIR" --configuration "$BUILD_CONFIGURATION"

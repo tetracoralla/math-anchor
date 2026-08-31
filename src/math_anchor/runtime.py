@@ -10,6 +10,7 @@ import mpmath
 from .catalog import OPERATIONS
 from .contracts import validate_operation_arguments, validate_result
 from .errors import CalculatorError
+from .research_contract import apply_research_contract
 
 # Mirrors sandbox.DEFAULT_TIMEOUT_MS (10_000 ms) so direct in-process callers
 # observe the same bound as the sandboxed worker pool. Kept as a literal here
@@ -143,7 +144,7 @@ def execute_direct(
         timeout_seconds = timeout_ms / 1000
     with in_process_evaluation_timeout(timeout_seconds):
         try:
-            result = spec.handler(arguments)
+            result = apply_research_contract(spec, spec.handler(arguments))
             validate_result(result)
             return result
         except CalculatorError:

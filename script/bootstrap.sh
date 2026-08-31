@@ -32,4 +32,12 @@ fi
   --disable-pip-version-check \
   --no-build-isolation \
   --no-deps \
-  -e "$ROOT_DIR"
+  --force-reinstall \
+  "$ROOT_DIR"
+
+if ! "$VENV_DIR/bin/python" -c \
+  'import math_anchor, pathlib, sys; venv = pathlib.Path(sys.argv[1]).resolve(); source = pathlib.Path(math_anchor.__file__).resolve(); raise SystemExit(0 if source.is_relative_to(venv) else 1)' \
+  "$VENV_DIR"; then
+  echo "The generated environment does not contain the current Math Anchor package." >&2
+  exit 1
+fi

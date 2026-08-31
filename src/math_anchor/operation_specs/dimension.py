@@ -56,6 +56,7 @@ SPECS = (
             "公式维度",
             "物理公式检查",
         ),
+        assurance_scope="dimensional_consistency_only",
     ),
     OperationSpec(
         id="dimension.infer",
@@ -106,6 +107,7 @@ SPECS = (
             "量纲约束",
             "公式推理",
         ),
+        assurance_scope="dimensional_consistency_only",
     ),
     OperationSpec(
         id="dimension.pi_groups",
@@ -149,6 +151,7 @@ SPECS = (
             "白金汉 Pi 定理",
             "相似性分析",
         ),
+        assurance_scope="dimensionless_basis_only",
     ),
 )
 

@@ -68,6 +68,9 @@ SPECS = (
         ),
         handler=measurement.propagate,
         keywords=("measurement uncertainty", "error propagation", "covariance", "correlation", "coverage factor", "GUM", "不确定度传播", "误差传播", "协方差", "相关系数", "扩展不确定度"),
+        assurance="diagnostic",
+        assurance_scope="first_order_covariance_model_in_coherent_units",
+        backends=("sympy",),
     ),
 )
 

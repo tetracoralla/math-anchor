@@ -34,6 +34,8 @@ SPECS = (
         ),
         handler=verification.expression_equivalent,
         keywords=("semantic equivalence", "same expression", "identity", "等价性验证", "恒等式", "表达式等价"),
+        assurance_scope="declared_domain_and_definedness_policy",
+        backends=("sympy",),
     ),
     OperationSpec(
         id="solution.verify",
@@ -63,6 +65,9 @@ SPECS = (
         ),
         handler=verification.solution_verify,
         keywords=("check solution", "substitute", "residual", "omitted roots", "解验证", "验根", "候选解", "残差"),
+        assurance="diagnostic",
+        assurance_scope="supplied_candidates_and_optional_finite_completeness",
+        backends=("sympy",),
     ),
 )
 

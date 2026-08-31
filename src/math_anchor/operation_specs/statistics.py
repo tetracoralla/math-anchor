@@ -35,6 +35,8 @@ SPECS = (
         examples=({"values": [12, 15, 18, 21, 24], "ddof": 1},),
         handler=data.statistics_describe,
         keywords=("mean", "median", "standard deviation", "quartile", "summary", "统计", "平均数", "中位数", "标准差", "四分位数"),
+        assurance_scope="declared_sample_and_quartile_convention",
+        backends=("numpy", "sympy"),
     ),
     OperationSpec(
         id="statistics.infer",
@@ -120,6 +122,9 @@ SPECS = (
         ),
         handler=inference.infer,
         keywords=("confidence interval", "one sample t test", "paired t test", "Welch t test", "two sample t test", "chi square goodness of fit", "regression", "hypothesis test", "置信区间", "配对t检验", "双样本t检验", "卡方拟合优度", "回归", "假设检验"),
+        assurance="diagnostic",
+        assurance_scope="declared_samples_model_and_test_assumptions",
+        backends=("numpy", "mpmath"),
     ),
 )
 

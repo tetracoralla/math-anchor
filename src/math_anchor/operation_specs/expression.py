@@ -82,6 +82,7 @@ SPECS = (
         ),
         handler=expression.sample,
         keywords=("function table", "sample", "evaluate at points", "plot data", "grid", "函数表", "采样", "多点求值", "绘图数据"),
+        backends=("mpmath", "sympy"),
     ),
 )
 

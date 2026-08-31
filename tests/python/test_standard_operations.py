@@ -8,7 +8,7 @@ from math_anchor.runtime import execute_direct
 
 
 def test_catalog_contains_the_explicit_standard_operation_set() -> None:
-    assert len(OPERATIONS) == 44
+    assert len(OPERATIONS) == 45
     assert {
         "expression.equivalent",
         "solution.verify",

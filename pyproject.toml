@@ -49,3 +49,4 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests/python"]
 addopts = "-q"
+pythonpath = ["src"]

@@ -23,6 +23,7 @@ from math_anchor.output_policy import (
     MAX_OUTPUT_BYTES,
     MIN_OUTPUT_BYTES,
 )
+from math_anchor.runtime import execute_direct
 
 
 def _tool_payload(name: str) -> dict:
@@ -54,6 +55,7 @@ def test_tool_discovery_survives_current_codex_host_compaction() -> None:
     assert "Known direct shapes need no describe call" in run_tool.description
     assert "integer.machine_arithmetic" in run_tool.description
     assert "combinatorics.count" in run_tool.description
+    assert "certificate.polynomial_identity" in run_tool.description
     output_bytes = len(
         json.dumps(run_tool.output_schema, separators=(",", ":")).encode()
     )
@@ -88,6 +90,21 @@ def test_tool_discovery_survives_current_codex_host_compaction() -> None:
         assert tool.parameters["additionalProperties"] is False
         with pytest.raises(ValidationError):
             tool.fn_metadata.arg_model.model_validate({"unexpected": True})
+
+
+def test_ordinary_assurance_envelope_stays_small() -> None:
+    spec = OPERATIONS["expression.evaluate"]
+    arguments = {"expression": "6*7"}
+    raw = spec.handler(arguments)
+    annotated = execute_direct(spec.id, arguments)
+
+    def encoded(value: dict) -> int:
+        return len(
+            json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode()
+        )
+
+    assert encoded(annotated) < 512
+    assert encoded(annotated) - encoded(raw) <= 320
 
 
 def test_compact_run_output_schema_accepts_scalar_and_matrix_lanes_only() -> None:

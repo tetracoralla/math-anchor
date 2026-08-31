@@ -32,6 +32,7 @@ SPECS = (
         ),
         handler=units.search,
         keywords=("unit catalog", "unit id", "measurement discovery", "单位目录", "查找单位", "数据量", "频率", "力", "扭矩", "密度"),
+        backends=("python",),
     ),
     OperationSpec(
         id="units.convert",
@@ -60,6 +61,7 @@ SPECS = (
         ),
         handler=data.units_convert,
         keywords=("measurement", "dimension", "temperature", "length", "energy", "单位换算", "单位转换", "温度转换"),
+        backends=("pint", "sympy"),
     ),
     OperationSpec(
         id="quantity.evaluate",

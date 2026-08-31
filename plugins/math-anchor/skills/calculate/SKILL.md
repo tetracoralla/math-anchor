@@ -30,11 +30,12 @@ when deterministic execution materially improves reliability.
   operation-specific fields inside `arguments`; never flatten them beside
   `operation`.
 
-Two common routes are fully known. Call `math.run` directly; never search or
+Three common routes are fully known. Call `math.run` directly; never search or
 describe these shapes first:
 
 - Fixed-width arithmetic: `{"operation":"integer.machine_arithmetic","arguments":{"action":"add","left":"255","right":"2","bitWidth":8,"signedness":"unsigned","inputMode":"value","overflowBehavior":"wrapping"}}`
 - Exact combinations/permutations: `{"operation":"combinatorics.count","arguments":{"action":"binomial","n":52,"k":5}}`
+- Checkable polynomial identity: `{"operation":"certificate.polynomial_identity","arguments":{"left":"(x+1)^2","right":"x^2+2*x+1","variables":["x"]}}`
 
 ## Execute economically
 
@@ -75,6 +76,9 @@ Load only the relevant reference when the request needs its policy:
 - Preserve precision, units, conventions, assumptions, warnings, uncertainty,
   residuals, error bounds, stability diagnostics, branches, and omission risk
   when they affect interpretation.
+- Preserve `assurance`, `scope`, `certificate`, and `checkedBy`. `certified`
+  means a bounded artifact is available; `checkedBy: null` means no checker or
+  proof kernel has accepted it in this call.
 - Explain the mathematical setup briefly when useful; omit engine, worker,
   schema, and protocol details from the ordinary answer.
 - Stop after the first successful call for an ordinary calculation. Repeating

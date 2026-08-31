@@ -13,6 +13,7 @@ from ..models import OperationSpec
 from ..operations import (
     algebra,
     calculus,
+    certificate,
     combinatorics,
     data,
     dimension,

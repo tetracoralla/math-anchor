@@ -96,6 +96,8 @@ def test_calculation_skill_keeps_cost_and_trust_boundaries() -> None:
     assert "Never call `list_mcp_resources`" in skill
     assert "Use `dimension.check` for symbolic formula consistency" in skill
     assert "`dimension.pi_groups` for a Buckingham Pi basis" in skill
+    assert "certificate.polynomial_identity" in skill
+    assert "`checkedBy: null` means no checker" in skill
     assert "scope: dimensional_consistency_only" in skill
     assert "`precision` is not a top-level `math.run` field" in skill
     assert "at least two guard digits in the first call" in skill
@@ -152,6 +154,18 @@ def test_runtime_manifest_rejects_installer_unsafe_symbolic_links(tmp_path: Path
         runtime_manifest.inventory(tmp_path)
 
 
+def test_runtime_manifest_does_not_hide_file_provider_conflict_copies(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "LICENSE").write_text("current", encoding="utf-8")
+    (tmp_path / "LICENSE 2").write_text("stale", encoding="utf-8")
+
+    assert [item["path"] for item in runtime_manifest.inventory(tmp_path)] == [
+        "LICENSE",
+        "LICENSE 2",
+    ]
+
+
 def test_python_resolver_canonicalizes_symlinked_interpreter_for_venv(
     tmp_path: Path,
 ) -> None:
@@ -183,6 +197,23 @@ def test_python_resolver_canonicalizes_symlinked_interpreter_for_venv(
 def test_bootstrap_recovers_an_unusable_generated_venv() -> None:
     script = (ROOT / "script" / "bootstrap.sh").read_text(encoding="utf-8")
     assert '"$PYTHON" -m venv --clear "$VENV_DIR"' in script
+
+
+def test_bootstrap_uses_a_relocatable_noneditable_project_install() -> None:
+    script = (ROOT / "script" / "bootstrap.sh").read_text(encoding="utf-8")
+    assert "--force-reinstall" in script
+    assert '"$ROOT_DIR"' in script
+    assert "source.is_relative_to(venv)" in script
+    assert " -e " not in script
+
+
+def test_runtime_packaging_reinstalls_the_current_project_before_use() -> None:
+    package_runtime = (ROOT / "script" / "package_runtime.sh").read_text(encoding="utf-8")
+    check_all = (ROOT / "script" / "check_all.sh").read_text(encoding="utf-8")
+    build_and_run = (ROOT / "script" / "build_and_run.sh").read_text(encoding="utf-8")
+    assert '"$ROOT_DIR/script/bootstrap.sh"' in package_runtime
+    assert '"$ROOT_DIR/script/package_runtime.sh"' in check_all
+    assert '"$ROOT_DIR/script/package_runtime.sh"' in build_and_run
 
 
 def test_generated_runtime_is_ignored_by_the_source_repository() -> None:
@@ -716,6 +747,52 @@ def test_github_ci_covers_both_supported_macos_architectures() -> None:
     assert "actions/setup-python@v" not in workflow
 
 
+def test_headless_distribution_covers_linux_wheel_sdist_and_non_root_oci() -> None:
+    workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(
+        encoding="utf-8"
+    )
+    release = (ROOT / ".github" / "workflows" / "release.yml").read_text(
+        encoding="utf-8"
+    )
+    dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+    headless = (ROOT / "script" / "check_headless.sh").read_text(encoding="utf-8")
+    build_lock = (ROOT / "requirements-build.lock").read_text(encoding="utf-8")
+
+    assert "runner: ubuntu-24.04\n            architecture: x86_64" in workflow
+    assert "runner: ubuntu-24.04-arm\n            architecture: arm64" in workflow
+    assert "./script/check_headless.sh" in workflow
+    assert "docker build --tag" in workflow
+    assert "verify-certificate -" in workflow
+    assert 'test "$(docker image inspect "$image" --format \'{{.Config.User}}\')" = "65532:65532"' in workflow
+
+    pinned_base = (
+        "python:3.11.16-slim-trixie@"
+        "sha256:1042b61448fef4ba92d16a8c7eb4996d027568ce64792a7877fd88511e0af7c6"
+    )
+    assert dockerfile.count(f"FROM {pinned_base}") == 2
+    assert "--require-hashes --requirement requirements-build.lock" in dockerfile
+    assert "--require-hashes --requirement requirements-runtime.lock" in dockerfile
+    assert "USER 65532:65532" in dockerfile
+    assert 'ENTRYPOINT ["python", "-m", "math_anchor.mcp_server"]' in dockerfile
+    assert "setuptools==84.0.0" in build_lock and "--hash=sha256:" in build_lock
+
+    for command in (
+        "-m pytest",
+        "check_source_safety.py",
+        "check_mcp.py",
+        "load_check.py",
+        "build_python_dist.py\" build",
+        "build_python_dist.py\" verify",
+    ):
+        assert command in headless
+    assert "check_mcp.py\" --source-runtime" in headless
+
+    assert "name: release-python" in release
+    assert "build/python-dist/math_anchor-*.whl" in release
+    assert "build/python-dist/math_anchor-*.tar.gz" in release
+    assert "needs: [python-dist, signed-macos]" in release
+
+
 def test_github_release_requires_signed_notarized_assets_from_both_architectures() -> None:
     workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text(
         encoding="utf-8"
@@ -755,7 +832,7 @@ def test_release_workflow_gates_signing_on_green_ci_and_checksums_the_sbom() -> 
     # Negative regression: signing must fail closed unless the tagged commit's
     # CI runs are green, and must never publish a checksum-less SBOM.
     gate_step = workflow.index("Require green CI on the tagged commit")
-    bootstrap = workflow.index("./script/bootstrap.sh")
+    bootstrap = workflow.index("./script/bootstrap.sh", gate_step)
     assert gate_step < bootstrap
     assert "actions: read" in workflow
     assert "timeout-minutes: 90" in workflow

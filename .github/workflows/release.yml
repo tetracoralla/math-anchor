@@ -12,6 +12,39 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  python-dist:
+    name: headless Python distribution
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11.16"
+          cache: pip
+          cache-dependency-path: requirements-dev.lock
+      - name: Build and verify wheel and source distribution
+        run: |
+          set -euo pipefail
+          ./script/bootstrap.sh
+          .venv/bin/python script/build_python_dist.py build
+          .venv/bin/python script/build_python_dist.py verify
+      - name: Upload headless Python release assets
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-python
+          path: |
+            build/python-dist/math_anchor-*.whl
+            build/python-dist/math_anchor-*.whl.sha256
+            build/python-dist/math_anchor-*.tar.gz
+            build/python-dist/math_anchor-*.tar.gz.sha256
+          if-no-files-found: error
+          compression-level: 0
+
   signed-macos:
     name: signed macOS (${{ matrix.architecture }})
     # CI may legitimately still be running when a tag is pushed. Leave enough
@@ -174,7 +207,7 @@ jobs:
 
   publish:
     name: Publish GitHub release
-    needs: signed-macos
+    needs: [python-dist, signed-macos]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

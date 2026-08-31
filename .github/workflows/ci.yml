@@ -14,6 +14,49 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  headless:
+    name: headless Linux (${{ matrix.architecture }})
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            architecture: x86_64
+          - runner: ubuntu-24.04-arm
+            architecture: arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11.16"
+          cache: pip
+          cache-dependency-path: |
+            requirements-build.lock
+            requirements-dev.lock
+            requirements-runtime.lock
+      - name: Run headless runtime and distribution checks
+        run: ./script/check_headless.sh
+      - name: Build the pinned OCI runtime
+        run: docker build --tag "math-anchor-runtime:${{ matrix.architecture }}" .
+      - name: Verify the OCI user, calculation, certificate, and checker
+        run: |
+          set -euo pipefail
+          image="math-anchor-runtime:${{ matrix.architecture }}"
+          test "$(docker image inspect "$image" --format '{{.Config.User}}')" = "65532:65532"
+          mkdir -p build/oci-smoke
+          docker run --rm --entrypoint python "$image" -m math_anchor.cli run \
+            certificate.polynomial_identity \
+            '{"left":"(x+1)^2","right":"x^2+2*x+1","variables":["x"]}' \
+            > build/oci-smoke/certificate.json
+          docker run --rm -i --entrypoint python "$image" -m math_anchor.cli \
+            verify-certificate - < build/oci-smoke/certificate.json \
+            > build/oci-smoke/check.json
+          python -c 'import json; value=json.load(open("build/oci-smoke/check.json")); assert value["valid"] is True'
+
   macos:
     timeout-minutes: 30
     strategy:

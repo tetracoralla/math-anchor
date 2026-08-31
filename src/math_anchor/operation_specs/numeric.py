@@ -62,6 +62,9 @@ SPECS = (
         ),
         handler=calculus.numeric_root,
         keywords=("numerically solve", "nonlinear", "high precision", "zero", "all roots", "数值求根", "数值解", "零点", "所有根"),
+        assurance="diagnostic",
+        assurance_scope="bracketed_roots_under_declared_resolution",
+        backends=("mpmath", "sympy"),
     ),
     OperationSpec(
         id="numeric.integrate",
@@ -97,6 +100,9 @@ SPECS = (
         ),
         handler=numerical.integrate,
         keywords=("numerical integration", "quadrature", "error estimate", "adaptive Clenshaw-Curtis", "数值积分", "误差估计", "区间结果"),
+        assurance="diagnostic",
+        assurance_scope="estimated_quadrature_interval_not_rigorous_enclosure",
+        backends=("mpmath", "sympy"),
     ),
     OperationSpec(
         id="numeric.minimize",
@@ -140,6 +146,9 @@ SPECS = (
         ),
         handler=optimization.minimize,
         keywords=("global minimum", "global maximum", "optimization", "argmin", "certified", "interval arithmetic", "全局最优", "最小值", "最大值", "区间分支定界"),
+        assurance="diagnostic",
+        assurance_scope="rigorous_internal_interval_enclosure_without_external_certificate",
+        backends=("mpmath", "sympy"),
     ),
     OperationSpec(
         id="float.ieee754",
@@ -197,6 +206,9 @@ SPECS = (
         ),
         handler=numerical.solve_approximate_linear_system,
         keywords=("numerical linear algebra", "condition number", "backward error", "ill conditioned", "数值线性代数", "条件数", "病态矩阵", "数值稳定性"),
+        assurance="diagnostic",
+        assurance_scope="binary64_solution_under_declared_rank_tolerance",
+        backends=("numpy",),
     ),
     OperationSpec(
         id="linear_algebra.numeric",
@@ -253,6 +265,9 @@ SPECS = (
         ),
         handler=linear_algebra.numeric,
         keywords=("least squares", "QR decomposition", "SVD", "singular value decomposition", "pseudoinverse", "Moore Penrose", "numerical linear algebra", "最小二乘", "QR分解", "奇异值分解", "伪逆"),
+        assurance="diagnostic",
+        assurance_scope="binary64_linear_algebra_under_declared_tolerance",
+        backends=("numpy",),
     ),
 )
 
