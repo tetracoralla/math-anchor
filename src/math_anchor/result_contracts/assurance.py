@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ..models import ASSURANCE_LEVELS
+from ..models import ASSURANCE_CONTRACT_VERSION, ASSURANCE_LEVELS
 
 
 BACKEND_PROVENANCE_SCHEMA = {
@@ -16,6 +16,7 @@ PROVENANCE_SCHEMA = {
     "type": "object",
     "additionalProperties": False,
     "properties": {
+        "entrypoint": {"type": "string", "minLength": 1, "maxLength": 160},
         "runtime": {
             "type": "object",
             "additionalProperties": False,
@@ -32,7 +33,7 @@ PROVENANCE_SCHEMA = {
             "items": BACKEND_PROVENANCE_SCHEMA,
         },
     },
-    "required": ["runtime", "backends"],
+    "required": ["entrypoint", "runtime", "backends"],
 }
 CERTIFICATE_OR_NULL_SCHEMA = {
     "oneOf": [
@@ -59,6 +60,7 @@ CHECKED_BY_OR_NULL_SCHEMA = {
     ]
 }
 BASE_ASSURANCE_PROPERTIES = {
+    "assuranceContractVersion": {"const": ASSURANCE_CONTRACT_VERSION},
     "assurance": {"enum": list(ASSURANCE_LEVELS)},
     "claim": {"type": "string", "minLength": 1, "maxLength": 128},
     "scope": {"type": "string", "minLength": 1, "maxLength": 128},

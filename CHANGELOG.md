@@ -9,6 +9,11 @@ and Apple notarization record exist.
 
 ### Added
 
+- Added assurance contract version `1.0`, operation-path and selected-backend
+  provenance, plus an optional Lean 4.33.1/Mathlib 4.33.1 bridge that translates
+  a true rational-polynomial certificate into a generated theorem and records
+  `kernel_checked` only after Lean accepts the proof. The formal toolchain stays
+  outside the ordinary runtime and four-tool MCP surface.
 - Added one runtime-owned assurance envelope to every successful Agent result,
   including claim scope, assumptions, runtime/backend versions, certificate
   presence, and actual kernel-check identity. Added the bounded
@@ -66,6 +71,16 @@ and Apple notarization record exist.
 
 ### Fixed
 
+- Corrected interval optimization for ordinary SymPy function nodes,
+  non-monotone `cosh`, inverse-trigonometric endpoints, and directed interval
+  rounding. Its contract now distinguishes an internal mpmath interval bound
+  from an external certificate or proof-kernel result.
+- Made local Plugin installation consume Codex's authoritative
+  `installedPath`, compare the installed bytes before execution, and reject an
+  MCP route that does not resolve to that exact installed artifact.
+- Gave the assurance/Lean milestone the distinct `0.5.0` package identity so a
+  verified Plugin installation cannot retain older bytes behind version
+  `0.4.0`.
 - Returned scalar derivative contracts for directional derivative, divergence,
   and the Laplacian while retaining matrix contracts and shapes for gradient,
   Jacobian, Hessian, and curl. This keeps mathematical rank aligned across the

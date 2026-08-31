@@ -34,6 +34,7 @@ SPECS = (
             {"expression": "power * hours * days", "variables": {"power": 72, "hours": 9.5, "days": 30}},
         ),
         handler=expression.evaluate,
+        backends=("sympy",),
         keywords=("calculate", "arithmetic", "scientific", "trigonometry", "logarithm", "Airy", "Bessel", "beta", "gamma", "polygamma", "special functions", "计算", "算术", "科学计算", "特殊函数"),
     ),
     OperationSpec(
@@ -51,6 +52,7 @@ SPECS = (
         ),
         examples=({"expression": "(x^2 - 1)/(x - 1)", "variables": ["x"]},),
         handler=expression.simplify,
+        backends=("sympy",),
         keywords=("reduce", "simplify", "symbolic", "化简", "约简"),
     ),
     OperationSpec(

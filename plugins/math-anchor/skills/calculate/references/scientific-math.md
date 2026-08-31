@@ -16,9 +16,10 @@ below identify semantic boundaries that must survive presentation.
   `errorBoundCertified` is false it is not a rigorous enclosure. `status:
   uncertain` means only the local estimate was met. Supply breakpoints only
   when they cover material discontinuities or localized features.
-- `numeric.minimize` returns interval-arithmetic enclosures. Treat `uncertain`
-  as the best reported rigorous internal bound, not a finished answer or an
-  externally checked certificate, and avoid undefined points in the bracket.
+- `numeric.minimize` returns internal mpmath interval enclosures over its
+  supported expression subset. Treat `uncertain` as the best reported bound,
+  not a finished answer, external certificate, or proof-kernel result, and
+  avoid undefined points in the bracket.
 - For exact matrix solving, rank, RREF, bases, eigenspaces, LU, and Cholesky,
   use integers or rational text. Do not turn approximate decimals into exact
   structural claims.

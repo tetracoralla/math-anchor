@@ -124,7 +124,7 @@ SPECS = (
         keywords=("confidence interval", "one sample t test", "paired t test", "Welch t test", "two sample t test", "chi square goodness of fit", "regression", "hypothesis test", "置信区间", "配对t检验", "双样本t检验", "卡方拟合优度", "回归", "假设检验"),
         assurance="diagnostic",
         assurance_scope="declared_samples_model_and_test_assumptions",
-        backends=("numpy", "mpmath"),
+        backends=("mpmath",),
     ),
 )
 

@@ -6,32 +6,7 @@ import platform
 from typing import Any
 
 from . import __version__
-from .models import OperationSpec
-
-
-_MODULE_BACKENDS = {
-    "algebra": ("sympy",),
-    "calculus": ("sympy",),
-    "combinatorics": ("sympy",),
-    "data": ("pint",),
-    "dimension": ("sympy", "pint"),
-    "expression": ("sympy",),
-    "finance": ("python",),
-    "floating": ("python",),
-    "inference": ("numpy", "mpmath"),
-    "linear_algebra": ("numpy", "sympy"),
-    "matrix": ("numpy", "sympy"),
-    "measurement": ("sympy",),
-    "number_theory": ("sympy",),
-    "numerical": ("mpmath", "sympy"),
-    "optimization": ("mpmath", "sympy"),
-    "probability": ("mpmath",),
-    "programmer": ("python",),
-    "quantity": ("pint", "sympy"),
-    "rounding": ("python",),
-    "units": ("pint",),
-    "verification": ("sympy",),
-}
+from .models import ASSURANCE_CONTRACT_VERSION, OperationSpec
 
 
 @lru_cache(maxsize=None)
@@ -43,11 +18,18 @@ def _backend_version(name: str) -> str:
     return str(value) if value is not None else "unknown"
 
 
-def _backend_names(spec: OperationSpec) -> tuple[str, ...]:
-    if spec.backends:
+def _backend_names(spec: OperationSpec, result: dict[str, Any]) -> tuple[str, ...]:
+    selected = result.pop("_usedBackends", None)
+    if selected is None:
         return spec.backends
-    module_name = spec.handler.__module__.rsplit(".", 1)[-1]
-    return _MODULE_BACKENDS.get(module_name, ("python",))
+    if (
+        not isinstance(selected, (list, tuple))
+        or not selected
+        or any(not isinstance(name, str) or name not in spec.backends for name in selected)
+    ):
+        raise ValueError(f"operation {spec.id} reported invalid execution backends")
+    # Keep first-use order while preventing duplicate provenance entries.
+    return tuple(dict.fromkeys(selected))
 
 
 def _result_assurance(spec: OperationSpec, result: dict[str, Any]) -> str:
@@ -74,15 +56,20 @@ def apply_research_contract(spec: OperationSpec, result: dict[str, Any]) -> dict
     # Assurance, claim boundary, and runtime provenance are registry/runtime
     # facts. A handler must not be able to promote its own output by returning
     # stronger labels or a broader scope.
+    annotated["assuranceContractVersion"] = ASSURANCE_CONTRACT_VERSION
     annotated["assurance"] = assurance
     annotated["claim"] = str(annotated.get("kind", spec.id))
     annotated["scope"] = spec.assurance_scope
     annotated.setdefault("assumptions", [])
     annotated["provenance"] = {
+        # The runtime identity supplies the package namespace. Keeping the
+        # operation module plus callable is unambiguous inside Math Anchor and
+        # avoids paying for the same package prefix on every Agent result.
+        "entrypoint": f"{spec.handler.__module__.rsplit('.', 1)[-1]}.{spec.handler.__name__}",
         "runtime": {"name": "math-anchor", "version": __version__},
         "backends": [
             {"name": name, "version": _backend_version(name)}
-            for name in _backend_names(spec)
+            for name in _backend_names(spec, annotated)
         ],
     }
     annotated.setdefault("certificate", None)

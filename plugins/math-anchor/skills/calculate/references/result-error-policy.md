@@ -10,8 +10,9 @@
 - Prefer diagnostics returned by the original call. Make another call only for
   a materially different independent invariant needed by a consequential
   result.
-- Preserve `assurance`, `scope`, `assumptions`, `provenance`, `certificate`,
-  and `checkedBy` when they delimit a research or verification claim.
+- Preserve `assuranceContractVersion`, `assurance`, `scope`, `assumptions`,
+  `provenance`, `certificate`, and `checkedBy` when they delimit a research or
+  verification claim.
 
 ## Errors and retries
 

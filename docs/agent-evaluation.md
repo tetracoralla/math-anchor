@@ -23,10 +23,13 @@ enough reliability to justify the extra Agent/tool round. The paired assets in
 - The `installed-smoke` mode exercises the packaged Plugin in a disposable
   Codex home containing no other Plugin. It stages the same installed Math
   Anchor identity for both conditions, keeps local command tools disabled, and
-  varies only whether the verified Math Anchor MCP server is enabled. This is
-  the bounded full-product Skill/dependency route; it is deliberately separate
-  from an ambient user session whose unrelated Plugins and schemas would
-  contaminate both routing and token cost.
+  disables unrelated app, browser, computer-use, memory, delegation, image,
+  automation, and resource-discovery surfaces, then varies only whether the
+  verified Math Anchor MCP server is enabled. This is the bounded full-product
+  Skill/dependency route; it is deliberately separate from an ambient user
+  session whose unrelated Plugins and schemas would contaminate both routing
+  and token cost. Preflight rejects a carrier prompt above 48 KB or one that
+  still exposes generic MCP resource discovery.
 - The ordinary known route budget is one direct `math.run` call. One
   `math.describe` call is acceptable when the selected operation's exact
   argument contract is genuinely unfamiliar; `math.search` is reserved for an
@@ -92,7 +95,7 @@ tokens or tool turns.
 
 ## Claim interpretation
 
-Math Anchor 0.4 supports explicit structured invocation and deterministic
+Math Anchor 0.5 supports explicit structured invocation and deterministic
 execution. Source or binary release therefore does not require a fresh Agent
 to select the Plugin from natural language. Promotion of a natural-language
 selection, automatic-adoption, or Agent-quality claim requires current
@@ -125,7 +128,8 @@ about 15,900 input tokens each, while the nontrivial successful runs approached
 84,000–85,000 and the two failures exceeded 100,000. This shows that removing
 ambient Plugins materially reduced simple cold-session context, but did not
 make a fresh Agent turn economical or reliable for repeated structured
-calculation. Driver v0.4.1 now explicitly enables the Plugin feature and locks
+calculation. Driver v0.5.0 explicitly enables the Plugin feature, observes the
+current Codex runtime identity, and locks
 that precondition in a negative regression; that repair is development-tested
 but has not been promoted into a second paid smoke.
 
@@ -151,7 +155,23 @@ The comparison is therefore invalid and installed cold natural routing remains
 automatic adoption or Agent-quality improvement, but does not invalidate or
 block release of the separately measured deterministic explicit route.
 
-The zero-model cold direct-host smoke is a separate observation. It invokes 13
+The current 0.5.0 installed smoke on September 1 used Codex CLI
+`0.151.0-alpha.7.2`, Luna at low reasoning, the exact installer-reported Plugin
+root, and the narrowed isolated carrier. It was comparison-valid: all eight
+runs completed, both conditions solved 4/4 tasks, baseline made no target call,
+and treatment made no optional or irrelevant target call. Treatment reached
+the actual `math.run` entry on the large-binomial task but failed to route the
+required fixed-width task to Math Anchor, so required-opportunity recall was
+1/2. The quality delta was zero, paired token delta was +16,210 in total
+(+4,052.5 mean), and paired mean latency delta was +915.75 ms; no USD cost was
+reported and none is inferred. This is a valid routing/cost finding with
+`no-utility-claim`, not promotion evidence. The 180-run estimate was not
+started. The current report is
+`build/agent-evals/math-anchor.codex-luna.installed-plugin-routing-smoke-0-5-20260831T171154Z.json`.
+
+The zero-model cold direct-host smoke is a separate observation. The current
+0.5.0 report passed 13/13 workloads with 283 ms median and 328.15 ms mean cold
+latency. It invokes 13
 structured `math.run` workloads once each, with no Agent, harness, prompt,
 paired condition, token, or tool-adoption fields. Run it through
 `script/direct_host_eval.py`; do not merge its latency summary into a paired

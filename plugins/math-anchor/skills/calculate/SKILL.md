@@ -76,9 +76,11 @@ Load only the relevant reference when the request needs its policy:
 - Preserve precision, units, conventions, assumptions, warnings, uncertainty,
   residuals, error bounds, stability diagnostics, branches, and omission risk
   when they affect interpretation.
-- Preserve `assurance`, `scope`, `certificate`, and `checkedBy`. `certified`
-  means a bounded artifact is available; `checkedBy: null` means no checker or
-  proof kernel has accepted it in this call.
+- Preserve `assuranceContractVersion`, `assurance`, `scope`, `provenance`,
+  `certificate`, and `checkedBy`. `certified` means a bounded artifact is
+  available; `checkedBy: null` means no checker or proof kernel has accepted
+  it in this call. The optional Lean bridge is a separate CLI lane, not another
+  MCP tool.
 - Explain the mathematical setup briefly when useful; omit engine, worker,
   schema, and protocol details from the ordinary answer.
 - Stop after the first successful call for an ordinary calculation. Repeating

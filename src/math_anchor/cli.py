@@ -12,6 +12,7 @@ from .certificate_checker import (
     verify_polynomial_identity_certificate,
 )
 from .errors import CalculatorError, error_payload
+from .lean_bridge import verify_polynomial_identity_with_lean
 from .output_policy import DEFAULT_MAX_OUTPUT_BYTES
 from .sandbox import run_batch, run_operation
 
@@ -61,6 +62,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="Independently verify a Math Anchor certificate JSON object",
     )
     verify.add_argument("source", help="Certificate/result JSON file or - for stdin")
+
+    verify_lean = subparsers.add_parser(
+        "verify-certificate-lean",
+        help="Check a true polynomial identity certificate with the Lean kernel",
+    )
+    verify_lean.add_argument("source", help="Certificate/result JSON file or - for stdin")
+    verify_lean.add_argument("--lake", required=True, type=Path)
+    verify_lean.add_argument("--project", required=True, type=Path)
+    verify_lean.add_argument("--artifact-output", type=Path)
+    verify_lean.add_argument("--timeout", type=int, default=120)
     return parser
 
 
@@ -122,7 +133,7 @@ def main() -> None:
             )
         elif arguments.command == "batch":
             result = run_batch(_batch_items(arguments.items))
-        else:
+        elif arguments.command == "verify-certificate":
             try:
                 check = verify_polynomial_identity_certificate(
                     _certificate_value(arguments.source)
@@ -134,6 +145,17 @@ def main() -> None:
                 "kind": "certificate_check",
                 **check,
             }
+        else:
+            try:
+                result = verify_polynomial_identity_with_lean(
+                    _certificate_value(arguments.source),
+                    lake=arguments.lake,
+                    project_root=arguments.project,
+                    artifact_output=arguments.artifact_output,
+                    timeout=arguments.timeout,
+                )
+            except CertificateValidationError as error:
+                raise CalculatorError("E_CERTIFICATE", str(error)) from error
     except CalculatorError as error:
         result = {"status": "error", "error": error.as_dict()}
     except json.JSONDecodeError as error:

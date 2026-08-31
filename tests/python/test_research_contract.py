@@ -17,8 +17,8 @@ from math_anchor.certificate_checker import (
 )
 from math_anchor.catalog import OPERATIONS
 from math_anchor.errors import CalculatorError
-from math_anchor.models import OperationSpec
-from math_anchor.research_contract import _MODULE_BACKENDS, apply_research_contract
+from math_anchor.models import ASSURANCE_CONTRACT_VERSION, OperationSpec
+from math_anchor.research_contract import apply_research_contract
 from math_anchor.runtime import execute_direct
 
 
@@ -38,11 +38,13 @@ def _digest(value: object) -> str:
 def test_every_success_gets_the_compact_assurance_envelope() -> None:
     result = execute_direct("expression.evaluate", {"expression": "1/10 + 2/10"})
 
+    assert result["assuranceContractVersion"] == ASSURANCE_CONTRACT_VERSION
     assert result["assurance"] == "deterministic"
     assert result["claim"] == result["kind"] == "scalar"
     assert result["scope"] == "declared_operation_result"
     assert result["assumptions"] == []
     assert result["provenance"]["runtime"] == {"name": "math-anchor", "version": __version__}
+    assert result["provenance"]["entrypoint"] == "expression.evaluate"
     assert result["provenance"]["backends"][0]["name"] == "sympy"
     assert result["certificate"] is None
     assert result["checkedBy"] is None
@@ -92,6 +94,7 @@ def test_operation_spec_rejects_an_unknown_assurance_level() -> None:
             examples=(),
             handler=lambda arguments: {},
             assurance="proven",
+            backends=("python",),
         )
 
 
@@ -105,6 +108,7 @@ def test_certified_profile_cannot_return_without_a_certificate() -> None:
         examples=(),
         handler=lambda arguments: {},
         assurance="certified",
+        backends=("python",),
     )
     with pytest.raises(ValueError, match="returned no certificate"):
         apply_research_contract(
@@ -138,6 +142,7 @@ def test_runtime_owned_assurance_and_provenance_cannot_be_self_promoted() -> Non
             "operation": spec.id,
             "kind": "test",
             "warnings": [],
+            "assuranceContractVersion": "invented",
             "assurance": "kernel_checked",
             "scope": "unbounded_proof",
             "provenance": {"runtime": {"name": "invented", "version": "1"}, "backends": []},
@@ -145,6 +150,7 @@ def test_runtime_owned_assurance_and_provenance_cannot_be_self_promoted() -> Non
     )
 
     assert result["assurance"] == "diagnostic"
+    assert result["assuranceContractVersion"] == ASSURANCE_CONTRACT_VERSION
     assert result["scope"] == "bounded_diagnostic"
     assert result["provenance"]["runtime"] == {"name": "math-anchor", "version": __version__}
 
@@ -260,11 +266,49 @@ def test_certificate_operation_rejects_zero_denominator_and_negative_exponent() 
     assert "nonnegative" in negative_exponent.value.message
 
 
-def test_every_operation_declares_or_registers_backend_provenance() -> None:
+def test_every_operation_declares_backend_provenance() -> None:
     for spec in OPERATIONS.values():
-        module_name = spec.handler.__module__.rsplit(".", 1)[-1]
-        assert spec.backends or module_name in _MODULE_BACKENDS, (
-            f"{spec.id} would silently fall back to python backend provenance"
+        assert spec.backends, f"{spec.id} has no declared execution backend"
+
+
+def test_provenance_uses_the_selected_operation_path_not_a_module_inventory() -> None:
+    determinant = execute_direct("matrix.determinant", {"matrix": [[1, 2], [3, 4]]})
+    assert [item["name"] for item in determinant["provenance"]["backends"]] == ["sympy"]
+    assert determinant["provenance"]["entrypoint"] == "matrix.determinant"
+
+    explicit_points = execute_direct(
+        "function.sample",
+        {"expression": "x^2", "variable": "x", "points": ["0", "1"]},
+    )
+    grid = execute_direct(
+        "function.sample",
+        {"expression": "x^2", "variable": "x", "lower": "0", "upper": "1", "count": 2},
+    )
+    assert [item["name"] for item in explicit_points["provenance"]["backends"]] == ["sympy"]
+    assert [item["name"] for item in grid["provenance"]["backends"]] == ["mpmath", "sympy"]
+
+
+def test_handler_backend_selection_cannot_escape_the_registry_allow_list() -> None:
+    spec = OperationSpec(
+        id="test.backend_escape",
+        category="test",
+        summary="test",
+        description="test",
+        input_schema={"type": "object"},
+        examples=(),
+        handler=lambda arguments: {},
+        backends=("python",),
+    )
+    with pytest.raises(ValueError, match="invalid execution backends"):
+        apply_research_contract(
+            spec,
+            {
+                "_usedBackends": ["invented"],
+                "status": "ok",
+                "operation": spec.id,
+                "kind": "test",
+                "warnings": [],
+            },
         )
 
 

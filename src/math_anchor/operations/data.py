@@ -64,6 +64,7 @@ def statistics_describe(arguments: dict[str, Any]) -> dict[str, Any]:
             ddof=ddof,
         )
         reported_precision = precision
+        used_backends = ["sympy"]
     else:
         array = np.asarray([float(value) for value in values], dtype=float)
         require(bool(np.all(np.isfinite(array))), "E_DOMAIN", "values must be finite")
@@ -85,11 +86,13 @@ def statistics_describe(arguments: dict[str, Any]) -> dict[str, Any]:
         )
         metrics = {name: sp.Float(str(value), 15) for name, value in numeric_metrics.items()}
         reported_precision = effective_precision(list(metrics.values()), precision)
+        used_backends = ["numpy", "sympy"]
         warnings.append(
             "JSON floating-point inputs are approximate; send decimal strings to preserve exact decimal provenance."
         )
 
     return {
+        "_usedBackends": used_backends,
         "status": "ok",
         "operation": "statistics.describe",
         "kind": "statistics",

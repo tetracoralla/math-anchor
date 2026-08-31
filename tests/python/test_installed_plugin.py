@@ -80,3 +80,44 @@ def test_installed_plugin_rejects_version_drift(tmp_path: Path) -> None:
 
     with pytest.raises(SystemExit, match="manifest version mismatch"):
         installed_plugin.validate(source, installed, "0.4.0")
+
+
+def test_installed_plugin_accepts_the_exact_codex_mcp_route(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    installed = tmp_path / "installed"
+    write_plugin(source, "0.4.0")
+    shutil.copytree(source, installed)
+    executable = installed / "runtime" / "math-anchor-runtime" / "math-anchor-runtime"
+
+    installed_plugin.validate(
+        source,
+        installed,
+        "0.4.0",
+        {
+            "name": "math-anchor",
+            "enabled": True,
+            "transport": {"type": "stdio", "command": str(executable), "cwd": None},
+        },
+    )
+
+
+def test_installed_plugin_rejects_a_codex_route_outside_the_install(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    installed = tmp_path / "installed"
+    other = tmp_path / "other-runtime"
+    write_plugin(source, "0.4.0")
+    shutil.copytree(source, installed)
+    other.write_text("runtime", encoding="utf-8")
+    other.chmod(0o755)
+
+    with pytest.raises(SystemExit, match="escapes the installed Plugin root"):
+        installed_plugin.validate(
+            source,
+            installed,
+            "0.4.0",
+            {
+                "name": "math-anchor",
+                "enabled": True,
+                "transport": {"type": "stdio", "command": str(other), "cwd": None},
+            },
+        )

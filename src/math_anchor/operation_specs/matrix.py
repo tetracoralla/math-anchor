@@ -21,6 +21,7 @@ SPECS = (
         input_schema=_object({"matrix": _MATRIX, "precision": _PRECISION}, ("matrix",)),
         examples=({"matrix": [[1, 2], [3, 4]]},),
         handler=matrix.determinant,
+        backends=("sympy",),
         keywords=("linear algebra", "det", "行列式", "矩阵"),
     ),
     OperationSpec(
@@ -31,6 +32,7 @@ SPECS = (
         input_schema=_object({"matrix": _MATRIX, "precision": _PRECISION}, ("matrix",)),
         examples=({"matrix": [[1, 2], [3, 4]]},),
         handler=matrix.inverse,
+        backends=("sympy",),
         keywords=("linear algebra", "reciprocal matrix", "逆矩阵", "矩阵求逆"),
     ),
     OperationSpec(
@@ -41,6 +43,7 @@ SPECS = (
         input_schema=_object({"matrix": _MATRIX, "precision": _PRECISION}, ("matrix",)),
         examples=({"matrix": [[2, 0], [0, 3]]},),
         handler=matrix.eigenvalues,
+        backends=("sympy",),
         keywords=("linear algebra", "spectrum", "characteristic", "特征值", "矩阵特征值"),
     ),
     OperationSpec(
@@ -67,6 +70,7 @@ SPECS = (
             {"matrix": [[1, 2], [2, 4]], "constants": [3, 6]},
         ),
         handler=matrix.solve,
+        backends=("sympy",),
         keywords=("linear system", "Ax=b", "simultaneous equations", "线性方程组", "矩阵求解", "增广矩阵"),
     ),
     OperationSpec(
@@ -89,6 +93,7 @@ SPECS = (
             {"action": "cholesky", "matrix": [[4, 2], [2, 3]]},
         ),
         handler=matrix.reduce,
+        backends=("sympy",),
         keywords=("rank", "row reduce", "RREF", "null space", "column space", "eigenvectors", "eigenspaces", "diagonalizable", "LU", "Cholesky", "秩", "行最简形", "零空间", "列空间", "特征向量", "特征空间", "可对角化", "LU分解", "Cholesky分解"),
     ),
     OperationSpec(
@@ -149,6 +154,7 @@ SPECS = (
             {"action": "projection", "left": [2, 2], "onto": [1, 0]},
         ),
         handler=linear_algebra.exact,
+        backends=("sympy",),
         keywords=("matrix multiplication", "transpose", "dot product", "cross product", "vector norm", "projection", "矩阵乘法", "转置", "点积", "叉积", "向量范数", "投影"),
     ),
 )

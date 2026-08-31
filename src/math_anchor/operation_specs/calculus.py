@@ -28,6 +28,7 @@ SPECS = (
         ),
         examples=({"expression": "sin(x) * exp(x)", "variable": "x"},),
         handler=calculus.derivative,
+        backends=("sympy",),
         keywords=("differentiate", "slope", "rate of change", "求导", "导数", "微分"),
     ),
     OperationSpec(
@@ -50,6 +51,7 @@ SPECS = (
             {"expression": "sin(x)", "variable": "x", "lower": 0, "upper": "pi"},
         ),
         handler=calculus.integrate,
+        backends=("sympy",),
         keywords=("integral", "area", "antiderivative", "积分", "定积分", "不定积分"),
     ),
     OperationSpec(
@@ -69,6 +71,7 @@ SPECS = (
         ),
         examples=({"expression": "sin(x)/x", "variable": "x", "point": "0"},),
         handler=calculus.limit,
+        backends=("sympy",),
         keywords=("approaches", "asymptote", "convergence", "极限", "趋近", "收敛"),
     ),
     OperationSpec(
@@ -88,6 +91,7 @@ SPECS = (
         ),
         examples=({"expression": "exp(x)", "variable": "x", "point": 0, "order": 6},),
         handler=calculus.series,
+        backends=("sympy",),
         keywords=("Taylor", "Laurent", "power series", "级数展开", "泰勒展开", "洛朗展开"),
     ),
     OperationSpec(
@@ -143,6 +147,7 @@ SPECS = (
             {"action": "directional_derivative", "expression": "x^2 + y^2", "variables": ["x", "y"], "direction": [3, 4]},
         ),
         handler=calculus.multivariate,
+        backends=("sympy",),
         keywords=("gradient", "Jacobian", "Hessian", "directional derivative", "divergence", "curl", "Laplacian", "multivariable", "梯度", "雅可比", "海森矩阵", "方向导数", "散度", "旋度", "拉普拉斯算子", "多元微分"),
     ),
 )

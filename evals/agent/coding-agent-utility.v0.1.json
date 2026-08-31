@@ -5,7 +5,7 @@
   "title": "Math Anchor Coding Agent utility estimate",
   "targetRef": {
     "id": "math-anchor",
-    "version": "0.4.0"
+    "version": "0.5.0"
   },
   "tasks": [
     {

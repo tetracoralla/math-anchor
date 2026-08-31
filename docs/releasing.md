@@ -127,11 +127,11 @@ identity and a configured `notarytool` keychain profile:
 2. Merge the release commit through the protected `main` branch and wait for
    both architecture jobs to pass.
 3. From a clean checkout of that commit, create an annotated tag such as
-   `git tag -a v0.4.0 -m "Math Anchor 0.4.0"`.
+   `git tag -a v0.5.0 -m "Math Anchor 0.5.0"`.
 4. Run the release command below on the matching architecture.
 
 ```bash
-export MATH_ANCHOR_APP_VERSION=0.4.0
+export MATH_ANCHOR_APP_VERSION=0.5.0
 export MATH_ANCHOR_BUILD_NUMBER=1
 export MATH_ANCHOR_CODESIGN_IDENTITY="Developer ID Application: Example (TEAMID)"
 export MATH_ANCHOR_NOTARY_PROFILE="math-anchor-notary"

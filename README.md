@@ -43,10 +43,12 @@ Currency conversion is an online, human-app feature calculated from the European
   input schema remains below the current Codex host's lossy-compaction boundary,
   and the complete four-tool listing remains below a 10,000-byte regression.
 - Every successful Agent result now carries a runtime-owned assurance level,
-  claim scope, assumptions, runtime/backend versions, and explicit certificate
-  and kernel-check state. `certificate.polynomial_identity` emits a bounded
-  rational-polynomial artifact that the separate standard-library checker can
-  recompute without SymPy.
+  assurance contract version, claim scope, assumptions, selected operation
+  path and backend versions, and explicit certificate/kernel-check state.
+  `certificate.polynomial_identity` emits a bounded rational-polynomial
+  artifact that the separate standard-library checker can recompute without
+  SymPy. An optional pinned Lean bridge can then check a generated rational
+  theorem without entering the normal runtime or MCP surface.
 - The headless runtime now builds as a verified wheel and source archive, runs
   in Linux CI on x86_64 and arm64, and has a digest-pinned, non-root OCI image
   definition. These paths do not depend on the macOS application.
@@ -126,6 +128,16 @@ or the certificate producer. A successful check establishes only the declared
 rational-polynomial identity classification; it is not a formal proof-kernel
 acceptance.
 
+For the optional, heavyweight Lean kernel lane:
+
+```bash
+./script/check_lean_bridge.sh
+```
+
+This records `kernel_checked` only after pinned Lean 4.33.1 accepts the
+generated theorem. See [docs/lean-bridge.md](docs/lean-bridge.md) for its exact
+scope and reusable CLI form.
+
 Start the MCP server with:
 
 ```bash
@@ -154,7 +166,7 @@ same four tools directly; they do not need a model turn per calculation. See
 [docs/agent-runtime.md](docs/agent-runtime.md) for admission, retries, load
 evidence, and direct-host usage.
 
-Math Anchor 0.4 supports this explicit structured route. Cold selection from a
+Math Anchor 0.5 supports this explicit structured route. Cold selection from a
 fresh natural-language Agent session is host/model-dependent integration
 behavior, not a guaranteed zero-configuration feature or a source-release
 condition.

@@ -107,6 +107,7 @@ def sample(arguments: dict[str, Any]) -> dict[str, Any]:
             f"{undefined} sampled point(s) are outside the expression's domain and are reported as undefined."
         )
     return {
+        "_usedBackends": ["sympy"] if points_present else ["mpmath", "sympy"],
         "status": "ok",
         "operation": "function.sample",
         "kind": "function_table",
@@ -114,4 +115,3 @@ def sample(arguments: dict[str, Any]) -> dict[str, Any]:
         "points": rows,
         "warnings": warnings,
     }
-

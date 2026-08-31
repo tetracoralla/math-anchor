@@ -44,6 +44,7 @@ RUN_TOOL_OUTPUT_SCHEMA = {
         "precision": {"type": "integer", "minimum": 2},
         "unit": _TEXT_OR_NULL,
         "warnings": {"type": "array", "items": {"type": "string"}},
+        "assuranceContractVersion": {"type": "string"},
         "assurance": {
             "enum": ["heuristic", "deterministic", "diagnostic", "certified", "kernel_checked"]
         },

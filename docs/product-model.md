@@ -12,7 +12,7 @@
 
 The human surface is a compact, enjoyable macOS calculator for people who need ordinary arithmetic, scientific functions, common physical-unit conversions, and reference currency conversion without learning a new workspace. Familiar keypad and keyboard entry remain the default experience. The calculator face stays focused on the entered value and result; history, errors, rate status, and optional details or copy choices appear only when requested or relevant.
 
-The Agent surface is a deterministic mathematical runtime for assistants that have translated a reliability-sensitive user request into a mathematical operation. Trivial, low-risk arithmetic that is immediately verifiable stays with the model; exactness, precision, units, diagnostics, reuse, nontrivial algorithms, or consequential downstream use justify the runtime. An ordinary known runtime request should complete in one `math.run` call. The always-listed schema carries every stable operation id and the execution limits without crossing the Codex host's lossy-compaction boundary; `math.describe` supplies one selected operation's exact closed argument contract when it is unfamiliar. Every execution is mechanically validated against that registry contract and returns typed results that distinguish exact values from approximations. The 0.4 product contract starts after a caller or assistant selects an operation: explicit structured invocation and deterministic execution are supported. Whether a fresh host selects the Plugin from natural language is host/model behavior measured as a separate experiment, not a zero-configuration product promise or source-release condition.
+The Agent surface is a deterministic mathematical runtime for assistants that have translated a reliability-sensitive user request into a mathematical operation. Trivial, low-risk arithmetic that is immediately verifiable stays with the model; exactness, precision, units, diagnostics, reuse, nontrivial algorithms, or consequential downstream use justify the runtime. An ordinary known runtime request should complete in one `math.run` call. The always-listed schema carries every stable operation id and the execution limits without crossing the Codex host's lossy-compaction boundary; `math.describe` supplies one selected operation's exact closed argument contract when it is unfamiliar. Every execution is mechanically validated against that registry contract and returns typed results that distinguish exact values from approximations. The 0.5 product contract starts after a caller or assistant selects an operation: explicit structured invocation and deterministic execution are supported. Whether a fresh host selects the Plugin from natural language is host/model behavior measured as a separate experiment, not a zero-configuration product promise or source-release condition.
 
 ## Related surfaces and flows
 
@@ -100,9 +100,11 @@ The catalog covers expression evaluation and registered special functions, trans
   rejects degree, term, AST, and coefficient growth before or during
   normalization. Its certificate binds the normalized statement and exact
   coefficient difference with digests; a separate standard-library checker
-  recomputes both without importing SymPy or the producer. `checkedBy` remains
-  null until such a check is actually performed, and this is not a formal
-  proof-kernel result.
+  recomputes both without importing SymPy or the producer. The optional Lean
+  bridge separately translates a true certificate into a theorem over the
+  rationals and sets `kernel_checked` only after pinned Lean accepts it. The
+  ordinary operation still returns `checkedBy: null`; formal tooling remains
+  outside the four-tool runtime and default distribution.
 - Financial results state rate and cash-flow timing conventions and apply an explicit decimal rounding mode. Bracketed IRR returns one selected root and never implies that another root is absent.
 - Probability and inferential statistics accept decimal text, expose their numerical method, and keep distribution support, sample assumptions, degrees of freedom, and approximate provenance visible to the Agent result without surfacing them in the human calculator UI.
 - `measurement.propagate` applies exact first-order Taylor covariance algebra to inputs already expressed in one coherent numerical unit system. It validates that explicit correlations form a positive-semidefinite matrix, separates standard from coverage-factor-expanded uncertainty, and warns that exact fields are exact only within the linearized model.

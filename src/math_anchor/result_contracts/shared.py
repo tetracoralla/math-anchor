@@ -273,6 +273,7 @@ def _ok_schema(
             "operation",
             "kind",
             "warnings",
+            "assuranceContractVersion",
             "assurance",
             "claim",
             "scope",

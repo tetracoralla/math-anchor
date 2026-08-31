@@ -23,6 +23,8 @@ import tempfile
 from typing import Any
 
 from release_metadata import canonical_version
+from check_installed_plugin import validate as validate_installed_plugin
+from check_installed_plugin import validate_server_route
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -181,8 +183,21 @@ def _temporary_environment(updates: dict[str, str]):
                 os.environ[key] = value
 
 
+def _driver_configs(experiment: dict[str, Any]) -> list[str]:
+    arguments = experiment.get("driver", {}).get("args")
+    if not isinstance(arguments, list):
+        return []
+    configs: list[str] = []
+    for index, value in enumerate(arguments):
+        if value == "--config" and index + 1 < len(arguments):
+            configured = arguments[index + 1]
+            if isinstance(configured, str):
+                configs.append(configured)
+    return configs
+
+
 @contextmanager
-def _isolated_codex_home(enabled: bool):
+def _isolated_codex_home(enabled: bool, configs: list[str]):
     """Install only Math Anchor into a disposable Codex home for one paired run."""
 
     if not enabled:
@@ -208,6 +223,7 @@ def _isolated_codex_home(enabled: bool):
             # evaluated prompt surface.
             "HOME": str(isolated_root),
         }
+        config_arguments = [item for value in configs for item in ("--config", value)]
         _capture_json(
             [codex, "plugin", "marketplace", "add", str(ROOT), "--json"],
             cwd=ROOT,
@@ -220,6 +236,15 @@ def _isolated_codex_home(enabled: bool):
         )
         if installed.get("pluginId") != TARGET_PLUGIN_ID or installed.get("version") != TARGET_PLUGIN_VERSION:
             raise SystemExit("isolated Plugin installation did not resolve the declared Math Anchor version")
+        installed_path_value = installed.get("installedPath")
+        if not isinstance(installed_path_value, str) or not installed_path_value:
+            raise SystemExit("isolated Plugin installation did not report installedPath")
+        installed_path = Path(installed_path_value).expanduser().resolve()
+        validate_installed_plugin(
+            ROOT / "plugins" / "math-anchor",
+            installed_path,
+            TARGET_PLUGIN_VERSION,
+        )
         inventory = _capture_json(
             [codex, "plugin", "list", "--json"],
             cwd=ROOT,
@@ -239,16 +264,21 @@ def _isolated_codex_home(enabled: bool):
         )
         if server.get("name") != "math-anchor" or server.get("enabled") is not True:
             raise SystemExit("isolated Math Anchor MCP server is unavailable after installation")
+        validate_server_route(installed_path, server)
         transport = server.get("transport")
         if not isinstance(transport, dict):
             raise SystemExit("isolated Math Anchor MCP transport is unavailable")
         command = transport.get("command")
         server_arguments = transport.get("args")
         server_cwd = transport.get("cwd")
-        if not isinstance(command, str) or not isinstance(server_cwd, str) or not isinstance(server_arguments, list):
+        if not isinstance(command, str) or not isinstance(server_arguments, list):
             raise SystemExit("isolated Math Anchor MCP transport is malformed")
         if not all(isinstance(value, str) for value in server_arguments):
             raise SystemExit("isolated Math Anchor MCP arguments are malformed")
+        if server_cwd is None:
+            server_cwd = str(installed_path)
+        elif not isinstance(server_cwd, str):
+            raise SystemExit("isolated Math Anchor MCP cwd is malformed")
         for expected_enabled in (False, True):
             serialized_arguments = ",".join(json.dumps(value) for value in server_arguments)
             override = (
@@ -280,6 +310,7 @@ def _isolated_codex_home(enabled: bool):
                 "--enable", "plugins",
                 "--disable", "shell_tool",
                 "--disable", "unified_exec",
+                *config_arguments,
                 "debug", "prompt-input",
                 "Use Math Anchor for one reliability-sensitive calculation.",
             ],
@@ -295,22 +326,19 @@ def _isolated_codex_home(enabled: bool):
             for content in item.get("content", [])
             if isinstance(content, dict) and isinstance(content.get("text"), str)
         )
-        expected_skill = (
-            isolated_root
-            / "plugins"
-            / "cache"
-            / "openadam"
-            / "math-anchor"
-            / TARGET_PLUGIN_VERSION
-            / "skills"
-            / "calculate"
-            / "SKILL.md"
+        skill_identity = "- math-anchor:calculate:"
+        skill_version_path = (
+            f"/math-anchor/{TARGET_PLUGIN_VERSION}/skills/calculate/SKILL.md"
         )
         ambient_skill_root = Path.home().resolve() / ".agents" / "skills"
-        if str(expected_skill) not in prompt_text:
+        if skill_identity not in prompt_text or skill_version_path not in prompt_text:
             raise SystemExit("isolated Codex prompt does not expose the installed Math Anchor Skill")
         if str(ambient_skill_root) in prompt_text:
             raise SystemExit("isolated Codex prompt still exposes ambient user Skills")
+        if "list_mcp_resources" in prompt_text:
+            raise SystemExit("isolated Codex prompt still exposes unrelated MCP resource discovery")
+        if len(prompt_text.encode("utf-8")) > 48_000:
+            raise SystemExit("isolated Codex prompt exceeds the declared 48 KB carrier budget")
         print(f"prepared isolated {TARGET_PLUGIN_ID} version {TARGET_PLUGIN_VERSION}")
         with _temporary_environment({"HOME": str(isolated_root)}):
             yield isolated_root
@@ -330,7 +358,10 @@ def _prepared_experiment(
         yield path
         return
     needs_isolated_home = ISOLATED_CODEX_HOME_PLACEHOLDER in arguments
-    with _isolated_codex_home(needs_isolated_home and prepare_installed_plugin) as isolated_root:
+    with _isolated_codex_home(
+        needs_isolated_home and prepare_installed_plugin,
+        _driver_configs(experiment),
+    ) as isolated_root:
         replacements: dict[str, str] = {}
         if POLICY_PLACEHOLDER in arguments:
             if not POLICY_PATH.is_file():

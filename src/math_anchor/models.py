@@ -12,6 +12,7 @@ ASSURANCE_LEVELS = (
     "certified",
     "kernel_checked",
 )
+ASSURANCE_CONTRACT_VERSION = "1.0"
 
 
 @dataclass(frozen=True)
@@ -33,7 +34,7 @@ class OperationSpec:
             raise ValueError(f"unsupported assurance level for {self.id}: {self.assurance}")
         if not self.assurance_scope or len(self.assurance_scope) > 128:
             raise ValueError(f"invalid assurance scope for {self.id}")
-        if any(not backend or len(backend) > 64 for backend in self.backends):
+        if not self.backends or any(not backend or len(backend) > 64 for backend in self.backends):
             raise ValueError(f"invalid backend identity for {self.id}")
 
     def compact(self) -> dict[str, str]:

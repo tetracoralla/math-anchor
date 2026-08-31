@@ -107,8 +107,8 @@ SPECS = (
     OperationSpec(
         id="numeric.minimize",
         category="numeric",
-        summary="Certifiably locate the global minimum or maximum over a bracket.",
-        description="Interval-arithmetic branch and bound returns a rigorous enclosure of the global extremum value plus cover intervals for every minimizer, or degrades honestly to the best certified bound when the evaluation budget runs out. The expression must be defined everywhere on the bracket; brackets containing poles or undefined points are rejected rather than certified.",
+        summary="Bound a global minimum or maximum over a bracket with interval arithmetic.",
+        description="Interval-arithmetic branch and bound returns an internal enclosure of the global extremum value plus cover intervals for every minimizer over the supported expression subset, or degrades honestly to the best bound obtained when the evaluation budget runs out. The expression must be defined everywhere on the bracket; brackets containing poles or undefined points are rejected. This is not an external certificate or a proof-kernel result.",
         input_schema=_object(
             {
                 "expression": _EXPRESSION,
@@ -128,7 +128,7 @@ SPECS = (
                 "tolerance": {
                     **_DECIMAL_TEXT,
                     "default": "1e-12",
-                    "description": "Requested width of the certified value enclosure.",
+                    "description": "Requested width of the internal value enclosure.",
                 },
                 "argminTolerance": {
                     **_DECIMAL_TEXT,
@@ -145,9 +145,9 @@ SPECS = (
             {"expression": "sin(x) + x/3", "variable": "x", "bracket": ["-4", "4"], "objective": "minimum"},
         ),
         handler=optimization.minimize,
-        keywords=("global minimum", "global maximum", "optimization", "argmin", "certified", "interval arithmetic", "全局最优", "最小值", "最大值", "区间分支定界"),
+        keywords=("global minimum", "global maximum", "optimization", "argmin", "interval bound", "interval arithmetic", "全局最优", "最小值", "最大值", "区间分支定界"),
         assurance="diagnostic",
-        assurance_scope="rigorous_internal_interval_enclosure_without_external_certificate",
+        assurance_scope="internal_mpmath_interval_enclosure_for_supported_expression_subset",
         backends=("mpmath", "sympy"),
     ),
     OperationSpec(
@@ -184,6 +184,7 @@ SPECS = (
             {"action": "compare", "left": "0.1", "right": "0.10000000000000001", "format": "binary64"},
         ),
         handler=floating.ieee754,
+        backends=("python",),
         keywords=("IEEE 754", "binary32", "binary64", "float bits", "ULP", "subnormal", "NaN", "rounding error", "浮点", "尾数", "指数", "舍入误差"),
     ),
     OperationSpec(

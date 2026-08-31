@@ -113,7 +113,7 @@ def test_coding_agent_suite_has_independent_oracles_and_balanced_opportunities()
     by_id = {task["id"]: task for task in tasks}
     assert len(tasks) == 30
     assert len(by_id) == 30
-    assert suite["targetRef"] == {"id": "math-anchor", "version": "0.4.0"}
+    assert suite["targetRef"] == {"id": "math-anchor", "version": "0.5.0"}
     assert {opportunity: sum(task["opportunity"] == opportunity for task in tasks) for opportunity in ("required", "optional", "irrelevant")} == {
         "required": 24,
         "optional": 3,
@@ -167,13 +167,13 @@ def test_experiments_fix_one_agent_harness_driver_and_target() -> None:
         )
         task_count = len(_load(suite_name)["tasks"])
         assert experiment["suiteRef"] == {"id": suite_id, "version": "0.1.0"}
-        assert experiment["targetRef"] == {"id": "math-anchor", "version": "0.4.0"}
+        assert experiment["targetRef"] == {"id": "math-anchor", "version": "0.5.0"}
         assert experiment["purpose"] == purpose
         assert experiment["repeats"] == repeats
         assert experiment["agent"] == {"provider": "openai", "model": "gpt-5.6-luna"}
-        assert experiment["harness"] == {"id": "codex-cli", "version": "0.150.0-alpha.8"}
+        assert experiment["harness"] == {"id": "codex-cli", "version": "0.151.0-alpha.7.2"}
         assert experiment["driver"]["id"] == "codex-cli-driver"
-        assert experiment["driver"]["version"] == "0.4.1"
+        assert experiment["driver"]["version"] == "0.5.0"
         arguments = experiment["driver"]["args"]
         reasoning_index = arguments.index("--config") + 1
         assert arguments[reasoning_index] == 'model_reasoning_effort="low"'

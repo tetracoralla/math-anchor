@@ -44,6 +44,7 @@ SPECS = (
             },
         ),
         handler=dimension.check,
+        backends=("pint", "sympy"),
         keywords=(
             "dimensional consistency",
             "dimensional analysis",
@@ -95,6 +96,7 @@ SPECS = (
             },
         ),
         handler=dimension.infer,
+        backends=("pint", "sympy"),
         keywords=(
             "infer dimensions",
             "infer variable dimension",
@@ -139,6 +141,7 @@ SPECS = (
             },
         ),
         handler=dimension.pi_groups,
+        backends=("pint", "sympy"),
         keywords=(
             "Buckingham Pi theorem",
             "Buckingham π theorem",

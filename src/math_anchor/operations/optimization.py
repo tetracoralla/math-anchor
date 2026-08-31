@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 from fractions import Fraction
 import heapq
 from typing import Any
@@ -13,9 +14,27 @@ from ..validation import enum_arg, integer_arg, string_arg
 
 iv = mp.iv
 
-# Functions mpmath's interval context evaluates directly. Everything else in
-# the safe-expression function set is handled through monotone endpoint
-# evaluation, which is a rigorous enclosure for monotone functions.
+# Functions mpmath's interval context evaluates directly. Hyperbolic functions
+# are expressed only in terms of interval exp and arithmetic because mpmath
+# 1.3 does not expose interval sinh/cosh/tanh methods.
+def _interval_sinh(value: Any) -> Any:
+    positive = iv.exp(value)
+    negative = iv.exp(-value)
+    return (positive - negative) / 2
+
+
+def _interval_cosh(value: Any) -> Any:
+    positive = iv.exp(value)
+    negative = iv.exp(-value)
+    return (positive + negative) / 2
+
+
+def _interval_tanh(value: Any) -> Any:
+    positive = iv.exp(value)
+    negative = iv.exp(-value)
+    return (positive - negative) / (positive + negative)
+
+
 _DIRECT_FUNCTIONS = {
     sp.sin: iv.sin,
     sp.cos: iv.cos,
@@ -24,16 +43,26 @@ _DIRECT_FUNCTIONS = {
     sp.log: iv.log,
     sp.sqrt: iv.sqrt,
     sp.gamma: iv.gamma,
+    sp.sinh: _interval_sinh,
+    sp.cosh: _interval_cosh,
+    sp.tanh: _interval_tanh,
 }
 _MONOTONE_FUNCTIONS = {
     sp.asin: mp.asin,
     sp.acos: mp.acos,
     sp.atan: mp.atan,
-    sp.sinh: mp.sinh,
-    sp.cosh: mp.cosh,
-    sp.tanh: mp.tanh,
 }
 _MAX_INTERVAL_EXPONENT = 128
+
+
+@contextmanager
+def _interval_workdps(precision: int) -> Any:
+    previous = iv.dps
+    iv.dps = precision
+    try:
+        yield
+    finally:
+        iv.dps = previous
 
 
 class _BudgetExhausted(Exception):
@@ -42,13 +71,13 @@ class _BudgetExhausted(Exception):
 
 
 class _IntervalTranslator:
-    """Evaluate a parsed SymPy expression rigorously over mp intervals.
+    """Evaluate a parsed SymPy expression over mpmath intervals.
 
     Every enclosure is checked for finiteness: mpmath returns (-inf, +inf)
     style enclosures for operations that are undefined somewhere inside the
     interval (log across zero, tan across a pole, division by an interval
     containing zero), and those cases must surface as domain errors because
-    the certification only holds where the expression is defined everywhere
+    the enclosure only holds where the expression is defined everywhere
     on the bracket.
     """
 
@@ -61,14 +90,13 @@ class _IntervalTranslator:
         if expression == self.symbol:
             return interval
         if expression is sp.pi:
-            return self._point_interval(mp.pi)
+            return iv.pi
         if expression is sp.E:
-            return self._point_interval(mp.e)
+            return iv.e
         if isinstance(expression, sp.Rational):
-            fraction = Fraction(str(expression))
-            return self._point_interval(mp.mpf(fraction.numerator) / mp.mpf(fraction.denominator))
+            return iv.mpf(str(expression))
         if expression.is_Number:
-            return self._point_interval(mp.mpf(sp.sstr(expression)))
+            return iv.mpf(sp.sstr(expression))
         if isinstance(expression, sp.Add):
             total = self.enclosure(expression.args[0], interval)
             for term in expression.args[1:]:
@@ -107,15 +135,15 @@ class _IntervalTranslator:
                 )
             return self._checked(result)
         if isinstance(expression, sp.Function):
-            for base, evaluator in _DIRECT_FUNCTIONS.items():
-                if isinstance(expression, base) and len(expression.args) == 1:
-                    return self._checked(evaluator(self.enclosure(expression.args[0], interval)))
-            for base, scalar in _MONOTONE_FUNCTIONS.items():
-                if isinstance(expression, base) and len(expression.args) == 1:
-                    inner = self.enclosure(expression.args[0], interval)
-                    return self._checked(
-                        self._monotone_enclosure(scalar, mp.mpf(inner.a), mp.mpf(inner.b))
-                    )
+            evaluator = _DIRECT_FUNCTIONS.get(expression.func)
+            if evaluator is not None and len(expression.args) == 1:
+                return self._checked(evaluator(self.enclosure(expression.args[0], interval)))
+            scalar = _MONOTONE_FUNCTIONS.get(expression.func)
+            if scalar is not None and len(expression.args) == 1:
+                inner = self.enclosure(expression.args[0], interval)
+                return self._checked(
+                    self._monotone_enclosure(scalar, mp.mpf(inner.a), mp.mpf(inner.b))
+                )
             if isinstance(expression, sp.factorial) and len(expression.args) == 1:
                 inner = self.enclosure(expression.args[0], interval)
                 return self._checked(iv.gamma(inner + iv.mpf([1, 1])))
@@ -125,19 +153,16 @@ class _IntervalTranslator:
             )
         raise CalculatorError("E_DOMAIN", "global optimization cannot evaluate this expression over intervals")
 
-    def _point_interval(self, value: mp.mpf) -> Any:
-        padded_low = value - abs(value) * self.padding - self.padding
-        padded_high = value + abs(value) * self.padding + self.padding
-        return iv.mpf([padded_low, padded_high])
-
     def _monotone_enclosure(self, scalar: Any, low: mp.mpf, high: mp.mpf) -> Any:
-        def applied(value: mp.mpf, direction: int) -> mp.mpf:
-            widened = value + direction * (abs(value) * self.padding + self.padding)
-            return scalar(widened)
-
-        # Widen the endpoints before applying the monotone scalar: correct
-        # rounding of the scalar itself is then covered by the padding.
-        return iv.mpf([min(applied(low, -1), applied(high, -1)), max(applied(low, 1), applied(high, 1))])
+        try:
+            lower_values = (scalar(low, rounding="f"), scalar(high, rounding="f"))
+            upper_values = (scalar(low, rounding="c"), scalar(high, rounding="c"))
+        except (ArithmeticError, ValueError) as error:
+            raise CalculatorError(
+                "E_DOMAIN",
+                "the expression is undefined or not real somewhere inside the bracket",
+            ) from error
+        return iv.mpf([min(lower_values), max(upper_values)])
 
     def _power(self, base: Any, exponent: sp.Expr) -> Any:
         if isinstance(exponent, sp.Float):
@@ -147,7 +172,7 @@ class _IntervalTranslator:
         elif isinstance(exponent, sp.Integer):
             fraction = Fraction(int(exponent))
         elif exponent in (sp.pi, sp.E):
-            raise CalculatorError("E_DOMAIN", "transcendental exponents cannot be certified over intervals")
+            raise CalculatorError("E_DOMAIN", "transcendental exponents are not supported by interval optimization")
         else:
             raise CalculatorError("E_DOMAIN", "interval evaluation requires numeric exponents")
         numerator, denominator = fraction.numerator, fraction.denominator
@@ -221,10 +246,12 @@ def minimize(arguments: dict[str, Any]) -> dict[str, Any]:
     expression = parse_expression(expression_text, symbols=symbols)
     target = expression if objective == "minimum" else -expression
 
-    with mp.workdps(precision + 12):
+    with mp.workdps(precision + 12), _interval_workdps(precision + 12):
         try:
-            lower = mp.mpf(str(bracket[0]))
-            upper = mp.mpf(str(bracket[1]))
+            lower_input = iv.mpf(str(bracket[0]))
+            upper_input = iv.mpf(str(bracket[1]))
+            lower = mp.mpf(lower_input.a)
+            upper = mp.mpf(upper_input.b)
             tolerance = mp.mpf(tolerance_text)
             argmin_tolerance = mp.mpf(argmin_tolerance_text)
         except (TypeError, ValueError) as error:
@@ -242,8 +269,6 @@ def minimize(arguments: dict[str, Any]) -> dict[str, Any]:
         derivative_translator = (
             None if derivative_target == 0 else _IntervalTranslator(symbols[variable], precision)
         )
-        point_function = sp.lambdify(symbols[variable], target, modules="mpmath")
-
         state = {"evaluations": 0}
 
         def raw_enclosure(expression: sp.Expr, sub_translator: _IntervalTranslator, interval: Any) -> Any:
@@ -278,30 +303,30 @@ def minimize(arguments: dict[str, Any]) -> dict[str, Any]:
             if state["evaluations"] >= max_evaluations:
                 raise _BudgetExhausted
             state["evaluations"] += 1
-            prime = raw_enclosure(derivative_target, derivative_translator, interval)
+            try:
+                prime = raw_enclosure(derivative_target, derivative_translator, interval)
+            except CalculatorError as error:
+                if error.code != "E_DOMAIN":
+                    raise
+                # A function can be defined on a closed bracket while its
+                # derivative is singular at an endpoint (acos on [-1, 1]) or
+                # uses a derivative shape outside the supported interval
+                # subset. Plain interval evaluation remains a valid enclosure;
+                # only the optional mean-value tightening is unavailable.
+                return base
             if state["evaluations"] >= max_evaluations:
                 raise _BudgetExhausted
             state["evaluations"] += 1
             midpoint = (low + high) / 2
-            middle_value = point_function(midpoint)
+            middle_interval = iv.mpf([midpoint, midpoint])
+            middle_value = raw_enclosure(target, translator, middle_interval)
+            mean_value = middle_value + prime * (interval - middle_interval)
+            combined_low = max(mp.mpf(base.a), mp.mpf(mean_value.a))
+            combined_high = min(mp.mpf(base.b), mp.mpf(mean_value.b))
             require(
-                mp.isfinite(middle_value) and mp.im(middle_value) == 0,
-                "E_DOMAIN",
-                "the expression is not finite and real at a sampled point",
-            )
-            middle_value = mp.re(middle_value)
-            slack = abs(middle_value) * translator.padding + translator.padding
-            prime_low, prime_high = mp.mpf(prime.a), mp.mpf(prime.b)
-            corners = (
-                prime_low * (low - midpoint),
-                prime_low * (high - midpoint),
-                prime_high * (low - midpoint),
-                prime_high * (high - midpoint),
-            )
-            combined_low = max(mp.mpf(base.a), middle_value - slack + min(corners))
-            combined_high = min(mp.mpf(base.b), middle_value + slack + max(corners))
-            require(
-                mp.isfinite(combined_low) and mp.isfinite(combined_high),
+                mp.isfinite(combined_low)
+                and mp.isfinite(combined_high)
+                and combined_low <= combined_high,
                 "E_DOMAIN",
                 "the expression is undefined or not real somewhere inside the bracket",
             )
@@ -311,18 +336,13 @@ def minimize(arguments: dict[str, Any]) -> dict[str, Any]:
             if state["evaluations"] >= max_evaluations:
                 raise _BudgetExhausted
             state["evaluations"] += 1
-            value = point_function(point)
-            require(
-                mp.isfinite(value) and mp.im(value) == 0,
-                "E_DOMAIN",
-                "the expression is not finite and real at a sampled point",
-            )
-            return mp.re(value)
+            point_interval = raw_enclosure(target, translator, iv.mpf([point, point]))
+            return mp.mpf(point_interval.b)
 
         # Branch and bound over interval lower bounds. The heap head bounds
         # the global minimum from below over everything unexplored; pruned
         # intervals have lower bound above the best attained value, so the
-        # reported enclosure [global_lower, best_upper] is rigorous at every
+        # reported enclosure [global_lower, best_upper] is maintained at every
         # step, and the extremum intervals always form a cover of the true
         # minimizer set.
         heap: list[tuple[mp.mpf, int, mp.mpf, mp.mpf]] = []
@@ -407,11 +427,11 @@ def minimize(arguments: dict[str, Any]) -> dict[str, Any]:
     widest = max((high - low for low, high in merged), default=mp.mpf(0))
 
     warnings = [
-        "The value enclosure and the extremum intervals are rigorous interval-arithmetic results; the point estimate is their midpoint.",
+        "Internal mpmath interval bounds over the supported expression subset; certified means the requested value tolerance was reached, not an external certificate or proof-kernel check. The point estimate is the enclosure midpoint.",
     ]
     if not certified:
         warnings.append(
-            "The value tolerance was not reached within maxEvaluations; the reported enclosure is the best certified bound obtained."
+            "The value tolerance was not reached within maxEvaluations; the reported enclosure is the best internal interval bound obtained."
         )
     if certified and widest > argmin_tolerance:
         warnings.append(

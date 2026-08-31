@@ -90,6 +90,7 @@ SPECS = (
             {"expression": "3 * meter + 25 * centimeter", "toUnit": "meter"},
         ),
         handler=quantity.evaluate,
+        backends=("pint", "sympy"),
         keywords=("dimensional analysis", "unit expression", "force", "compound units", "带单位表达式", "带单位的表达式", "量纲分析", "维度单位", "单位运算"),
     ),
 )
