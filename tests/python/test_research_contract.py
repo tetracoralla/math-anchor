@@ -10,13 +10,15 @@ import sys
 
 import pytest
 
+from math_anchor import __version__
 from math_anchor.certificate_checker import (
     CertificateValidationError,
     verify_polynomial_identity_certificate,
 )
+from math_anchor.catalog import OPERATIONS
 from math_anchor.errors import CalculatorError
 from math_anchor.models import OperationSpec
-from math_anchor.research_contract import apply_research_contract
+from math_anchor.research_contract import _MODULE_BACKENDS, apply_research_contract
 from math_anchor.runtime import execute_direct
 
 
@@ -40,7 +42,7 @@ def test_every_success_gets_the_compact_assurance_envelope() -> None:
     assert result["claim"] == result["kind"] == "scalar"
     assert result["scope"] == "declared_operation_result"
     assert result["assumptions"] == []
-    assert result["provenance"]["runtime"] == {"name": "math-anchor", "version": "0.4.0"}
+    assert result["provenance"]["runtime"] == {"name": "math-anchor", "version": __version__}
     assert result["provenance"]["backends"][0]["name"] == "sympy"
     assert result["certificate"] is None
     assert result["checkedBy"] is None
@@ -144,7 +146,7 @@ def test_runtime_owned_assurance_and_provenance_cannot_be_self_promoted() -> Non
 
     assert result["assurance"] == "diagnostic"
     assert result["scope"] == "bounded_diagnostic"
-    assert result["provenance"]["runtime"] == {"name": "math-anchor", "version": "0.4.0"}
+    assert result["provenance"]["runtime"] == {"name": "math-anchor", "version": __version__}
 
 
 @pytest.mark.parametrize(
@@ -238,6 +240,32 @@ def test_certificate_operation_rejects_inexact_literals_and_oversized_expansion(
             timeout_ms=500,
         )
     assert too_many_terms.value.code == "E_LIMIT"
+
+
+def test_certificate_operation_rejects_zero_denominator_and_negative_exponent() -> None:
+    with pytest.raises(CalculatorError) as zero_denominator:
+        execute_direct(
+            "certificate.polynomial_identity",
+            {"left": "x/0", "right": "0", "variables": ["x"]},
+        )
+    assert zero_denominator.value.code == "E_DOMAIN"
+    assert "division by zero" in zero_denominator.value.message
+
+    with pytest.raises(CalculatorError) as negative_exponent:
+        execute_direct(
+            "certificate.polynomial_identity",
+            {"left": "x^-1", "right": "0", "variables": ["x"]},
+        )
+    assert negative_exponent.value.code == "E_DOMAIN"
+    assert "nonnegative" in negative_exponent.value.message
+
+
+def test_every_operation_declares_or_registers_backend_provenance() -> None:
+    for spec in OPERATIONS.values():
+        module_name = spec.handler.__module__.rsplit(".", 1)[-1]
+        assert spec.backends or module_name in _MODULE_BACKENDS, (
+            f"{spec.id} would silently fall back to python backend provenance"
+        )
 
 
 def test_independent_checker_does_not_import_the_generator_or_sympy() -> None:

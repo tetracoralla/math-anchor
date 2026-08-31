@@ -74,7 +74,12 @@ def _multiply_shapes(left: PolynomialShape, right: PolynomialShape) -> Polynomia
 
 def _power_shape(base: PolynomialShape, exponent: int, variable_count: int) -> PolynomialShape:
     require(
-        0 <= exponent <= MAX_POLYNOMIAL_DEGREE,
+        exponent >= 0,
+        "E_DOMAIN",
+        "polynomial exponents must be nonnegative integers",
+    )
+    require(
+        exponent <= MAX_POLYNOMIAL_DEGREE,
         "E_LIMIT",
         f"polynomial certificate degree may not exceed {MAX_POLYNOMIAL_DEGREE}",
     )
@@ -156,6 +161,16 @@ class _PolynomialShapeAnalyzer(ast.NodeVisitor):
         if isinstance(node.op, ast.Mult):
             return _multiply_shapes(self.visit(node.left), self.visit(node.right))
         if isinstance(node.op, ast.Div):
+            if (
+                isinstance(node.right, ast.Constant)
+                and isinstance(node.right.value, int)
+                and not isinstance(node.right.value, bool)
+                and node.right.value == 0
+            ):
+                # The shape analyzer tracks term shapes, not values, so a
+                # literal-zero denominator must be rejected here; computed zero
+                # denominators still fall through to the QQ domain coercion.
+                raise CalculatorError("E_DOMAIN", "polynomial division by zero")
             numerator = self.visit(node.left)
             denominator = self.visit(node.right)
             require(
