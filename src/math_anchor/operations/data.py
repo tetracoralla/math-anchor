@@ -5,12 +5,7 @@ from fractions import Fraction
 import threading
 from typing import Any
 
-import numpy as np
-import pint
-import sympy as sp
-
 from ..errors import CalculatorError, require
-from ..formatting import effective_precision, value_result
 from ..validation import enum_arg, integer_arg, list_arg, string_arg
 from . import units
 
@@ -18,12 +13,14 @@ from . import units
 # Constructing a pint registry parses the complete unit definition file
 # (~150 ms each). Building them lazily keeps worker, app, and MCP cold start
 # free of that cost until a unit operation actually needs a registry.
-_EXACT_UNIT_REGISTRY: pint.UnitRegistry | None = None
-_FLOAT_UNIT_REGISTRY: pint.UnitRegistry | None = None
+_EXACT_UNIT_REGISTRY: Any | None = None
+_FLOAT_UNIT_REGISTRY: Any | None = None
 _UNIT_REGISTRY_LOCK = threading.Lock()
 
 
-def _exact_unit_registry() -> pint.UnitRegistry:
+def _exact_unit_registry() -> Any:
+    import pint
+
     global _EXACT_UNIT_REGISTRY
     if _EXACT_UNIT_REGISTRY is None:
         with _UNIT_REGISTRY_LOCK:
@@ -35,7 +32,9 @@ def _exact_unit_registry() -> pint.UnitRegistry:
     return _EXACT_UNIT_REGISTRY
 
 
-def _float_unit_registry() -> pint.UnitRegistry:
+def _float_unit_registry() -> Any:
+    import pint
+
     global _FLOAT_UNIT_REGISTRY
     if _FLOAT_UNIT_REGISTRY is None:
         with _UNIT_REGISTRY_LOCK:
@@ -44,13 +43,11 @@ def _float_unit_registry() -> pint.UnitRegistry:
     return _FLOAT_UNIT_REGISTRY
 
 
-def warm_unit_registries() -> None:
-    """Build both lazy registries now rather than inside a request budget."""
-    _exact_unit_registry()
-    _float_unit_registry()
-
-
 def statistics_describe(arguments: dict[str, Any]) -> dict[str, Any]:
+    import sympy as sp
+
+    from ..formatting import effective_precision, value_result
+
     values = list_arg(arguments, "values", maximum=100_000)
     precision = integer_arg(arguments, "precision", default=16, minimum=2, maximum=200)
     ddof = integer_arg(arguments, "ddof", default=0, minimum=0, maximum=max(0, len(values) - 1))
@@ -66,6 +63,8 @@ def statistics_describe(arguments: dict[str, Any]) -> dict[str, Any]:
         reported_precision = precision
         used_backends = ["sympy"]
     else:
+        import numpy as np
+
         array = np.asarray([float(value) for value in values], dtype=float)
         require(bool(np.all(np.isfinite(array))), "E_DOMAIN", "values must be finite")
         with np.errstate(over="ignore", invalid="ignore"):
@@ -115,6 +114,12 @@ def statistics_describe(arguments: dict[str, Any]) -> dict[str, Any]:
 
 
 def units_convert(arguments: dict[str, Any]) -> dict[str, Any]:
+    import pint
+    import sympy as sp
+    from pint.util import UnitsContainer
+
+    from ..formatting import effective_precision, value_result
+
     value = arguments.get("value")
     require(
         isinstance(value, (int, float, str)) and not isinstance(value, bool),
@@ -136,7 +141,7 @@ def units_convert(arguments: dict[str, Any]) -> dict[str, Any]:
     resolved_to = units.resolve_unit_text(to_unit)
     uses_calendar_average = False
     try:
-        registry: pint.UnitRegistry
+        registry: Any
         source_value: Fraction | float
         if exact_source:
             registry = _exact_unit_registry()
@@ -193,11 +198,16 @@ def units_convert(arguments: dict[str, Any]) -> dict[str, Any]:
     formatted = value_result(result_value, reported_precision)
     if uses_calendar_average:
         warnings.insert(0, units.CALENDAR_AVERAGE_WARNING)
-    # Pint's Fraction-backed registry also stores integral unit exponents as
-    # Fractions, which its compact formatter cannot render for squared/cubed
-    # units. Reparse only the already-validated target unit in a conventional
-    # registry for its human-facing compact symbol.
-    display_unit = f"{_float_unit_registry().parse_units(resolved_to):~}"
+    display_registry = registry if exact_conversion else _float_unit_registry()
+    display_units = UnitsContainer(
+        {
+            name: int(exponent)
+            if isinstance(exponent, Fraction) and exponent.denominator == 1
+            else float(exponent)
+            for name, exponent in parsed_to._units.items()
+        }
+    )
+    display_unit = f"{display_registry.Unit(display_units):~}"
     return {
         "status": "ok",
         "operation": "units.convert",
@@ -225,8 +235,8 @@ def _exact_fraction(value: Any) -> Fraction | None:
 
 
 def _unit_path_is_rational(
-    registry: pint.UnitRegistry,
-    units: pint.Unit,
+    registry: Any,
+    units: Any,
 ) -> bool:
     pending = list(units._units)
     visited: set[str] = set()
@@ -246,7 +256,9 @@ def _unit_path_is_rational(
     return True
 
 
-def _sympy_fraction(value: Fraction) -> sp.Rational:
+def _sympy_fraction(value: Fraction) -> Any:
+    import sympy as sp
+
     return sp.Rational(value.numerator, value.denominator)
 
 
@@ -258,7 +270,9 @@ def _linear_quartile(sorted_values: list[Fraction], numerator: int) -> Fraction:
     return sorted_values[lower] + (sorted_values[upper] - sorted_values[lower]) * weight
 
 
-def _exact_statistics(values: list[Fraction], *, ddof: int) -> dict[str, sp.Expr]:
+def _exact_statistics(values: list[Fraction], *, ddof: int) -> dict[str, Any]:
+    import sympy as sp
+
     ordered = sorted(values)
     count = len(values)
     mean = sum(values, Fraction()) / count

@@ -13,8 +13,7 @@ from .runtime import (
     ensure_mpmath_default_precision,
     in_process_evaluation_timeout,
 )
-from .operations.data import units_convert
-from .operations.expression import evaluate
+from .transport_budget import MAX_REQUEST_BYTES
 
 
 _CURRENCY_SERVICE = ECBRateService()
@@ -28,6 +27,18 @@ _CURRENCY_EXECUTOR = ThreadPoolExecutor(
     max_workers=2, thread_name_prefix="math-anchor-currency"
 )
 _STDOUT_LOCK = threading.Lock()
+
+
+def evaluate(arguments: dict[str, Any]) -> dict[str, Any]:
+    from .operations.expression import evaluate as operation
+
+    return operation(arguments)
+
+
+def units_convert(arguments: dict[str, Any]) -> dict[str, Any]:
+    from .operations.data import units_convert as operation
+
+    return operation(arguments)
 
 
 def _error(code: str, message: str) -> dict[str, Any]:
@@ -109,17 +120,45 @@ def _dispatch(request: Any) -> None:
     _respond(request)
 
 
+def _read_app_line(stream: Any, max_bytes: int = MAX_REQUEST_BYTES) -> bytes | None:
+    line = stream.readline(max_bytes + 1)
+    if not line:
+        return None
+    if len(line) > max_bytes:
+        while line and not line.endswith(b"\n"):
+            line = stream.readline(max_bytes + 1)
+        raise ValueError(
+            f"app request exceeds the cumulative {max_bytes}-byte transport limit"
+        )
+    return line
+
+
 def main() -> None:
     with _STDOUT_LOCK:
         sys.stdout.write('{"status":"ready"}\n')
         sys.stdout.flush()
-    for line in sys.stdin:
+    binary_input = getattr(sys.stdin, "buffer", None)
+    if binary_input is None:
+        lines = iter(sys.stdin)
+        for line in lines:
+            try:
+                _dispatch(json.loads(line))
+            except json.JSONDecodeError as error:
+                _write_response(_error("E_INPUT", f"invalid JSON: {error.msg}"))
+        return
+    while True:
         try:
-            request = json.loads(line)
-        except json.JSONDecodeError as error:
-            _write_response(_error("E_INPUT", f"invalid JSON: {error.msg}"))
+            line = _read_app_line(binary_input)
+        except ValueError as error:
+            _write_response(_error("E_LIMIT", str(error)))
             continue
-        _dispatch(request)
+        if line is None:
+            return
+        try:
+            _dispatch(json.loads(line))
+        except (json.JSONDecodeError, UnicodeDecodeError) as error:
+            message = error.msg if isinstance(error, json.JSONDecodeError) else "invalid UTF-8"
+            _write_response(_error("E_INPUT", f"invalid JSON: {message}"))
 
 
 if __name__ == "__main__":

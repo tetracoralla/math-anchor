@@ -6,7 +6,6 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
-
 from .output_policy import (
     DEFAULT_BATCH_MAX_OUTPUT_BYTES,
     DEFAULT_MAX_OUTPUT_BYTES,
@@ -16,9 +15,22 @@ from .output_policy import (
     RESULT_MODES,
     apply_output_policy,
 )
-from .runtime_control import AdmissionController, CircuitBreaker
+from .runtime_control import (
+    AdmissionController,
+    CircuitBreaker,
+    CombinedCancelEvent,
+    batch_worker_count as _batch_worker_count,
+)
 from .runtime_telemetry import RUNTIME_TELEMETRY
 from .sandbox_errors import _error
+from .transport_budget import (
+    MAX_BATCH_REQUEST_BYTES,
+    MAX_BATCH_REQUEST_NODES,
+    MAX_REQUEST_BYTES,
+    MAX_REQUEST_NODES,
+    TransportBudgetError,
+    encode_json_line,
+)
 from .worker_pool import (
     DEFAULT_MEMORY_MB,
     DEFAULT_TIMEOUT_MS,
@@ -58,14 +70,6 @@ _BATCH_ITEM_FIELDS = {
 }
 _ADMISSION = AdmissionController()
 _CIRCUIT = CircuitBreaker()
-
-
-class _CombinedCancelEvent:
-    def __init__(self, *events: threading.Event | None) -> None:
-        self.events = tuple(event for event in events if event is not None)
-
-    def is_set(self) -> bool:
-        return any(event.is_set() for event in self.events)
 
 
 def run_operation(
@@ -145,7 +149,22 @@ def _run_operation_impl(
         "maxOutputBytes": max_output_bytes,
     }
     try:
-        request_line = json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n"
+        request_line = encode_json_line(payload)
+    except TransportBudgetError as error:
+        return apply_output_policy(
+            _error(
+                "E_LIMIT",
+                str(error),
+                {
+                    "rule": error.rule,
+                    "maxRequestBytes": MAX_REQUEST_BYTES,
+                    "maxRequestNodes": MAX_REQUEST_NODES,
+                },
+                phase="input",
+            ),
+            result_mode=result_mode,
+            max_output_bytes=max_output_bytes,
+        )
     except (TypeError, ValueError, OverflowError, RecursionError) as error:
         # Transport payloads are JSON by construction, but direct library
         # callers can hand over values json cannot encode. Reject before a
@@ -313,9 +332,39 @@ def run_batch(
     if not MIN_OUTPUT_BYTES <= max_output_bytes <= MAX_OUTPUT_BYTES:
         return _error("E_LIMIT", f"maxOutputBytes must be between {MIN_OUTPUT_BYTES} and {MAX_OUTPUT_BYTES}")
     deadline = time.monotonic() + timeout_ms / 1000
+    try:
+        encode_json_line(
+            {"items": items},
+            max_bytes=MAX_BATCH_REQUEST_BYTES,
+            max_nodes=MAX_BATCH_REQUEST_NODES,
+        )
+    except TransportBudgetError as error:
+        return _error(
+            "E_LIMIT",
+            str(error),
+            {
+                "rule": error.rule,
+                "maxRequestBytes": MAX_BATCH_REQUEST_BYTES,
+                "maxRequestNodes": MAX_BATCH_REQUEST_NODES,
+            },
+            phase="input",
+        )
+    except (TypeError, ValueError, OverflowError, RecursionError) as error:
+        return _error(
+            "E_INPUT",
+            f"batch items must be JSON-serializable: {error}",
+            phase="input",
+        )
+    if time.monotonic() >= deadline:
+        return _error(
+            "E_TIMEOUT",
+            f"batch exceeded its cumulative {timeout_ms} ms deadline during input preflight",
+            {"phase": "input", "timeoutMs": timeout_ms},
+            phase="input",
+        )
     worker_count = _batch_worker_count(items)
     batch_cancel = threading.Event()
-    combined_cancel = _CombinedCancelEvent(cancel_event, batch_cancel)
+    combined_cancel = CombinedCancelEvent(cancel_event, batch_cancel)
     grouped: dict[str, list[tuple[int, dict[str, Any]]]] = {}
     for index, item in enumerate(items):
         try:
@@ -449,18 +498,3 @@ def _run_batch_item(
         _request_class="batch",
     )
     return {"index": index, **result}
-
-
-def _batch_worker_count(items: list[dict[str, Any]]) -> int:
-    requested_limits = [
-        item.get("memoryMb", DEFAULT_MEMORY_MB)
-        for item in items
-        if isinstance(item, dict)
-        and isinstance(item.get("memoryMb", DEFAULT_MEMORY_MB), int)
-        and not isinstance(item.get("memoryMb", DEFAULT_MEMORY_MB), bool)
-    ]
-    largest_limit = max(requested_limits, default=DEFAULT_MEMORY_MB)
-    memory_bounded_workers = max(1, 4096 // max(DEFAULT_MEMORY_MB, largest_limit))
-    # A batch never owns the fourth worker. Admission gives that lane to an
-    # interactive math.run even under a sustained 32-item batch workload.
-    return max(1, min(3, len(items), memory_bounded_workers))

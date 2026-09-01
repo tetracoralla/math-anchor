@@ -15,6 +15,27 @@ CIRCUIT_FAILURE_THRESHOLD = 3
 CIRCUIT_OPEN_SECONDS = 1.0
 
 
+class CombinedCancelEvent:
+    def __init__(self, *events: threading.Event | None) -> None:
+        self.events = tuple(event for event in events if event is not None)
+
+    def is_set(self) -> bool:
+        return any(event.is_set() for event in self.events)
+
+
+def batch_worker_count(items: list[dict[str, Any]], default_memory_mb: int = 1_024) -> int:
+    requested_limits = [
+        item.get("memoryMb", default_memory_mb)
+        for item in items
+        if isinstance(item, dict)
+        and isinstance(item.get("memoryMb", default_memory_mb), int)
+        and not isinstance(item.get("memoryMb", default_memory_mb), bool)
+    ]
+    largest_limit = max(requested_limits, default=default_memory_mb)
+    memory_bounded_workers = max(1, GLOBAL_MEMORY_BUDGET_MB // max(default_memory_mb, largest_limit))
+    return max(1, min(MAX_ACTIVE_BATCH_REQUESTS, len(items), memory_bounded_workers))
+
+
 @dataclass(frozen=True)
 class AdmissionLease:
     memory_mb: int

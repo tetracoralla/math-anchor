@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import signal
+import sys
 import time
 from contextlib import contextmanager
 from typing import Any, Iterator
-
-import mpmath
 
 from .catalog import OPERATIONS
 from .contracts import validate_operation_arguments, validate_result
@@ -32,7 +31,11 @@ _DEFAULT_MPMATH_PRECISION = 53
 
 
 def ensure_mpmath_default_precision() -> None:
-    if mpmath.mp.prec > _MPMATH_PRECISION_CEILING:
+    # Pure-Python integer/decimal operations should not import mpmath merely
+    # to reset state that they cannot have changed. Mathematical handlers that
+    # use mpmath import it before this cleanup path runs.
+    mpmath = sys.modules.get("mpmath")
+    if mpmath is not None and mpmath.mp.prec > _MPMATH_PRECISION_CEILING:
         mpmath.mp.prec = _DEFAULT_MPMATH_PRECISION
 
 

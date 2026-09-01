@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "script"))
 
 from load_profiles import CODING_AGENT_CASES, EXPECTED_FAILURES, verify_case  # noqa: E402
+import load_check  # noqa: E402
 from math_anchor import sandbox  # noqa: E402
 
 
@@ -31,3 +32,23 @@ def test_failure_profile_keeps_caller_errors_typed_and_nonretryable() -> None:
             assert result["error"]["retryable"] is False
     finally:
         sandbox._WORKER_POOL.shutdown()
+
+
+def test_load_harness_does_not_retain_every_result_payload(monkeypatch) -> None:
+    released = 0
+
+    class TrackedResult(dict):
+        def __del__(self) -> None:
+            nonlocal released
+            released += 1
+
+    def expression_result(expression: str, *, timeout_ms: int = 10_000) -> dict:
+        left = int(expression.split("+", 1)[0])
+        return TrackedResult(status="ok", exact=str(left + 1))
+
+    monkeypatch.setattr(load_check, "_call", expression_result)
+    timings, operations = load_check._timed_calls(100, 1, "expression")
+
+    assert len(timings) == 100
+    assert operations == {"expression.evaluate": 100}
+    assert released == 100

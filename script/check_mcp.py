@@ -116,12 +116,22 @@ async def main(
                 run_tool.outputSchema["properties"]
             )
 
+            first_call_start = time.perf_counter()
             direct = await session.call_tool(
                 "math.run",
                 {"operation": "expression.evaluate", "arguments": {"expression": "6*7"}},
             )
+            first_call_elapsed = time.perf_counter() - first_call_start
             assert direct.isError is False
             assert direct.structuredContent["exact"] == "42"
+            # The lazy-import contract makes discovery cheap and defers engine
+            # loading to this first real calculation. A generous ceiling stays
+            # under the server-side 10 s E_TIMEOUT so a lost lazy import or a
+            # dead prewarm shows up here instead of as an error result, while
+            # slow shared CI runners stay far below it.
+            assert (
+                first_call_elapsed < 8.0
+            ), f"first cold math.run call took {first_call_elapsed:.3f}s"
             assert direct.structuredContent["assurance"] == "deterministic"
             assert direct.structuredContent["scope"] == "declared_operation_result"
             assert direct.structuredContent["provenance"]["runtime"] == {
@@ -977,7 +987,8 @@ async def main(
         f"math.run advertises {len(run_tool.inputSchema['properties']['operation']['enum'])} operation ids in a Codex-host-safe {run_schema_bytes}-byte envelope; "
         f"its result contract is {run_output_schema_bytes} bytes; "
         f"compact math.batch input is {batch_schema_bytes} bytes and all four listed tools total {listed_bytes} bytes; "
-        f"five warm expression calls completed in {warm_elapsed:.3f}s."
+        f"five warm expression calls completed in {warm_elapsed:.3f}s; "
+        f"first cold call completed in {first_call_elapsed:.3f}s."
     )
 
 

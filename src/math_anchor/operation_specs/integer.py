@@ -83,7 +83,7 @@ SPECS = (
             {"action": "inverse", "value": 3, "modulus": 11},
         ),
         handler=number_theory.modular,
-        backends=("python", "sympy"),
+        backends=("python",),
         keywords=("modulo", "modular inverse", "modular exponent", "模运算", "模逆", "模幂"),
     ),
     OperationSpec(

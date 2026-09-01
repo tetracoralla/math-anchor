@@ -4,10 +4,8 @@ import math
 import re
 from typing import Any
 
-import sympy as sp
-
 from ..errors import CalculatorError, require
-from ..formatting import typed_scalar_result
+from ..integer_format import exact_integer_result
 from ..validation import enum_arg, exact_integer_arg, integer_arg, list_arg
 
 
@@ -16,6 +14,8 @@ _ASCII_INTEGER = re.compile(r"[+-]?[0-9]+")
 
 
 def factorization(arguments: dict[str, Any]) -> dict[str, Any]:
+    import sympy as sp
+
     value = exact_integer_arg(arguments, "value", minimum=-_MAX_INTEGER, maximum=_MAX_INTEGER)
     require(value != 0, "E_DOMAIN", "zero does not have a finite prime factorization")
     magnitude = abs(value)
@@ -71,10 +71,10 @@ def modular(arguments: dict[str, Any]) -> dict[str, Any]:
             result = pow(value, -1, modulus)
         except ValueError as error:
             raise CalculatorError("E_DOMAIN", "modular inverse does not exist for these inputs") from error
-    return typed_scalar_result(
+    return exact_integer_result(
         "integer.modular",
         "modular",
-        sp.Integer(result),
+        result,
         16,
         action=action,
         modulus=str(modulus),

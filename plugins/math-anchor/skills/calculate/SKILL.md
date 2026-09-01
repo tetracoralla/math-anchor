@@ -5,27 +5,25 @@ description: "Use Math Anchor for reliability-sensitive mathematics. MUST load a
 
 # Calculate
 
-Translate the user's request into explicit mathematics, then use Math Anchor
-when deterministic execution materially improves reliability.
+Translate the request into explicit mathematics and use Math Anchor when
+deterministic execution materially improves reliability.
 
 ## Decide and route
 
 - Do not load it for trivial, low-risk arithmetic the model can immediately
   verify.
-- Always use it for fixed-width or IEEE-754 facts; do not classify them as trivial arithmetic
-  merely because the visible numbers are small.
-- Call Math Anchor for machine semantics, exact or high-precision output,
-  symbolic work, matrices, units, statistics, probability, finance,
-  verification, repeated calculations, standard scientific algorithms, or a
-  result that affects a consequential next step.
-- Ask for a missing assumption when it changes the mathematical problem. Do
-  not use a call to hide ambiguity.
-- The four tools are already registered. Never call `list_mcp_resources`,
-  inspect source, or use a shell to discover them.
-- For a known request, call `math.run` directly. Use `math.search` only when
-  the operation is genuinely unfamiliar or ambiguous, then `math.describe`
-  once for the selected unfamiliar operation if its exact argument contract is
-  still needed.
+- Always use it for fixed-width wrapping/saturating arithmetic, bit fields, or
+  IEEE-754 facts; do not classify them as trivial arithmetic because the
+  visible numbers are small.
+- Also use it for exact/high-precision output, symbolic work, matrices, units,
+  statistics, probability, finance, verification, repeated calculations,
+  standard scientific algorithms, or consequential results.
+- Ask for a missing assumption when it changes the problem; a call must not
+  hide ambiguity.
+- The four tools are registered. Never call `list_mcp_resources`, inspect
+  source, or use a shell to find them. Call known operations with `math.run`. Otherwise use
+  `math.search`, then `math.describe` once only if the selected schema is still
+  needed.
 - Every run uses the outer envelope `{operation, arguments}`. Put all
   operation-specific fields inside `arguments`; never flatten them beside
   `operation`.
@@ -39,21 +37,17 @@ describe these shapes first:
 
 ## Execute economically
 
-- Use `math.run` for one calculation and `math.batch` for 2–32 independent
-  calculations. Batch preserves input order and does not form a dependency
-  graph.
-- Use `function.sample` for one expression at many points instead of repeated
-  single-point calls.
-- Use `resultMode: "exact"` or `resultMode: "approx"` for bulky output when
-  one representation is sufficient. Raise `maxOutputBytes` only when the added
-  content is useful.
+- Use one `math.run`, `math.batch` for 2–32 independent ordered calculations,
+  or `function.sample` for one expression at many points. Batch is not a
+  dependency graph.
+- For bulky output, request only the needed `resultMode` (`exact` or `approx`)
+  and raise `maxOutputBytes` only when useful.
 - Control digits with `arguments.precision`; `precision` is not a top-level `math.run` field.
-  It counts significant digits, not decimal places. Exact
-  fields remain exact. For requested decimal places, allow integer digits plus
-  at least two guard digits in the first call and round once for presentation.
-- Supply all material assumptions explicitly: variables, bounds, units,
-  conventions, brackets, data, and tolerances. Do not invent one that changes
-  the answer.
+  It counts significant digits. Exact fields stay exact. For decimal places,
+  include integer digits plus at least two guard digits in the first call and
+  round once for presentation.
+- Supply variables, bounds, units, conventions, brackets, data, and tolerances
+  explicitly. Never invent an answer-changing assumption.
 
 Load only the relevant reference when the request needs its policy:
 
@@ -62,8 +56,8 @@ Load only the relevant reference when the request needs its policy:
 - [scientific-math.md](references/scientific-math.md) for symbolic work,
   calculus, numerical methods, matrices, linear algebra, and verification.
 - [statistics-units-dimensions.md](references/statistics-units-dimensions.md)
-  for probability, statistics, uncertainty, quantities, dimensional analysis,
-  and finance. Use `dimension.check` for symbolic formula consistency and
+  for probability, statistics, uncertainty, quantities, dimensions, and
+  finance. Use `dimension.check` for symbolic formula consistency and
   `dimension.pi_groups` for a Buckingham Pi basis; preserve
   `scope: dimensional_consistency_only`.
 - [result-error-policy.md](references/result-error-policy.md) for result
@@ -71,28 +65,22 @@ Load only the relevant reference when the request needs its policy:
 
 ## Present and check
 
-- Prefer `exact` for symbolic answers. Include `approx` when useful or
-  requested, and never describe it as exact.
-- Preserve precision, units, conventions, assumptions, warnings, uncertainty,
-  residuals, error bounds, stability diagnostics, branches, and omission risk
-  when they affect interpretation.
+- Prefer `exact` for symbolic answers; include `approx` only when useful and
+  never call it exact. Preserve interpretation-changing precision, units,
+  assumptions, warnings, uncertainty, residuals, bounds, stability, branches,
+  and omission risk.
 - Preserve `assuranceContractVersion`, `assurance`, `scope`, `provenance`,
-  `certificate`, and `checkedBy`. `certified` means a bounded artifact is
-  available; `checkedBy: null` means no checker or proof kernel has accepted
-  it in this call. The optional Lean bridge is a separate CLI lane, not another
-  MCP tool.
-- Explain the mathematical setup briefly when useful; omit engine, worker,
-  schema, and protocol details from the ordinary answer.
+  `certificate`, and `checkedBy`. `certified` exposes a bounded artifact;
+  `checkedBy: null` means no checker/kernel accepted it. Lean is a separate
+  CLI lane, not another MCP tool.
+- Briefly explain useful mathematical setup, not engine/protocol internals.
 - Stop after the first successful call for an ordinary calculation. Repeating
   identical input is not independent validation.
 - A successful tool response proves that the declared operation ran; it does
   not prove that the user's problem was translated correctly.
-- Before presenting a consequential result, check the cheapest relevant
-  invariant already available: dimensions, sign and magnitude, support,
-  residual or condition, sample size and method, or period and timing.
-- If an invariant conflicts with the result, correct the declared input or
-  operation once. If the conflict remains, report that the calculation could
-  not be validated.
-- For conceptual explanation without calculation, answer normally without the
-  tools. For high-consequence decisions, use Math Anchor as calculation
-  support rather than the sole authority.
+- For consequential results, check the cheapest relevant invariant: dimensions,
+  sign/magnitude, support, residual/condition, sample size/method, or timing.
+  Correct the declared input/operation once on conflict; if it remains, report
+  that validation failed.
+- Answer conceptual questions without tools when no calculation is needed.
+  Math Anchor supports high-consequence decisions; it is not their sole authority.

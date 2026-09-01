@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from .shared import OperationSpec, _EXPRESSION, _object
-from ..operations import certificate
+from .shared import OperationSpec, _EXPRESSION, _object, certificate
 
 
 SPECS = (

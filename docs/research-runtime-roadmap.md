@@ -33,9 +33,9 @@ stages.
 
 ## Current state
 
-- Working baseline for this campaign: `main` at `1209653`, already two local
-  commits ahead of `origin/main` at `da29d8b`; the 0.5 changes below remain
-  uncommitted. The independent active clone is under `Development/tools-dev`;
+- Working baseline for this optimization campaign: `main` at `a5c4f30`, three
+  local commits ahead of `origin/main` at `da29d8b`; the cost, performance, and
+  resilience changes below remain uncommitted. The independent active clone is under `Development/tools-dev`;
   the File Provider backup and its running 0.4 application were not replaced.
 - Current product contract: Math Anchor 0.5.0, 45 operation ids, exactly four
   public MCP tools, compact one-call execution, strict per-operation
@@ -60,6 +60,16 @@ stages.
   hidden flag on editable-install `.pth` files, so Python ignored the current
   package. Bootstrap now uses a relocatable non-editable project install and
   runtime packaging refreshes it before use.
+- The registry and runtime now load operation engines on first use. Pure
+  Python routes do not import SymPy, NumPy, Pint, or mpmath; high-frequency
+  integer/combinatoric output uses a Python/Decimal formatter without changing
+  the interpreter's global integer-string safety limit. Result validation
+  dispatches to the selected kind/action contract while retaining the complete
+  union as the fail-closed fallback.
+- Request graphs are bounded before worker admission (8 MiB / 250,000 nodes /
+  depth 64 per run; 16 MiB / 500,000 nodes per batch). Worker and app JSON-lines
+  reads are bounded, and the MCP stdio carrier rejects messages above 17 MiB
+  before SDK JSON parsing while preserving alignment for the next message.
 
 ## Boundaries
 
@@ -103,7 +113,7 @@ followed by the affected rung of the validation ladder.
 
 ## Latest local observations (2026-09-01)
 
-- `./script/check_all.sh`: PASS against the rebuilt arm64 Plugin runtime; 855
+- `./script/check_all.sh`: PASS against the rebuilt arm64 Plugin runtime; 868
   Python tests passed and one explicitly conditional test was skipped, followed
   by source safety, four Swift tests, Swift store checks/build, live packaged
   MCP, a 1,000-call load profile, Plugin validation, and release hygiene.
@@ -115,20 +125,37 @@ followed by the affected rung of the validation ladder.
   output 1,470 bytes, and the complete four-tool listing 8,214 bytes. The live
   sequence includes assurance provenance, certificate generation, independent
   recomputation, cancellation recovery, and negative schema/domain cases.
-- Latest headless load receipt: PASS at
-  `build/load-checks/load-check-20260831T172426Z.json`; serial p95 was 14.806 ms,
-  cancellation and worker-crash recovery succeeded, and child-process, thread,
-  and file-descriptor deltas were zero after cleanup.
+- Same-checkout before/after load comparison against `a5c4f30`: serial p50
+  improved from 3.805 ms to 0.557 ms, serial p95 from 13.920 ms to 9.198 ms,
+  concurrent-warm p50 from 7.341 ms to 2.365 ms, and average worker startup
+  from 192.471 ms to 60.655 ms. Both runs used the same 1,000-call, 13-case,
+  concurrency-8 profile and passed cancellation/crash recovery and cleanup.
+- Corrected sustained-load receipt:
+  `build/load-checks/optimization/load-check-20260831T182938Z.json`. It passed
+  10,000 serial calls plus 10 seconds at concurrency 8, completing 19,027
+  sustained calls at 1,889.65 calls/s with p50 2.387 ms, p95 12.736 ms, p99
+  18.208 ms, zero child/thread/file-descriptor residue, and 1.69 MiB parent RSS
+  growth. The harness no longer retains every result payload; the earlier
+  75.7 MiB apparent growth was measurement retention, not runtime telemetry.
 - The pinned Lean bridge: PASS. The standard-library checker accepted the
   certificate first, then Lean 4.33.1 and the pinned Mathlib dependency graph
   accepted the generated theorem. Toolchain and Mathlib caches remain outside
   the ordinary Plugin/runtime artifact.
-- Isolated Plugin preflight: PASS for the 0.5.0 package with an exact installed
-  file inventory, Skill identity, and MCP executable resolved inside the
-  installer-reported root. The managed Agent Host installation remains the
-  healthy existing 0.4 component and was not replaced.
-- Zero-model direct-host smoke: 13/13 PASS; median cold latency was 283 ms and
-  mean latency 328.15 ms. No model cost field was available or inferred.
+- Isolated Plugin preflight: PASS for the 0.5.0 package with 203 identical
+  regular files, Skill identity, MCP executable resolved inside the
+  installer-reported root, and a 13,207-byte carrier prompt. The main Skill
+  body fell from 5,936 to 5,242 bytes. The managed Agent Host installation
+  remains the healthy existing 0.4 component and was not replaced.
+- Zero-model direct-host smoke: 13/13 PASS; median cold latency was 137 ms and
+  mean latency 210.77 ms. No model cost field was available or inferred.
+- Same-machine benchmark receipt:
+  `build/benchmarks/benchmark-20260831T182525Z.json`. Versus the committed
+  baseline, source expression cold-start p50 moved from 280.0 to 183.8 ms,
+  packaged MCP first result from 627.6 to 402.2 ms, and packaged app first
+  result from 242.4 to 190.9 ms; warm MCP round trip was 5.0 ms and the tool
+  listing remained 8,214 bytes. Engine-specific inner cold p50s were 41.1 ms
+  (machine integer), 40.8 ms (combinatorics), 138.5 ms (SymPy expression),
+  162.0 ms (NumPy linear algebra), and 296.2 ms (Pint units).
 - The bounded installed-Plugin Agent smoke was comparison-valid and both
   conditions solved 4/4 tasks, but treatment reached Math Anchor on only one of
   two required opportunities. Quality delta was zero; paired token delta was
@@ -148,18 +175,18 @@ followed by the affected rung of the validation ladder.
 
 ## Next product-strengthening sequence
 
-1. Repair cold Agent routing and context cost before adding operation count:
-   make both required smoke opportunities reach `math.run` directly, preserve
-   zero irrelevant calls, and re-run only the eight-call smoke.
-2. Integrate the explicit route into one real external mathematics or physics
+1. Integrate the explicit route into one real external mathematics or physics
    Agent workflow and measure task-level error prevention, retries, latency,
    and context cost. Internal arithmetic tasks alone cannot establish adoption.
-3. Add the next certificate vertical only from that workflow's repeated need,
+2. Add the next certificate vertical only from that workflow's repeated need,
    keeping each theorem family bounded, independently recomputable, and
    separately kernel-checked. Do not turn the four-tool runtime into a theorem
    planner or universal CAS facade.
-4. Run the existing Linux/container matrix in its owning CI environment; keep
+3. Run the existing Linux/container matrix in its owning CI environment; keep
    local container status BLOCKED until a real daemon run exists.
+4. Re-run the bounded eight-call installed routing smoke only after a carrier
+   or routing change is expected to fix the remaining fixed-width miss; do not
+   spend 180 model calls without that signal.
 5. Seek owner business/experience acceptance and release authorization only
    after the current uncommitted diff and the external-workflow result are
    reviewed.

@@ -337,9 +337,13 @@ def _isolated_codex_home(enabled: bool, configs: list[str]):
             raise SystemExit("isolated Codex prompt still exposes ambient user Skills")
         if "list_mcp_resources" in prompt_text:
             raise SystemExit("isolated Codex prompt still exposes unrelated MCP resource discovery")
-        if len(prompt_text.encode("utf-8")) > 48_000:
+        carrier_prompt_bytes = len(prompt_text.encode("utf-8"))
+        if carrier_prompt_bytes > 48_000:
             raise SystemExit("isolated Codex prompt exceeds the declared 48 KB carrier budget")
-        print(f"prepared isolated {TARGET_PLUGIN_ID} version {TARGET_PLUGIN_VERSION}")
+        print(
+            f"prepared isolated {TARGET_PLUGIN_ID} version {TARGET_PLUGIN_VERSION}; "
+            f"carrier prompt {carrier_prompt_bytes} bytes"
+        )
         with _temporary_environment({"HOME": str(isolated_root)}):
             yield isolated_root
 

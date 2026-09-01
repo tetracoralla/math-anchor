@@ -26,6 +26,27 @@ from .result_contracts.shared import (
 )
 
 
+def _validator_for_variant(schema: dict[str, Any]) -> Draft202012Validator:
+    return Draft202012Validator(
+        {**schema, "$defs": RUN_RESULT_SCHEMA["$defs"]}
+    )
+
+
+_RUN_RESULT_VALIDATOR = Draft202012Validator(RUN_RESULT_SCHEMA)
+_ERROR_RESULT_VALIDATOR = _validator_for_variant(ERROR_RESULT_SCHEMA)
+_RESULT_VALIDATORS_BY_KIND: dict[
+    str,
+    tuple[tuple[dict[str, Any], Draft202012Validator], ...],
+] = {}
+for _variant in RUN_RESULT_SCHEMA["oneOf"]:
+    _kind = _variant.get("properties", {}).get("kind", {}).get("const")
+    if isinstance(_kind, str):
+        _RESULT_VALIDATORS_BY_KIND[_kind] = (
+            *_RESULT_VALIDATORS_BY_KIND.get(_kind, ()),
+            (_variant, _validator_for_variant(_variant)),
+        )
+
+
 # Keep the complete per-kind schema above as the runtime validation authority.
 # Advertising that entire union on every tool listing made Agents pay for more
 # than 20 KB of result detail before making an ordinary call. The live tool
@@ -136,14 +157,43 @@ def _select_discriminated_schema(schema: dict[str, Any], instance: dict[str, Any
 
 
 def validate_result(result: dict[str, Any]) -> None:
+    validator = _result_validator(result)
     try:
-        Draft202012Validator(RUN_RESULT_SCHEMA).validate(result)
+        validator.validate(result)
     except ValidationError as error:
         path = ".".join(str(part) for part in error.absolute_path) or "result"
         raise CalculatorError(
             "E_RUNTIME",
             f"operation returned a result outside the public contract at {path}",
         ) from error
+
+
+def _result_validator(result: dict[str, Any]) -> Draft202012Validator:
+    if result.get("status") == "error":
+        return _ERROR_RESULT_VALIDATOR
+    kind = result.get("kind")
+    if not isinstance(kind, str):
+        return _RUN_RESULT_VALIDATOR
+    candidates = _RESULT_VALIDATORS_BY_KIND.get(kind, ())
+    if len(candidates) == 1:
+        return candidates[0][1]
+    if candidates:
+        action = result.get("action")
+        if isinstance(action, str):
+            matching = [
+                validator
+                for variant, validator in candidates
+                if (
+                    variant.get("properties", {}).get("action", {}).get("const") == action
+                    or action
+                    in variant.get("properties", {}).get("action", {}).get("enum", [])
+                )
+            ]
+            if len(matching) == 1:
+                return matching[0]
+    # Unknown or ambiguous discriminators still traverse the complete public
+    # union so the optimization cannot weaken contract rejection.
+    return _RUN_RESULT_VALIDATOR
 
 
 def run_tool_parameters(operation_schemas: list[tuple[str, dict[str, Any]]]) -> dict[str, Any]:

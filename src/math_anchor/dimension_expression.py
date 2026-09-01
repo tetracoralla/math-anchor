@@ -7,6 +7,11 @@ from fractions import Fraction
 import re
 from typing import Any, Iterable, Mapping
 
+from .dimension_contract import (
+    DIMENSION_EXPONENT_PATTERN,
+    DIMENSION_SYMBOL_PATTERN,
+    DIMENSION_VECTOR_NAME_PATTERN,
+)
 from .errors import CalculatorError, require
 from .safe_expression import normalize_expression_source
 
@@ -19,20 +24,6 @@ MAX_DIMENSION_CONSTRAINTS = 256
 # numerator or denominator would need more digits than that is rejected before
 # the big integer is ever materialized.
 MAX_LITERAL_DIGIT_BUDGET = 2048
-DIMENSION_EXPONENT_PATTERN = (
-    r"^[+-]?(?:1000000|0|[1-9]\d{0,5})(?:/(?:1000000|[1-9]\d{0,5}))?$"
-)
-DIMENSION_SYMBOL_PATTERN = (
-    r"^(?!(?:False|None|True|and|as|assert|async|await|break|class|continue|def|del|"
-    r"elif|else|except|finally|for|from|global|if|import|in|is|lambda|nonlocal|not|"
-    r"or|pass|raise|return|try|while|with|yield)$)[A-Za-z_][A-Za-z0-9_]*$"
-)
-# Dimension-vector keys accept either the canonical spelling ("length") or
-# Pint's bracketed spelling ("[length]"). Whitespace and nested brackets are
-# rejected so the transport schema and canonicalizer have one exact language.
-DIMENSION_VECTOR_NAME_PATTERN = (
-    r"^(?:[A-Za-z_][A-Za-z0-9_]*|\[[A-Za-z_][A-Za-z0-9_]*\])$"
-)
 _DIMENSION_RATIONAL_TEXT = re.compile(r"^[+-]?(?:0|[1-9]\d*)(?:/[1-9]\d*)?$", re.ASCII)
 _DIMENSION_VECTOR_NAME = re.compile(DIMENSION_VECTOR_NAME_PATTERN, re.ASCII)
 

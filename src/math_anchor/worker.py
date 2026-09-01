@@ -5,7 +5,6 @@ import math
 import os
 import resource
 import sys
-import threading
 import time
 from typing import Any
 
@@ -16,37 +15,7 @@ from .output_policy import (
     DEFAULT_RESULT_MODE,
     apply_output_policy,
 )
-
-
-UNIT_REGISTRY_WARM_IDLE_SECONDS = 0.5
-
-
-class _RequestActivity:
-    def __init__(self) -> None:
-        self.condition = threading.Condition()
-        self.active = False
-        self.last_activity_at = time.monotonic()
-
-    def begin(self) -> None:
-        with self.condition:
-            self.active = True
-            self.last_activity_at = time.monotonic()
-            self.condition.notify_all()
-
-    def end(self) -> None:
-        with self.condition:
-            self.active = False
-            self.last_activity_at = time.monotonic()
-            self.condition.notify_all()
-
-    def wait_until_idle_for(self, idle_seconds: float) -> None:
-        with self.condition:
-            while True:
-                elapsed = time.monotonic() - self.last_activity_at
-                if not self.active and elapsed >= idle_seconds:
-                    return
-                timeout = None if self.active else max(0.0, idle_seconds - elapsed)
-                self.condition.wait(timeout=timeout)
+from .transport_budget import MAX_REQUEST_BYTES
 
 
 def _request_timeout_ms(payload: dict[str, Any]) -> int:
@@ -129,25 +98,31 @@ def _write_response(response: dict[str, Any]) -> None:
     sys.stdout.flush()
 
 
-def _warm_unit_registries_in_background(
-    request_activity: _RequestActivity,
-) -> None:
-    # Pint registry construction (~150 ms each) stays lazy so readiness is
-    # cheap. Wait for a real idle interval before building both registries so
-    # a startup burst of cheap expressions never competes with ~300 ms of
-    # background parsing. Any request restarts the idle interval; a unit call
-    # arriving sooner simply uses the same locked lazy constructors itself.
-    from .operations.data import warm_unit_registries
+def _read_request_line() -> bytes | None:
+    line = sys.stdin.buffer.readline(MAX_REQUEST_BYTES + 1)
+    if not line:
+        return None
+    if len(line) > MAX_REQUEST_BYTES:
+        while line and not line.endswith(b"\n"):
+            line = sys.stdin.buffer.readline(MAX_REQUEST_BYTES + 1)
+        raise ValueError(
+            f"worker request exceeds the cumulative {MAX_REQUEST_BYTES}-byte transport limit"
+        )
+    return line
 
-    def warm_after_idle() -> None:
-        request_activity.wait_until_idle_for(UNIT_REGISTRY_WARM_IDLE_SECONDS)
-        warm_unit_registries()
 
-    threading.Thread(
-        target=warm_after_idle,
-        name="calculator-worker-unit-warm",
-        daemon=True,
-    ).start()
+def _decode_request(line: bytes) -> dict[str, Any]:
+    try:
+        payload = json.loads(line)
+    except (json.JSONDecodeError, UnicodeDecodeError) as error:
+        raise ValueError("worker request must be JSON") from error
+    if not isinstance(payload, dict):
+        raise ValueError("worker request must be a JSON object")
+    return payload
+
+
+def _request_error(code: str, message: str) -> dict[str, Any]:
+    return {"ok": False, "error": {"code": code, "message": message}}
 
 
 def main() -> None:
@@ -157,41 +132,47 @@ def main() -> None:
     from .errors import CalculatorError
     from .runtime import execute_direct
 
-    # Readiness means the common expression path is actually warm. SymPy keeps
-    # a small amount of first-use initialization behind its imports; leaving
-    # that work until after the ready signal made a 100 ms operation deadline
-    # intermittently measure startup rather than calculation.
-    execute_direct("expression.evaluate", {"expression": "0"})
-
     persistent = "--persistent" in sys.argv
     if persistent or not getattr(sys, "frozen", False):
         sys.stdout.write('{"ready":true}\n')
         sys.stdout.flush()
     if persistent:
-        request_activity = _RequestActivity()
-        _warm_unit_registries_in_background(request_activity)
-        for line in sys.stdin:
-            request_activity.begin()
+        while True:
             try:
-                try:
-                    payload = json.loads(line)
-                except json.JSONDecodeError:
-                    _write_response(
-                        {
-                            "ok": False,
-                            "error": {
-                                "code": "E_INPUT",
-                                "message": "worker request must be JSON",
-                            },
-                        }
-                    )
-                    continue
-                _write_response(_execute_payload(payload, execute_direct, CalculatorError))
-            finally:
-                request_activity.end()
+                line = _read_request_line()
+            except ValueError as error:
+                _write_response(
+                    {
+                        "ok": False,
+                        "error": {
+                            "code": "E_LIMIT",
+                            "message": str(error),
+                        },
+                    }
+                )
+                continue
+            if line is None:
+                break
+            try:
+                payload = _decode_request(line)
+            except ValueError as error:
+                _write_response(_request_error("E_INPUT", str(error)))
+                continue
+            _write_response(_execute_payload(payload, execute_direct, CalculatorError))
         return
 
-    payload = json.load(sys.stdin)
+    try:
+        line = _read_request_line()
+    except ValueError as error:
+        _write_response(_request_error("E_LIMIT", str(error)))
+        return
+    if line is None:
+        raise SystemExit("worker request is unavailable")
+    try:
+        payload = _decode_request(line)
+    except ValueError as error:
+        _write_response(_request_error("E_INPUT", str(error)))
+        return
     _write_response(_execute_payload(payload, execute_direct, CalculatorError))
     # This is a single-request isolation worker. Interpreter teardown is not
     # part of the mathematical operation and can take longer than a 100 ms

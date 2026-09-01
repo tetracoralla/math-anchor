@@ -9,6 +9,7 @@ from .shared import (
     quantity,
     units,
 )
+from ..operations.units import CALENDAR_POLICIES, UNIT_CATEGORIES
 
 
 SPECS = (
@@ -20,7 +21,7 @@ SPECS = (
         input_schema=_object(
             {
                 "query": {"type": "string", "maxLength": 128, "default": ""},
-                "category": {"type": "string", "enum": list(units.UNIT_CATEGORIES)},
+                "category": {"type": "string", "enum": list(UNIT_CATEGORIES)},
                 "limit": {"type": "integer", "minimum": 1, "maximum": 50, "default": 20},
             },
             (),
@@ -46,7 +47,7 @@ SPECS = (
                 "toUnit": {"type": "string", "maxLength": 128},
                 "calendarPolicy": {
                     "type": "string",
-                    "enum": list(units.CALENDAR_POLICIES),
+                    "enum": list(CALENDAR_POLICIES),
                     "default": "reject",
                     "description": "Reject civil months/years by default; average_duration explicitly selects fixed average lengths.",
                 },
@@ -78,7 +79,7 @@ SPECS = (
                 "toUnit": {"type": "string", "maxLength": 128},
                 "calendarPolicy": {
                     "type": "string",
-                    "enum": list(units.CALENDAR_POLICIES),
+                    "enum": list(CALENDAR_POLICIES),
                     "default": "reject",
                 },
                 "precision": _PRECISION,

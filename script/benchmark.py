@@ -43,6 +43,34 @@ from math_anchor.runtime import execute_direct  # noqa: E402
 
 PACKAGED_RUNTIME = ROOT / "plugins" / "math-anchor" / "runtime" / "math-anchor-runtime" / "math-anchor-runtime"
 FIRST_EXPRESSION = "6*7"
+COLD_ROUTES: dict[str, tuple[str, dict[str, Any]]] = {
+    "python_machine": (
+        "integer.machine_arithmetic",
+        {
+            "action": "add",
+            "left": "250",
+            "right": "20",
+            "bitWidth": 8,
+            "overflowBehavior": "wrapping",
+        },
+    ),
+    "python_combinatorics": (
+        "combinatorics.count",
+        {"action": "binomial", "n": 1_000, "k": 50},
+    ),
+    "symbolic_expression": (
+        "expression.evaluate",
+        {"expression": FIRST_EXPRESSION, "precision": 16},
+    ),
+    "numpy_linear_algebra": (
+        "linear_algebra.numeric",
+        {"action": "svd", "matrix": [["1", "2"], ["3", "4"]]},
+    ),
+    "pint_units": (
+        "units.convert",
+        {"value": "1", "fromUnit": "meter", "toUnit": "foot"},
+    ),
+}
 
 # Heavy operations are sampled fewer times so a default run stays practical;
 # this manages benchmark wall time only and implies no quality judgment.
@@ -98,28 +126,60 @@ def benchmark_warm(corpus: dict[str, list[dict[str, Any]]], warm_samples: int) -
     return report
 
 
-def benchmark_cold(samples: int) -> dict[str, Any]:
+def _source_environment() -> dict[str, str]:
+    environment = os.environ.copy()
+    existing = environment.get("PYTHONPATH")
+    environment["PYTHONPATH"] = str(ROOT / "src") + (
+        os.pathsep + existing if existing else ""
+    )
+    return environment
+
+
+def benchmark_cold(operation: str, arguments: dict[str, Any], samples: int) -> dict[str, Any]:
     code = (
-        "import time; start = time.perf_counter(); "
+        "import json,resource,sys,time; start = time.perf_counter(); "
         "from math_anchor.runtime import execute_direct; "
-        "result = execute_direct('expression.evaluate', "
-        f"{{'expression': {FIRST_EXPRESSION!r}, 'precision': 16}}); "
-        "print(time.perf_counter() - start)"
+        f"execute_direct({operation!r}, {arguments!r}); "
+        "elapsed=time.perf_counter()-start; "
+        "rss=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss; "
+        "rss=rss if sys.platform=='darwin' else rss*1024; "
+        "print(json.dumps({'elapsed':elapsed,'rssBytes':rss}))"
     )
     timings: list[float] = []
     inner_timings: list[float] = []
+    rss_samples: list[int] = []
+    environment = _source_environment()
     for _ in range(samples):
         started = time.perf_counter()
         completed = subprocess.run(
-            [sys.executable, "-c", code], capture_output=True, text=True, check=True
+            [sys.executable, "-c", code],
+            capture_output=True,
+            text=True,
+            check=True,
+            cwd=ROOT,
+            env=environment,
         )
         wall = (time.perf_counter() - started) * 1000.0
-        inner_ms = float(completed.stdout.strip()) * 1000.0
+        measurement = json.loads(completed.stdout)
+        inner_ms = float(measurement["elapsed"]) * 1000.0
         timings.append(wall)
         inner_timings.append(inner_ms)
+        rss_samples.append(int(measurement["rssBytes"]))
     summary = _summarize(timings)
     summary["inner_import_and_evaluate"] = _summarize(inner_timings)
+    summary["process_rss_bytes"] = {
+        "min": min(rss_samples),
+        "median": int(statistics.median(rss_samples)),
+        "max": max(rss_samples),
+    }
     return summary
+
+
+def benchmark_cold_routes(samples: int) -> dict[str, Any]:
+    return {
+        name: benchmark_cold(operation, arguments, samples)
+        for name, (operation, arguments) in COLD_ROUTES.items()
+    }
 
 
 def benchmark_packaged(runs: int) -> dict[str, Any]:
@@ -292,13 +352,15 @@ def main() -> int:
         parser.error(f"unknown operations: {', '.join(unknown)}")
 
     corpus = operation_corpus(selected)
+    cold_routes = benchmark_cold_routes(arguments.cold_samples)
     report: dict[str, Any] = {
         "recorded_at": datetime.now(timezone.utc).isoformat(),
         "python": sys.version,
         "platform": platform.platform(),
         "machine": platform.machine(),
         "warm": benchmark_warm(corpus, arguments.warm_samples),
-        "cold_interpreter": benchmark_cold(arguments.cold_samples),
+        "cold_interpreter": cold_routes["symbolic_expression"],
+        "cold_routes": cold_routes,
         "packaged_runtime": benchmark_packaged(arguments.packaged_runs),
         "packaged_mcp": asyncio.run(
             benchmark_packaged_mcp(arguments.mcp_runs, arguments.mcp_warm_calls)
@@ -317,6 +379,12 @@ def main() -> int:
     cold = report["cold_interpreter"]
     print(f"\ncold interpreter (spawn+import+evaluate): p50 {cold['p50_ms']:.1f} ms "
           f"(inner import+evaluate p50 {cold['inner_import_and_evaluate']['p50_ms']:.1f} ms)")
+    print("cold routes (inner p50 / median RSS):")
+    for name, route in report["cold_routes"].items():
+        print(
+            f"  {name}: {route['inner_import_and_evaluate']['p50_ms']:.1f} ms / "
+            f"{route['process_rss_bytes']['median'] / (1024 * 1024):.1f} MiB"
+        )
     packaged = report["packaged_runtime"]
     if packaged.get("available"):
         total = packaged["cold_start_total_ms"]

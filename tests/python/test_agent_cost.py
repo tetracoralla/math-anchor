@@ -14,7 +14,9 @@ from math_anchor.contracts import (
     RUN_TOOL_OUTPUT_SCHEMA,
     _LIMIT_PROPERTIES,
     batch_tool_parameters,
+    validate_result,
 )
+from math_anchor.errors import CalculatorError
 from math_anchor import mcp_server
 from math_anchor.mcp_server import _run_cancellable, _tool_result, mcp
 from math_anchor.output_policy import (
@@ -216,6 +218,34 @@ def test_advertised_result_envelope_stays_a_projection_of_the_result_union() -> 
     )
     missing = common_required - set(RUN_TOOL_OUTPUT_SCHEMA["properties"])
     assert not missing, f"envelope dropped common result fields: {sorted(missing)}"
+
+
+def test_result_validation_dispatch_keeps_the_complete_variant_contract() -> None:
+    valid = execute_direct(
+        "integer.machine_arithmetic",
+        {
+            "action": "add",
+            "left": "250",
+            "right": "20",
+            "bitWidth": 8,
+            "overflowBehavior": "wrapping",
+        },
+    )
+    invalid = dict(valid)
+    invalid.pop("overflow")
+
+    with pytest.raises(CalculatorError, match="outside the public contract"):
+        validate_result(invalid)
+
+    # Kinds with multiple action-discriminated variants must not accept the
+    # fields of a sibling action after fast dispatch.
+    vector = execute_direct(
+        "linear_algebra.exact",
+        {"action": "dot", "left": [1, 2], "right": [3, 4]},
+    )
+    vector["action"] = "cross"
+    with pytest.raises(CalculatorError, match="outside the public contract"):
+        validate_result(vector)
 
 
 def test_tool_results_signal_error_envelopes_through_is_error() -> None:
