@@ -49,10 +49,14 @@ describe these shapes first:
 - Supply variables, bounds, units, conventions, brackets, data, and tolerances
   explicitly. Never invent an answer-changing assumption.
 
-Load only the relevant reference when the request needs its policy:
+Load a reference only when the request needs policy not already explicit in the
+known route above. When action, operands, bit width, signedness, input mode, and
+overflow behavior are all stated, call `integer.machine_arithmetic` directly
+without loading another file.
 
-- [machine-semantics.md](references/machine-semantics.md) for fixed-width,
-  bits, IEEE-754, rounding, and integer division.
+- [machine-semantics.md](references/machine-semantics.md) for representation or
+  bit operations, IEEE-754, rounding, integer division, or a missing machine
+  convention.
 - [scientific-math.md](references/scientific-math.md) for symbolic work,
   calculus, numerical methods, matrices, linear algebra, and verification.
 - [statistics-units-dimensions.md](references/statistics-units-dimensions.md)
