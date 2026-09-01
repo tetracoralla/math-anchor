@@ -9,4 +9,5 @@ __pycache__/
 dist/
 plugins/math-anchor/runtime/
 integrations/lean/.lake/
+integrations/lean-reference/.lake/
 .DS_Store

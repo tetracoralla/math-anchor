@@ -171,7 +171,7 @@ def test_experiments_fix_one_agent_harness_driver_and_target() -> None:
         assert experiment["purpose"] == purpose
         assert experiment["repeats"] == repeats
         assert experiment["agent"] == {"provider": "openai", "model": "gpt-5.6-luna"}
-        assert experiment["harness"] == {"id": "codex-cli", "version": "0.151.0-alpha.7.2"}
+        assert experiment["harness"] == {"id": "codex-cli", "version": "0.152.0"}
         assert experiment["driver"]["id"] == "codex-cli-driver"
         assert experiment["driver"]["version"] == "0.5.0"
         arguments = experiment["driver"]["args"]
@@ -196,6 +196,34 @@ def test_policy_assisted_experiments_use_one_provider_neutral_policy_in_both_con
     assert "math anchor" not in policy
     assert "math.run" not in policy
     assert "trivial low-risk arithmetic" in policy
+
+
+def test_research_smoke_pairs_terra_and_luna_with_the_same_direct_mcp_task() -> None:
+    suite = _load("research-putnam-1976-a2.v0.1.json")
+    assert suite["targetRef"] == {"id": "math-anchor", "version": "0.5.0"}
+    assert len(suite["tasks"]) == 1
+    assert suite["tasks"][0]["evaluator"]["expected"] == "2,63,90,3"
+    assert suite["tasks"][0]["opportunity"] == "required"
+
+    for model in ("terra", "luna"):
+        experiment = _load(f"codex-{model}-research-putnam-1976-a2.v0.1.json")
+        assert experiment["suiteRef"] == {
+            "id": "math-anchor.research-putnam-1976-a2",
+            "version": "0.1.0",
+        }
+        assert experiment["agent"] == {
+            "provider": "openai",
+            "model": f"gpt-5.6-{model}",
+        }
+        assert experiment["targetRef"] == {"id": "math-anchor", "version": "0.5.0"}
+        assert experiment["harness"] == {"id": "codex-cli", "version": "0.152.0"}
+        assert experiment["driver"]["version"] == "0.5.0"
+        arguments = experiment["driver"]["args"]
+        assert "--target-plugin-id" not in arguments
+        assert "${MATH_ANCHOR_MCP_COMMAND}" in arguments
+        assert "${MATH_ANCHOR_MCP_CWD}" in arguments
+        assert "${MATH_ANCHOR_CODING_AGENT_POLICY}" in arguments
+        assert len(experiment["conditions"]) * experiment["repeats"] == 2
 
 
 def test_installed_plugin_smoke_uses_one_isolated_target_plugin_without_policy_injection() -> None:
@@ -234,6 +262,27 @@ def test_isolated_agent_environment_restores_home(monkeypatch) -> None:
         assert agent_eval.os.environ["HOME"] == "/tmp/math-anchor-isolated-home"
 
     assert agent_eval.os.environ["HOME"] == "/tmp/math-anchor-original-home"
+
+
+def test_direct_mcp_pair_uses_one_temporary_empty_codex_home(
+    monkeypatch, tmp_path: Path
+) -> None:
+    source_home = tmp_path / "source-codex"
+    source_home.mkdir()
+    auth = source_home / "auth.json"
+    auth.write_text('{"token":"fixture"}', encoding="utf-8")
+    monkeypatch.setenv("CODEX_HOME", str(source_home))
+    monkeypatch.setenv("HOME", str(tmp_path / "original-home"))
+
+    with agent_eval._isolated_direct_codex_home(True):
+        isolated = Path(agent_eval.os.environ["CODEX_HOME"])
+        assert agent_eval.os.environ["HOME"] == str(isolated)
+        assert isolated != source_home
+        assert (isolated / "auth.json").resolve() == auth.resolve()
+        assert (isolated / "config.toml").read_text(encoding="utf-8") == ""
+
+    assert agent_eval.os.environ["CODEX_HOME"] == str(source_home)
+    assert agent_eval.os.environ["HOME"] == str(tmp_path / "original-home")
 
 
 def test_installed_skill_routes_machine_semantics_to_one_nested_run_call() -> None:

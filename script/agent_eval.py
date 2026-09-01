@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Validate or run Math Anchor's paired Coding Agent evaluations.
 
-The provider-neutral runner lives in the sibling ``agent-tool-evals``
-workspace.  This wrapper keeps Math Anchor's task suites and exact planned
-model-call count local to the product, refuses accidental model runs, and
-writes reports only under the gitignored ``build/agent-evals`` directory.
+The provider-neutral runner lives in the external ``agent-tool-evals``
+workspace. This wrapper locates the current sibling or migrated development
+checkout, keeps Math Anchor's suites and exact planned model-call count local
+to the product, refuses accidental model runs, and writes reports only under
+the gitignored ``build/agent-evals`` directory.
 """
 
 from __future__ import annotations
@@ -29,13 +30,27 @@ from check_installed_plugin import validate_server_route
 
 ROOT = Path(__file__).resolve().parent.parent
 EVAL_DIR = ROOT / "evals" / "agent"
-DEFAULT_EVALUATOR_ROOT = ROOT.parent / "agent-tool-evals"
+DEFAULT_EVALUATOR_CANDIDATES = (
+    ROOT.parent / "agent-tool-labs" / "packages" / "agent-tool-evals",
+    ROOT.parent / "agent-tool-evals",
+    Path.home()
+    / "Development"
+    / "tools-dev"
+    / "agent-tool-labs"
+    / "packages"
+    / "agent-tool-evals",
+)
 DEFAULT_OUTPUT_DIR = ROOT / "build" / "agent-evals"
 POLICY_PATH = EVAL_DIR / "coding-agent-policy.md"
 POLICY_PLACEHOLDER = "${MATH_ANCHOR_CODING_AGENT_POLICY}"
 ISOLATED_CODEX_HOME_PLACEHOLDER = "${MATH_ANCHOR_ISOLATED_CODEX_HOME}"
+MCP_COMMAND_PLACEHOLDER = "${MATH_ANCHOR_MCP_COMMAND}"
+MCP_CWD_PLACEHOLDER = "${MATH_ANCHOR_MCP_CWD}"
 TARGET_PLUGIN_ID = "math-anchor@openadam"
 TARGET_PLUGIN_VERSION = canonical_version(ROOT)
+PACKAGED_MCP_COMMAND = (
+    ROOT / "plugins" / "math-anchor" / "runtime" / "math-anchor-runtime" / "math-anchor-runtime"
+)
 
 MODES = {
     "smoke": (
@@ -57,6 +72,14 @@ MODES = {
     "policy-utility": (
         EVAL_DIR / "coding-agent-utility.v0.1.json",
         EVAL_DIR / "codex-luna-policy-utility.v0.1.json",
+    ),
+    "research-terra-smoke": (
+        EVAL_DIR / "research-putnam-1976-a2.v0.1.json",
+        EVAL_DIR / "codex-terra-research-putnam-1976-a2.v0.1.json",
+    ),
+    "research-luna-smoke": (
+        EVAL_DIR / "research-putnam-1976-a2.v0.1.json",
+        EVAL_DIR / "codex-luna-research-putnam-1976-a2.v0.1.json",
     ),
 }
 
@@ -82,7 +105,12 @@ def _planned_runs(suite: dict[str, Any], experiment: dict[str, Any]) -> int:
 
 def _evaluator_root(argument: str | None) -> Path:
     configured = argument or os.environ.get("AGENT_TOOL_EVALS_ROOT")
-    return Path(configured).expanduser().resolve() if configured else DEFAULT_EVALUATOR_ROOT.resolve()
+    if configured:
+        return Path(configured).expanduser().resolve()
+    for candidate in DEFAULT_EVALUATOR_CANDIDATES:
+        if (candidate / "src" / "cli.mjs").is_file():
+            return candidate.resolve()
+    return DEFAULT_EVALUATOR_CANDIDATES[0].resolve()
 
 
 def _validate_evaluator(root: Path) -> Path:
@@ -349,6 +377,31 @@ def _isolated_codex_home(enabled: bool, configs: list[str]):
 
 
 @contextmanager
+def _isolated_direct_codex_home(enabled: bool):
+    """Keep direct-MCP paired runs free of ambient config and Plugin drift."""
+
+    if not enabled:
+        yield
+        return
+    source_codex_root = Path(
+        os.environ.get("CODEX_HOME", str(Path.home() / ".codex"))
+    ).expanduser().resolve()
+    auth_source = source_codex_root / "auth.json"
+    if not auth_source.is_file():
+        raise SystemExit(f"Codex authentication is unavailable: {auth_source}")
+    with tempfile.TemporaryDirectory(prefix="math-anchor-direct-agent-eval-codex-") as directory:
+        isolated_root = Path(directory).resolve()
+        (isolated_root / "auth.json").symlink_to(auth_source.resolve())
+        # An explicit stable file avoids a first-run write changing the paired
+        # runtime fingerprint between treatment and baseline.
+        (isolated_root / "config.toml").write_text("", encoding="utf-8")
+        with _temporary_environment(
+            {"CODEX_HOME": str(isolated_root), "HOME": str(isolated_root)}
+        ):
+            yield
+
+
+@contextmanager
 def _prepared_experiment(
     path: Path,
     experiment: dict[str, Any],
@@ -373,6 +426,14 @@ def _prepared_experiment(
             replacements[POLICY_PLACEHOLDER] = str(POLICY_PATH.resolve())
         if isolated_root is not None:
             replacements[ISOLATED_CODEX_HOME_PLACEHOLDER] = str(isolated_root)
+        if MCP_COMMAND_PLACEHOLDER in arguments:
+            if not PACKAGED_MCP_COMMAND.is_file() or not os.access(PACKAGED_MCP_COMMAND, os.X_OK):
+                raise SystemExit(
+                    "packaged Math Anchor MCP runtime is unavailable; run script/package_runtime.sh"
+                )
+            replacements[MCP_COMMAND_PLACEHOLDER] = str(PACKAGED_MCP_COMMAND.resolve())
+        if MCP_CWD_PLACEHOLDER in arguments:
+            replacements[MCP_CWD_PLACEHOLDER] = str(ROOT.resolve())
         if not replacements:
             yield path
             return
@@ -428,49 +489,51 @@ def main() -> int:
     if arguments.action in {"preflight", "run"}:
         _validate_codex_harness(experiment)
 
-    with _prepared_experiment(
-        experiment_path,
-        experiment,
-        prepare_installed_plugin=arguments.action in {"preflight", "run"},
-    ) as prepared_experiment:
-        validate = [
-            "node",
-            str(cli),
-            "validate",
-            "--suite",
-            str(suite_path),
-            "--experiment",
-            str(prepared_experiment),
-        ]
-        _run(validate, cwd=evaluator_root)
-        print(f"validated {arguments.mode}: {len(suite['tasks'])} tasks, {planned} planned model runs")
-        if arguments.action in {"validate", "preflight"}:
-            if arguments.action == "preflight":
-                print("installed Plugin preflight passed without model calls")
-            return 0
+    direct_mcp = MCP_COMMAND_PLACEHOLDER in experiment.get("driver", {}).get("args", [])
+    with _isolated_direct_codex_home(direct_mcp and arguments.action == "run"):
+        with _prepared_experiment(
+            experiment_path,
+            experiment,
+            prepare_installed_plugin=arguments.action in {"preflight", "run"},
+        ) as prepared_experiment:
+            validate = [
+                "node",
+                str(cli),
+                "validate",
+                "--suite",
+                str(suite_path),
+                "--experiment",
+                str(prepared_experiment),
+            ]
+            _run(validate, cwd=evaluator_root)
+            print(f"validated {arguments.mode}: {len(suite['tasks'])} tasks, {planned} planned model runs")
+            if arguments.action in {"validate", "preflight"}:
+                if arguments.action == "preflight":
+                    print("installed Plugin preflight passed without model calls")
+                return 0
 
-        if arguments.output:
-            output = Path(arguments.output).expanduser().resolve()
-        else:
-            stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-            output = DEFAULT_OUTPUT_DIR / f"{experiment['id']}-{stamp}.json"
-        output.parent.mkdir(parents=True, exist_ok=True)
-        if output.exists() or output.is_symlink():
-            raise SystemExit(f"refusing to overwrite existing report: {output}")
+            if arguments.output:
+                output = Path(arguments.output).expanduser().resolve()
+            else:
+                stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+                output = DEFAULT_OUTPUT_DIR / f"{experiment['id']}-{stamp}.json"
+            output.parent.mkdir(parents=True, exist_ok=True)
+            if output.exists() or output.is_symlink():
+                raise SystemExit(f"refusing to overwrite existing report: {output}")
 
-        command = [
-            "node",
-            str(cli),
-            "run",
-            "--suite",
-            str(suite_path),
-            "--experiment",
-            str(prepared_experiment),
-            "--output",
-            str(output),
-        ]
-        _run(command, cwd=evaluator_root)
-        print(f"report: {output}")
+            command = [
+                "node",
+                str(cli),
+                "run",
+                "--suite",
+                str(suite_path),
+                "--experiment",
+                str(prepared_experiment),
+                "--output",
+                str(output),
+            ]
+            _run(command, cwd=evaluator_root)
+            print(f"report: {output}")
     return 0
 
 

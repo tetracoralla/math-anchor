@@ -1,0 +1,18 @@
+{
+  "id": "putnam-1976-a2-n18",
+  "source": {
+    "benchmark": "PutnamBench",
+    "problem": "putnam_1976_a2",
+    "url": "https://github.com/trishullab/PutnamBench/blob/main/lean4/src/putnam_1976_a2.lean",
+    "scope": "fixed n=18 promotion task; not the full quantified theorem"
+  },
+  "operation": "certificate.polynomial_identity",
+  "arguments": {
+    "left": "x^18 + y^18 + (x + y)^18",
+    "right": "2*(x^2 + x*y + y^2)^9 + 63*(x^2*y + x*y^2)^2*(x^2 + x*y + y^2)^6 + 90*(x^2*y + x*y^2)^4*(x^2 + x*y + y^2)^3 + 3*(x^2*y + x*y^2)^6",
+    "variables": [
+      "x",
+      "y"
+    ]
+  }
+}

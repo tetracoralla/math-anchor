@@ -24,38 +24,32 @@ The current implementation campaign finishes its first productized slice when:
    runtime, and macOS build checks are reported separately from owner
    business/experience acceptance.
 
-The broader research-adoption goal remains open until the runtime is exercised
-inside a real external math-Agent workflow. A proof-kernel bridge and one
-bounded model-backed A/B smoke now exist, but neither establishes adoption,
-quality gain, or a reason to scale the experiment. Publication, registry
-pushes, release tags, and claims of adoption remain owner-authorized external
-stages.
+The broader research-adoption goal remains open after the first real external
+math-Agent smokes and proof-kernel bridge. The fixed public task did not trigger
+tool adoption, and the installed-Plugin smoke routed only one of two required
+opportunities. Neither bounded observation establishes utility or adoption.
 
 ## Current state
 
-- Working baseline for this optimization campaign: `main` at `a5c4f30`, three
-  local commits ahead of `origin/main` at `da29d8b`; the cost, performance, and
-  resilience changes below remain uncommitted. The independent active clone is under `Development/tools-dev`;
-  the File Provider backup and its running 0.4 application were not replaced.
+- Working baseline: the reconciliation branch based on `22fe2f5`, incorporating
+  the backup-only human/runtime fixes at `f7713f0` and the preserved research
+  reference work at `e400cc3`.
 - Current product contract: Math Anchor 0.5.0, 45 operation ids, exactly four
-  public MCP tools, compact one-call execution, strict per-operation
-  validation, isolated worker bounds, separate exact/approximate result
-  fields, and a versioned runtime-owned assurance envelope with actual selected
-  backend provenance.
-- The first certificate vertical is complete end to end: a bounded rational
-  polynomial identity certificate is recomputed by an independent
-  standard-library checker, translated through a separate safe AST path, and
-  accepted by pinned Lean 4.33.1 plus Mathlib before the result is labelled
-  `kernel_checked`.
-- Current numerical strength is bounded and explicit: deterministic and
-  diagnostic operations remain broad, while `numeric.minimize` reports only an
-  internal mpmath interval enclosure for its supported expression subset. It
-  is not described as an external certificate or general proof.
-- Remaining research gaps: no real external math-Agent integration, no
-  measured scientific workflow benefit, only one narrow Lean certificate
-  family, and no claim of scientific adoption. The OCI definition is
-  CI-runnable, but local image build/run remains blocked until a container
-  daemon is available.
+  public MCP tools, compact one-call execution, strict per-operation validation,
+  bounded transport and workers, separate exact/approximate result fields, and
+  a versioned runtime-owned assurance envelope with selected-backend provenance.
+- The production Lean bridge and an independent reference consumer both check
+  the bounded polynomial certificate with pinned Lean 4.33.1 and Mathlib commit
+  `0df444a360eaa60ab8c11dca51a86af692955474` for both the `n = 4` bridge and
+  `n = 18` promotion fixture. The reference route is a boundary test, not a
+  second public capability, and neither fixture proves the full Putnam theorem.
+- Current Agent smoke: paired low-reasoning Codex runs for Terra and Luna used
+  the public Putnam 1976 A2 `n = 18` fixed instance. Both comparisons were
+  infrastructure-valid and all answers were correct, but neither treatment
+  invoked Math Anchor, so observed quality delta and adoption were zero.
+- Remaining research gaps: a genuinely discriminating public-problem task,
+  observed target adoption, a multi-task executable-oracle evaluation, an
+  external consumer outside this repository, and scientific adoption.
 - Environment repair in this campaign: a File Provider copy preserved the
   hidden flag on editable-install `.pth` files, so Python ignored the current
   package. Bootstrap now uses a relocatable non-editable project install and
@@ -87,10 +81,10 @@ stages.
   callers. Heavy artifacts stay bounded and opt-in through a selected
   operation rather than appearing in every tool schema.
 - Do not change the human UI in this campaign.
-- Do not commit, push, tag, publish, or replace the managed global installation
-  without explicit owner authorization. Model-backed runs must remain bounded
-  by an exact planned-call confirmation and stop when the smoke does not justify
-  scaling.
+- The owner authorized this reconciliation campaign to commit, push, refresh
+  the managed installation, and run bounded Terra/Luna smokes. Model-backed
+  runs still require the exact planned-call confirmation and stop before a
+  larger estimate unless the treatment actually adopts Math Anchor.
 
 ## Validation ladder and continuation anchor
 
@@ -112,6 +106,29 @@ interruption is the first incomplete item in the finish condition above,
 followed by the affected rung of the validation ladder.
 
 ## Latest local observations (2026-09-01)
+
+- Lean reference consumer: PASS for the tracked Putnam 1976 A2 `n = 4` and
+  `n = 18` fixtures. Certificates were independently recomputed before the
+  generated rational equality was accepted by Lean 4.33.1 plus pinned Mathlib;
+  false identities, recomputed-digest coefficient tampering, unsupported AST
+  syntax, and `sorryAx` output are rejected.
+- Direct Agent research smoke: PASS for comparison integrity and answer
+  correctness in one Terra pair and one Luna pair; FAIL for tool adoption in
+  both. Each treatment observed the target capability as available but made
+  zero target calls. These development reports carry `no-utility-claim`.
+- Current backup-directory full regression: BLOCKED by macOS File Provider,
+  not by an assertion failure. Source layout passed, the project `.venv` and
+  wheel rebuilt, then runtime-manifest verification slept at 0% CPU while
+  reading a `dataless` packaged metadata file. Two full pytest attempts also
+  slept during collection on `dataless` source files even with a hydrated
+  external interpreter, disabled bytecode/cache writes, and `/private/tmp`
+  test state. The first inventory found 151 such source/test/script files. A
+  later Finder download made representative files immediately readable but a
+  fresh full pytest collection still slept inside the kernel `read()` path,
+  so the carrier remains blocked. Sixteen focused tests covering the changed
+  Lean bridge and Agent-evaluation assets passed. Full Python, Swift,
+  packaged-runtime, and load results below remain the previous 2026-08-31
+  observations and are not promoted to current post-change PASS.
 
 - `./script/check_all.sh`: PASS against the rebuilt arm64 Plugin runtime; 868
   Python tests passed and one explicitly conditional test was skipped, followed

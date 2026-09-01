@@ -49,7 +49,9 @@ dimensions. The four-task smoke is an exact subset.
 
 ## Safe execution
 
-The provider-neutral paired runner is the sibling `agent-tool-evals` workspace.
+The provider-neutral paired runner is the external `agent-tool-evals`
+workspace. The wrapper resolves either the sibling layout or the current
+migrated `agent-tool-labs/packages/agent-tool-evals` development checkout.
 Override its location with `AGENT_TOOL_EVALS_ROOT` or `--evaluator-root` when
 needed. Run `./script/bootstrap.sh` first when `.venv/bin/python` is absent.
 Validation makes no model calls:
@@ -61,6 +63,8 @@ Validation makes no model calls:
 .venv/bin/python script/agent_eval.py validate --mode policy-utility
 .venv/bin/python script/agent_eval.py validate --mode installed-smoke
 .venv/bin/python script/agent_eval.py preflight --mode installed-smoke
+.venv/bin/python script/agent_eval.py validate --mode research-terra-smoke
+.venv/bin/python script/agent_eval.py validate --mode research-luna-smoke
 ```
 
 Every model-backed run requires the exact planned-call confirmation. Reports
@@ -72,6 +76,8 @@ are new files under the gitignored `build/agent-evals/` directory:
 .venv/bin/python script/agent_eval.py run --mode policy-smoke --confirm-model-runs 8
 .venv/bin/python script/agent_eval.py run --mode policy-utility --confirm-model-runs 180
 .venv/bin/python script/agent_eval.py run --mode installed-smoke --confirm-model-runs 8
+.venv/bin/python script/agent_eval.py run --mode research-terra-smoke --confirm-model-runs 2
+.venv/bin/python script/agent_eval.py run --mode research-luna-smoke --confirm-model-runs 2
 ```
 
 The matching smoke must be infrastructure-valid and show the intended routing
@@ -184,3 +190,23 @@ budgets, driver, versions, and machine. It is not a universal Tool Score,
 provider conformance certificate, evidence of the target-specific installed
 Skill unless that route was separately observed, public-release authorization,
 or owner business acceptance.
+
+## Public-problem research smoke
+
+The bounded research suite uses the public Putnam 1976 A2 statement from
+PutnamBench but asks only for the coefficients of its fixed `n = 18` instance.
+It is not a proof of the full quantified theorem and it is not part of the
+30-task utility corpus. The direct-MCP route uses a temporary empty Codex home,
+links the existing authentication file, disables ambient Plugins and command
+tools, and gives both conditions the same provider-neutral deterministic-math
+policy. Only the verified local Math Anchor MCP availability differs.
+
+On 2026-09-01, one paired run each with Codex CLI 0.152.0 and driver 0.5.0 was
+valid for both `gpt-5.6-terra` and `gpt-5.6-luna` at low reasoning. Every run
+returned the correct coefficients `2,63,90,3`, baseline target use remained
+zero, and both treatment runs observed the target as available but made zero
+target calls. The result is therefore a successful model/driver integration
+smoke and a failed adoption probe: quality delta was zero and required-tool
+opportunity recall was zero. It supports no utility, automatic-selection, or
+research-adoption claim, and it is not a basis for expanding to a repeated
+model-backed evaluation.

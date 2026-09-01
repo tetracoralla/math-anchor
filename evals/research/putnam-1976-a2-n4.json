@@ -1,0 +1,18 @@
+{
+  "id": "putnam-1976-a2-n4",
+  "source": {
+    "benchmark": "PutnamBench",
+    "problem": "putnam_1976_a2",
+    "url": "https://github.com/trishullab/PutnamBench/blob/main/lean4/src/putnam_1976_a2.lean",
+    "scope": "fixed n=4 bridge fixture; not the full quantified theorem"
+  },
+  "operation": "certificate.polynomial_identity",
+  "arguments": {
+    "left": "(x + y)^4 + (x^4 + y^4)",
+    "right": "2 * (x^2 + x*y + y^2)^2",
+    "variables": [
+      "x",
+      "y"
+    ]
+  }
+}

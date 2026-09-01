@@ -6,7 +6,7 @@
   "suiteRef": {"id": "math-anchor.coding-agent-utility", "version": "0.1.0"},
   "targetRef": {"id": "math-anchor", "version": "0.5.0"},
   "agent": {"provider": "openai", "model": "gpt-5.6-luna"},
-  "harness": {"id": "codex-cli", "version": "0.151.0-alpha.7.2"},
+  "harness": {"id": "codex-cli", "version": "0.152.0"},
   "repeats": 3,
   "seed": "math-anchor-coding-agent-utility-2026-08-24",
   "budget": {

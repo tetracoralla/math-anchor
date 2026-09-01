@@ -1,0 +1,25 @@
+{
+  "schemaVersion": "openadam.agent-tool-eval.task-suite.v0.1",
+  "id": "math-anchor.research-putnam-1976-a2",
+  "version": "0.1.0",
+  "title": "Math Anchor Putnam 1976 A2 fixed-instance promotion smoke",
+  "targetRef": {
+    "id": "math-anchor",
+    "version": "0.4.0"
+  },
+  "tasks": [
+    {
+      "id": "putnam-1976-a2.n18-coefficients",
+      "prompt": "Let P = x^2*y + x*y^2, Q = x^2 + x*y + y^2, and S18 = x^18 + y^18 + (x+y)^18. Find the integers a,b,c,d such that S18 = a*Q^9 + b*P^2*Q^6 + c*P^4*Q^3 + d*P^6. If an exact deterministic math runtime is available, use it to validate your coefficients. Return only the comma-separated coefficients a,b,c,d with no spaces.",
+      "opportunity": "required",
+      "tags": ["research", "algebra", "polynomial-identity", "putnam"],
+      "evaluator": {
+        "kind": "string-equality",
+        "actualPointer": "",
+        "expected": "2,63,90,3",
+        "trim": true,
+        "caseSensitive": true
+      }
+    }
+  ]
+}
