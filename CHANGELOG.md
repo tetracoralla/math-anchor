@@ -75,6 +75,9 @@ and Apple notarization record exist.
 
 ### Fixed
 
+- Kept fully specified fixed-width machine arithmetic on the one-call path by
+  loading the machine-semantics reference only when a representation,
+  bit/IEEE, rounding, division, or missing-convention policy is actually needed.
 - Corrected interval optimization for ordinary SymPy function nodes,
   non-monotone `cosh`, inverse-trigonometric endpoints, and directed interval
   rounding. Its contract now distinguishes an internal mpmath interval bound
