@@ -5,6 +5,7 @@ import hashlib
 import json
 import platform
 from pathlib import Path
+import re
 import subprocess
 import sys
 from typing import Any
@@ -67,6 +68,15 @@ def source_digest(source_root: Path) -> str:
     return digest.hexdigest()
 
 
+def architectures_from_file_output(output: str) -> list[str]:
+    lowered = output.lower()
+    patterns = {
+        "arm64": r"\b(?:arm64|aarch64)\b",
+        "x86_64": r"\b(?:x86[_-]64|amd64)\b",
+    }
+    return [name for name, pattern in patterns.items() if re.search(pattern, lowered)]
+
+
 def binary_architectures(runtime: Path) -> list[str]:
     result = subprocess.run(
         ["file", "-b", str(runtime)],
@@ -74,7 +84,7 @@ def binary_architectures(runtime: Path) -> list[str]:
         capture_output=True,
         text=True,
     ).stdout
-    architectures = [name for name in ("arm64", "x86_64") if name in result]
+    architectures = architectures_from_file_output(result)
     if not architectures:
         raise SystemExit(f"could not determine runtime architecture: {result.strip()}")
     return architectures

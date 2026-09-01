@@ -179,6 +179,21 @@ def test_runtime_manifest_does_not_hide_file_provider_conflict_copies(
     ]
 
 
+@pytest.mark.parametrize(
+    ("description", "expected"),
+    (
+        ("Mach-O universal binary with 2 architectures: [x86_64] [arm64]", ["arm64", "x86_64"]),
+        ("ELF 64-bit LSB pie executable, x86-64, version 1 (SYSV)", ["x86_64"]),
+        ("ELF 64-bit LSB pie executable, ARM aarch64, version 1 (SYSV)", ["arm64"]),
+    ),
+)
+def test_runtime_manifest_normalizes_supported_file_architecture_names(
+    description: str,
+    expected: list[str],
+) -> None:
+    assert runtime_manifest.architectures_from_file_output(description) == expected
+
+
 def test_plugin_validation_consumes_the_complete_runtime_manifest(tmp_path: Path) -> None:
     # Negative regression: checking only that the executable existed allowed
     # File Provider conflict copies to pass plugin validation.

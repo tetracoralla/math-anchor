@@ -49,7 +49,8 @@ def test_swift_package_separates_core_from_app_and_tests_it() -> None:
     assert 'dependencies: ["MathAnchorCore"]' in package
     assert 'name: "MathAnchorCoreTests"' in package
     assert (ROOT / "Sources/MathAnchorCore").is_dir()
-    assert (ROOT / "Tests/MathAnchorCoreTests").is_dir()
+    assert 'path: "tests/MathAnchorCoreTests"' in package
+    assert (ROOT / "tests/MathAnchorCoreTests").is_dir()
 
 
 def test_complete_check_runs_the_swift_package_suite() -> None:

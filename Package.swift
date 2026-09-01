@@ -21,7 +21,7 @@ let package = Package(
         .testTarget(
             name: "MathAnchorCoreTests",
             dependencies: ["MathAnchorCore"],
-            path: "Tests/MathAnchorCoreTests"
+            path: "tests/MathAnchorCoreTests"
         ),
     ]
 )

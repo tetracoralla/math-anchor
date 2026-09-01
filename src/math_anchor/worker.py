@@ -5,6 +5,7 @@ import math
 import os
 import resource
 import sys
+import threading
 import time
 from typing import Any
 
@@ -16,6 +17,37 @@ from .output_policy import (
     apply_output_policy,
 )
 from .transport_budget import MAX_REQUEST_BYTES
+
+
+UNIT_REGISTRY_WARM_IDLE_SECONDS = 0.5
+
+
+class _RequestActivity:
+    def __init__(self) -> None:
+        self.condition = threading.Condition()
+        self.active = False
+        self.last_activity_at = time.monotonic()
+
+    def begin(self) -> None:
+        with self.condition:
+            self.active = True
+            self.last_activity_at = time.monotonic()
+            self.condition.notify_all()
+
+    def end(self) -> None:
+        with self.condition:
+            self.active = False
+            self.last_activity_at = time.monotonic()
+            self.condition.notify_all()
+
+    def wait_until_idle_for(self, idle_seconds: float) -> None:
+        with self.condition:
+            while True:
+                elapsed = time.monotonic() - self.last_activity_at
+                if not self.active and elapsed >= idle_seconds:
+                    return
+                timeout = None if self.active else max(0.0, idle_seconds - elapsed)
+                self.condition.wait(timeout=timeout)
 
 
 def _request_timeout_ms(payload: dict[str, Any]) -> int:
@@ -125,6 +157,22 @@ def _request_error(code: str, message: str) -> dict[str, Any]:
     return {"ok": False, "error": {"code": code, "message": message}}
 
 
+def _warm_unit_registries_in_background(request_activity: _RequestActivity) -> None:
+    # Keep readiness and startup bursts cheap. Any request restarts the idle
+    # interval; a unit request racing the warmup shares the registry lock.
+    from .operations.data import warm_unit_registries
+
+    def warm_after_idle() -> None:
+        request_activity.wait_until_idle_for(UNIT_REGISTRY_WARM_IDLE_SECONDS)
+        warm_unit_registries()
+
+    threading.Thread(
+        target=warm_after_idle,
+        name="calculator-worker-unit-warm",
+        daemon=True,
+    ).start()
+
+
 def main() -> None:
     os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
     os.environ.setdefault("OMP_NUM_THREADS", "1")
@@ -137,6 +185,8 @@ def main() -> None:
         sys.stdout.write('{"ready":true}\n')
         sys.stdout.flush()
     if persistent:
+        request_activity = _RequestActivity()
+        _warm_unit_registries_in_background(request_activity)
         while True:
             try:
                 line = _read_request_line()
@@ -153,12 +203,16 @@ def main() -> None:
                 continue
             if line is None:
                 break
+            request_activity.begin()
             try:
-                payload = _decode_request(line)
-            except ValueError as error:
-                _write_response(_request_error("E_INPUT", str(error)))
-                continue
-            _write_response(_execute_payload(payload, execute_direct, CalculatorError))
+                try:
+                    payload = _decode_request(line)
+                except ValueError as error:
+                    _write_response(_request_error("E_INPUT", str(error)))
+                    continue
+                _write_response(_execute_payload(payload, execute_direct, CalculatorError))
+            finally:
+                request_activity.end()
         return
 
     try:

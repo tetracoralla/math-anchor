@@ -45,6 +45,40 @@ def test_dependency_closure_rejects_a_lock_that_drops_an_extra_dependency() -> N
         )
 
 
+def test_shared_lock_accepts_a_supported_platform_conditional_dependency(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "pyproject.toml"
+    project.write_text(
+        '[project]\nname = "fixture"\nversion = "1.0"\n'
+        'dependencies = ["root==1.0"]\n',
+        encoding="utf-8",
+    )
+    inactive_platform = "linux" if sys.platform == "darwin" else "darwin"
+    installed = {
+        "root": SimpleNamespace(
+            version="1.0",
+            requires=[
+                f'other-platform-only==2.0; sys_platform == "{inactive_platform}"'
+            ],
+        ),
+        "other-platform-only": SimpleNamespace(version="2.0", requires=[]),
+    }
+    monkeypatch.setattr(
+        release_materials,
+        "distribution",
+        lambda name: installed[name.lower()],
+    )
+
+    closure = release_materials.validate_dependency_closure(
+        project,
+        [("root", "1.0"), ("other-platform-only", "2.0")],
+    )
+
+    assert closure == {"root": "1.0"}
+
+
 def test_dependency_lock_requires_a_sha256_hash_for_every_package(
     tmp_path: Path,
 ) -> None:
