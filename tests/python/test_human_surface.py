@@ -56,6 +56,27 @@ def test_expression_is_secondary_only_after_evaluation() -> None:
     assert ".accessibilityValue(displayAccessibilityValue)" in display
 
 
+def test_human_errors_remain_readable_and_accessible() -> None:
+    inline_error = (
+        ROOT / "Sources/MathAnchor/Views/InlineErrorView.swift"
+    ).read_text()
+    display = (ROOT / "Sources/MathAnchor/Views/DisplayView.swift").read_text()
+    conversion = (
+        ROOT / "Sources/MathAnchor/Views/ConversionDisplayView.swift"
+    ).read_text()
+
+    # Negative regression: the fixed-width calculator previously forced every
+    # message into one line and replaced its spoken content with only “Error”.
+    assert ".lineLimit(2)" in inline_error
+    assert ".help(message)" in inline_error
+    assert '.accessibilityLabel("Error")' in inline_error
+    assert ".accessibilityValue(message)" in inline_error
+    assert "InlineErrorView(message: errorMessage)" in display
+    assert "InlineErrorView(message: errorMessage, fontSize: 9)" in conversion
+    assert '.accessibilityLabel("Error")' not in display
+    assert '.accessibilityLabel("Error")' not in conversion
+
+
 def test_mode_menu_uses_the_visible_rounded_rectangle_as_its_trigger() -> None:
     header = (ROOT / "Sources/MathAnchor/Views/CalculatorHeaderView.swift").read_text()
     keyboard = (

@@ -129,12 +129,8 @@ struct ConversionDisplayView: View {
             CurrencyRateStatusView(store: store)
                 .frame(height: 20)
         } else if let errorMessage = store.errorMessage {
-            Text(errorMessage)
-                .font(.system(size: 9, weight: .semibold, design: .rounded))
-                .foregroundStyle(CalculatorPalette.error)
-                .frame(maxWidth: .infinity, alignment: .trailing)
+            InlineErrorView(message: errorMessage, fontSize: 9)
                 .frame(height: 20)
-                .accessibilityLabel("Error")
         } else {
             Color.clear
                 .frame(height: 20)

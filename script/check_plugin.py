@@ -4,6 +4,8 @@ import json
 import re
 from pathlib import Path
 
+from runtime_manifest import verify_manifest
+
 
 ROOT = Path(__file__).resolve().parent.parent
 PLUGIN = ROOT / "plugins" / "math-anchor"
@@ -12,6 +14,19 @@ MARKETPLACE = ROOT / ".agents" / "plugins" / "marketplace.json"
 
 def fail(message: str) -> None:
     raise SystemExit(f"Plugin validation failed: {message}")
+
+
+def validate_runtime_artifact(*, root: Path, executable: Path, version: str) -> None:
+    try:
+        verify_manifest(
+            bundle=executable.parent,
+            runtime=executable,
+            lock=root / "requirements-runtime.lock",
+            source_root=root,
+            version=version,
+        )
+    except SystemExit as error:
+        fail(f"runtime artifact is invalid: {error}")
 
 
 def main() -> None:
@@ -48,6 +63,11 @@ def main() -> None:
         fail(f"MCP command does not exist: {executable}")
     if not executable.stat().st_mode & 0o111:
         fail(f"MCP command is not executable: {executable}")
+    validate_runtime_artifact(
+        root=ROOT,
+        executable=executable,
+        version=str(manifest["version"]),
+    )
 
     skills_root = PLUGIN / manifest["skills"]
     skill_files = sorted(skills_root.glob("*/SKILL.md"))

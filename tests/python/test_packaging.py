@@ -37,6 +37,19 @@ assert RUNTIME_MANIFEST_SPEC is not None and RUNTIME_MANIFEST_SPEC.loader is not
 runtime_manifest = importlib.util.module_from_spec(RUNTIME_MANIFEST_SPEC)
 RUNTIME_MANIFEST_SPEC.loader.exec_module(runtime_manifest)
 
+CHECK_PLUGIN_SPEC = importlib.util.spec_from_file_location(
+    "math_anchor_check_plugin",
+    ROOT / "script" / "check_plugin.py",
+)
+assert CHECK_PLUGIN_SPEC is not None and CHECK_PLUGIN_SPEC.loader is not None
+check_plugin = importlib.util.module_from_spec(CHECK_PLUGIN_SPEC)
+script_path = str(ROOT / "script")
+sys.path.insert(0, script_path)
+try:
+    CHECK_PLUGIN_SPEC.loader.exec_module(check_plugin)
+finally:
+    sys.path.remove(script_path)
+
 
 def _generated_gitignore() -> str:
     return "\n".join(GENERATED_OUTPUTS) + "\n"
@@ -164,6 +177,46 @@ def test_runtime_manifest_does_not_hide_file_provider_conflict_copies(
         "LICENSE",
         "LICENSE 2",
     ]
+
+
+def test_plugin_validation_consumes_the_complete_runtime_manifest(tmp_path: Path) -> None:
+    # Negative regression: checking only that the executable existed allowed
+    # File Provider conflict copies to pass plugin validation.
+    bundle = tmp_path / "math-anchor-runtime"
+    bundle.mkdir()
+    executable = bundle / "math-anchor-runtime"
+    shutil.copy2(sys.executable, executable)
+    version = tomllib.loads(
+        (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    )["project"]["version"]
+    runtime_manifest.write_manifest(
+        bundle=bundle,
+        runtime=executable,
+        lock=ROOT / "requirements-runtime.lock",
+        source_root=ROOT,
+        version=version,
+    )
+
+    check_plugin.validate_runtime_artifact(
+        root=ROOT,
+        executable=executable,
+        version=version,
+    )
+    (bundle / "LICENSE 2").write_text("stale conflict copy", encoding="utf-8")
+    with pytest.raises(SystemExit, match="runtime file inventory"):
+        check_plugin.validate_runtime_artifact(
+            root=ROOT,
+            executable=executable,
+            version=version,
+        )
+
+
+def test_bootstrap_rebuilds_a_file_provider_dataless_environment() -> None:
+    script = (ROOT / "script" / "bootstrap.sh").read_text(encoding="utf-8")
+
+    assert "venv_contains_dataless_files" in script
+    assert "-flags +dataless" in script
+    assert "File Provider-dataless generated .venv" in script
 
 
 def test_python_resolver_canonicalizes_symlinked_interpreter_for_venv(
