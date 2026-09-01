@@ -31,6 +31,10 @@ def test_explicit_sdk_override_is_selected_before_discovery(tmp_path: Path) -> N
     environment = os.environ.copy()
     environment["PATH"] = f"{fake_bin}:{environment['PATH']}"
     environment["MATH_ANCHOR_SDKROOT"] = str(explicit_sdk)
+    # check_all exports the real host target before pytest. This test owns a
+    # fake aarch64 uname and must exercise target derivation, not inherit the
+    # runner's already-resolved x86_64/arm64 value.
+    environment.pop("MATH_ANCHOR_SWIFT_TARGET", None)
     completed = subprocess.run(
         [
             "/bin/bash",
