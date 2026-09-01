@@ -1,7 +1,20 @@
 import threading
 import time
+from io import BytesIO
 
 from math_anchor import app_runtime
+
+
+def test_app_input_line_is_cumulatively_bounded() -> None:
+    stream = BytesIO(b"x" * 17 + b"\n" + b'{}\n')
+
+    try:
+        app_runtime._read_app_line(stream, max_bytes=16)
+    except ValueError as error:
+        assert "16-byte transport limit" in str(error)
+    else:  # pragma: no cover
+        raise AssertionError("oversized app request was accepted")
+    assert app_runtime._read_app_line(stream, max_bytes=16) == b"{}\n"
 
 
 def test_expression_request_remains_backward_compatible() -> None:

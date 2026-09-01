@@ -67,19 +67,14 @@ struct DisplayView: View {
                 }
 
             if let errorMessage = store.errorMessage {
-                Text(errorMessage)
-                    .font(.system(size: 10, weight: .semibold, design: .rounded))
-                    .foregroundStyle(CalculatorPalette.error)
-                    .lineLimit(1)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-                    .accessibilityLabel("Error")
-                    .frame(height: 15)
+                InlineErrorView(message: errorMessage)
+                    .frame(height: 27)
                     .transition(.opacity)
             }
         }
         .foregroundStyle(CalculatorPalette.primaryText)
         .padding(.horizontal, 14)
-        .padding(.vertical, 12)
+        .padding(.vertical, store.errorMessage == nil ? 12 : 7)
         .frame(height: 110, alignment: .bottom)
         .background {
             RoundedRectangle(cornerRadius: 19, style: .continuous)

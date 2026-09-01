@@ -44,6 +44,7 @@ SPECS = (
             {"action": "apart", "expression": "1/(x*(x+1))", "variable": "x"},
         ),
         handler=algebra.transform,
+        backends=("sympy",),
         keywords=("expand", "factor", "partial fractions", "collect", "展开", "因式分解", "部分分式", "合并同类项"),
     ),
     OperationSpec(
@@ -70,6 +71,7 @@ SPECS = (
             {"equations": ["x + y = 7", "x - y = 1"], "variables": ["x", "y"]},
         ),
         handler=algebra.solve,
+        backends=("sympy",),
         keywords=("equation", "system", "roots", "unknowns", "解方程", "方程组", "求解"),
     ),
 )

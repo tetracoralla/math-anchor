@@ -1,0 +1,45 @@
+{
+  "schemaVersion": "openadam.agent-tool-eval.experiment.v0.1",
+  "id": "math-anchor.codex-luna.research-public-math-adoption-0-5",
+  "title": "Math Anchor 0.5 repeated public mathematics adoption estimate in Codex Luna",
+  "purpose": "utility-estimate",
+  "suiteRef": {"id": "math-anchor.research-public-math-adoption", "version": "0.1.0"},
+  "targetRef": {"id": "math-anchor", "version": "0.5.0"},
+  "agent": {"provider": "openai", "model": "gpt-5.6-luna"},
+  "harness": {"id": "codex-cli", "version": "0.152.0"},
+  "repeats": 3,
+  "seed": "math-anchor-public-math-adoption-luna-2026-09-01",
+  "budget": {
+    "perRunTimeoutMs": 180000,
+    "maxStdoutBytes": 131072,
+    "maxStderrBytes": 65536,
+    "maxReportBytes": 8388608,
+    "maxTotalTokens": 200000,
+    "maxOutputTokens": 2000,
+    "maxToolCalls": 4
+  },
+  "capture": {"answer": "digest", "toolArguments": "digest", "toolResults": "digest"},
+  "driver": {
+    "id": "codex-cli-driver",
+    "version": "0.5.0",
+    "command": "node",
+    "args": [
+      "src/adapters/codex-driver.mjs",
+      "--model", "gpt-5.6-luna",
+      "--config", "model_reasoning_effort=\"low\"",
+      "--target-mcp-server-id", "math-anchor",
+      "--target-tool-prefix", "math.",
+      "--target-tool-prefix", "math-anchor.",
+      "--target-server-command", "${MATH_ANCHOR_MCP_COMMAND}",
+      "--target-server-cwd", "${MATH_ANCHOR_MCP_CWD}",
+      "--target-server-arg", "mcp",
+      "--shared-instructions-file", "${MATH_ANCHOR_CODING_AGENT_POLICY}"
+    ],
+    "cwd": "."
+  },
+  "oracleIsolation": {"mode": "deny-read-roots"},
+  "conditions": {
+    "baseline": {"capabilityAvailable": false, "declaredDifference": "target-capability-availability"},
+    "treatment": {"capabilityAvailable": true, "declaredDifference": "target-capability-availability"}
+  }
+}

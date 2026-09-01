@@ -90,6 +90,8 @@ SPECS = (
         ),
         handler=probability.distribution,
         keywords=("normal distribution", "binomial", "Poisson", "beta distribution", "gamma distribution", "lognormal", "cdf", "pmf", "quantile", "概率分布", "正态分布", "二项分布", "泊松分布", "贝塔分布", "伽马分布", "对数正态分布"),
+        assurance_scope="declared_distribution_parameters_and_numeric_method",
+        backends=("mpmath",),
     ),
 )
 

@@ -16,6 +16,7 @@ from .output_policy import (
     DEFAULT_RESULT_MODE,
     apply_output_policy,
 )
+from .transport_budget import MAX_REQUEST_BYTES
 
 
 UNIT_REGISTRY_WARM_IDLE_SECONDS = 0.5
@@ -129,14 +130,36 @@ def _write_response(response: dict[str, Any]) -> None:
     sys.stdout.flush()
 
 
-def _warm_unit_registries_in_background(
-    request_activity: _RequestActivity,
-) -> None:
-    # Pint registry construction (~150 ms each) stays lazy so readiness is
-    # cheap. Wait for a real idle interval before building both registries so
-    # a startup burst of cheap expressions never competes with ~300 ms of
-    # background parsing. Any request restarts the idle interval; a unit call
-    # arriving sooner simply uses the same locked lazy constructors itself.
+def _read_request_line() -> bytes | None:
+    line = sys.stdin.buffer.readline(MAX_REQUEST_BYTES + 1)
+    if not line:
+        return None
+    if len(line) > MAX_REQUEST_BYTES:
+        while line and not line.endswith(b"\n"):
+            line = sys.stdin.buffer.readline(MAX_REQUEST_BYTES + 1)
+        raise ValueError(
+            f"worker request exceeds the cumulative {MAX_REQUEST_BYTES}-byte transport limit"
+        )
+    return line
+
+
+def _decode_request(line: bytes) -> dict[str, Any]:
+    try:
+        payload = json.loads(line)
+    except (json.JSONDecodeError, UnicodeDecodeError) as error:
+        raise ValueError("worker request must be JSON") from error
+    if not isinstance(payload, dict):
+        raise ValueError("worker request must be a JSON object")
+    return payload
+
+
+def _request_error(code: str, message: str) -> dict[str, Any]:
+    return {"ok": False, "error": {"code": code, "message": message}}
+
+
+def _warm_unit_registries_in_background(request_activity: _RequestActivity) -> None:
+    # Keep readiness and startup bursts cheap. Any request restarts the idle
+    # interval; a unit request racing the warmup shares the registry lock.
     from .operations.data import warm_unit_registries
 
     def warm_after_idle() -> None:
@@ -157,12 +180,6 @@ def main() -> None:
     from .errors import CalculatorError
     from .runtime import execute_direct
 
-    # Readiness means the common expression path is actually warm. SymPy keeps
-    # a small amount of first-use initialization behind its imports; leaving
-    # that work until after the ready signal made a 100 ms operation deadline
-    # intermittently measure startup rather than calculation.
-    execute_direct("expression.evaluate", {"expression": "0"})
-
     persistent = "--persistent" in sys.argv
     if persistent or not getattr(sys, "frozen", False):
         sys.stdout.write('{"ready":true}\n')
@@ -170,28 +187,46 @@ def main() -> None:
     if persistent:
         request_activity = _RequestActivity()
         _warm_unit_registries_in_background(request_activity)
-        for line in sys.stdin:
+        while True:
+            try:
+                line = _read_request_line()
+            except ValueError as error:
+                _write_response(
+                    {
+                        "ok": False,
+                        "error": {
+                            "code": "E_LIMIT",
+                            "message": str(error),
+                        },
+                    }
+                )
+                continue
+            if line is None:
+                break
             request_activity.begin()
             try:
                 try:
-                    payload = json.loads(line)
-                except json.JSONDecodeError:
-                    _write_response(
-                        {
-                            "ok": False,
-                            "error": {
-                                "code": "E_INPUT",
-                                "message": "worker request must be JSON",
-                            },
-                        }
-                    )
+                    payload = _decode_request(line)
+                except ValueError as error:
+                    _write_response(_request_error("E_INPUT", str(error)))
                     continue
                 _write_response(_execute_payload(payload, execute_direct, CalculatorError))
             finally:
                 request_activity.end()
         return
 
-    payload = json.load(sys.stdin)
+    try:
+        line = _read_request_line()
+    except ValueError as error:
+        _write_response(_request_error("E_LIMIT", str(error)))
+        return
+    if line is None:
+        raise SystemExit("worker request is unavailable")
+    try:
+        payload = _decode_request(line)
+    except ValueError as error:
+        _write_response(_request_error("E_INPUT", str(error)))
+        return
     _write_response(_execute_payload(payload, execute_direct, CalculatorError))
     # This is a single-request isolation worker. Interpreter teardown is not
     # part of the mathematical operation and can take longer than a 100 ms

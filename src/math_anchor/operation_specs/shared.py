@@ -3,36 +3,38 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from ..dimension_expression import (
+from ..dimension_contract import (
     DIMENSION_EXPONENT_PATTERN,
     DIMENSION_SYMBOL_PATTERN,
     DIMENSION_VECTOR_NAME_PATTERN,
 )
 from ..errors import CalculatorError
+from ..lazy_handler import LazyOperationModule
 from ..models import OperationSpec
-from ..operations import (
-    algebra,
-    calculus,
-    combinatorics,
-    data,
-    dimension,
-    expression,
-    finance,
-    floating,
-    inference,
-    linear_algebra,
-    matrix,
-    measurement,
-    number_theory,
-    numerical,
-    optimization,
-    probability,
-    programmer,
-    quantity,
-    rounding,
-    units,
-    verification,
-)
+
+
+algebra = LazyOperationModule("algebra")
+calculus = LazyOperationModule("calculus")
+certificate = LazyOperationModule("certificate")
+combinatorics = LazyOperationModule("combinatorics")
+data = LazyOperationModule("data")
+dimension = LazyOperationModule("dimension")
+expression = LazyOperationModule("expression")
+finance = LazyOperationModule("finance")
+floating = LazyOperationModule("floating")
+inference = LazyOperationModule("inference")
+linear_algebra = LazyOperationModule("linear_algebra")
+matrix = LazyOperationModule("matrix")
+measurement = LazyOperationModule("measurement")
+number_theory = LazyOperationModule("number_theory")
+numerical = LazyOperationModule("numerical")
+optimization = LazyOperationModule("optimization")
+probability = LazyOperationModule("probability")
+programmer = LazyOperationModule("programmer")
+quantity = LazyOperationModule("quantity")
+rounding = LazyOperationModule("rounding")
+units = LazyOperationModule("units")
+verification = LazyOperationModule("verification")
 
 
 MAX_SEARCH_QUERY_LENGTH = 256

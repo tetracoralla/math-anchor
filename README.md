@@ -5,7 +5,7 @@ Math Anchor is one product with two quiet entry points:
 - a native macOS calculator for people, with familiar basic/scientific input, lightweight offline physical-unit conversion, ECB reference currency conversion with visible source and freshness, a read-only calculator display, optional exact-value copy, and local history;
 - a safe scientific runtime for Agents, with one-call execution for known operations through a Codex-host-safe `math.run` envelope and exact per-operation contracts available on demand.
 
-Both surfaces use the same Python calculation core. The Agent catalog currently provides 44 typed operations spanning exact and high-precision arithmetic, explicit decimal rounding and integer-division conventions, fixed-width machine arithmetic, programmer representations and bit operations, IEEE-754 inspection, symbolic and vector calculus, verification, numerical methods, exact eigenspaces and matrix decompositions, diagnostic numerical linear algebra, number theory, combinatorics, finance, probability and statistical inference, covariance-based measurement-uncertainty propagation, stable unit discovery and conversion, unit-bearing expressions, and symbolic dimensional analysis. The safe expression grammar includes registered Airy, Bessel, beta/gamma, error, Lambert W, polygamma, and zeta functions without admitting arbitrary code. The project reuses SymPy, NumPy, mpmath, and Pint for mathematics; its own work is the safe parser, capability catalog, structured result contract, isolation boundary, human app, and Agent-facing interface.
+Both surfaces use the same Python calculation core. The Agent catalog currently provides 45 typed operations spanning exact and high-precision arithmetic, explicit decimal rounding and integer-division conventions, fixed-width machine arithmetic, programmer representations and bit operations, IEEE-754 inspection, symbolic and vector calculus, verification and independently checkable polynomial-identity certificates, numerical methods, exact eigenspaces and matrix decompositions, diagnostic numerical linear algebra, number theory, combinatorics, finance, probability and statistical inference, covariance-based measurement-uncertainty propagation, stable unit discovery and conversion, unit-bearing expressions, and symbolic dimensional analysis. The safe expression grammar includes registered Airy, Bessel, beta/gamma, error, Lambert W, polygamma, and zeta functions without admitting arbitrary code. The project reuses SymPy, NumPy, mpmath, and Pint for mathematics; its own work is the safe parser, capability catalog, structured result contract, isolation boundary, human app, and Agent-facing interface.
 
 Currency conversion is an online, human-app feature calculated from the European Central Bank's daily euro reference rates. The interface shows the source, publication time, and current or expired state; cached rates remain explicitly marked when a refresh cannot complete. These rates are informational and are not transaction quotes. Currency conversion remains an app-internal request and does not add another public MCP tool or Agent operation.
 
@@ -42,6 +42,16 @@ Currency conversion is an online, human-app feature calculated from the European
   a provider circuit breaker, and stable retry guidance. Every always-listed
   input schema remains below the current Codex host's lossy-compaction boundary,
   and the complete four-tool listing remains below a 10,000-byte regression.
+- Every successful Agent result now carries a runtime-owned assurance level,
+  assurance contract version, claim scope, assumptions, selected operation
+  path and backend versions, and explicit certificate/kernel-check state.
+  `certificate.polynomial_identity` emits a bounded rational-polynomial
+  artifact that the separate standard-library checker can recompute without
+  SymPy. An optional pinned Lean bridge can then check a generated rational
+  theorem without entering the normal runtime or MCP surface.
+- The headless runtime now builds as a verified wheel and source archive, runs
+  in Linux CI on x86_64 and arm64, and has a digest-pinned, non-root OCI image
+  definition. These paths do not depend on the macOS application.
 
 ## What's new in 0.2
 
@@ -66,9 +76,9 @@ and claim boundaries.
 
 ## Requirements
 
-- macOS 14 or newer;
-- Xcode Command Line Tools with Swift 6;
-- Python 3.11 or newer.
+- Python 3.11 or newer for the headless runtime;
+- macOS 14 or newer plus Xcode Command Line Tools with Swift 6 for the native
+  app.
 
 The repository publishes source. Downloadable macOS applications are supported
 only when attached to a versioned GitHub Release with a matching source tag,
@@ -104,6 +114,30 @@ Symbolic dimensional analysis uses the same `run` entry point:
   '{"variables":{"rho":"kilogram / meter^3","v":"meter / second","L":"meter","mu":"pascal * second"}}'
 ```
 
+Generate and independently verify a bounded rational polynomial certificate:
+
+```bash
+.venv/bin/math-anchor run certificate.polynomial_identity \
+  '{"left":"(x+1)^2","right":"x^2+2*x+1","variables":["x"]}' \
+  > build/polynomial-certificate.json
+.venv/bin/math-anchor verify-certificate build/polynomial-certificate.json
+```
+
+The checker recomputes the statement and coefficients without importing SymPy
+or the certificate producer. A successful check establishes only the declared
+rational-polynomial identity classification; it is not a formal proof-kernel
+acceptance.
+
+For the optional, heavyweight Lean kernel lane:
+
+```bash
+./script/check_lean_bridge.sh
+```
+
+This records `kernel_checked` only after pinned Lean 4.33.1 accepts the
+generated theorem. See [docs/lean-bridge.md](docs/lean-bridge.md) for its exact
+scope and reusable CLI form.
+
 Start the MCP server with:
 
 ```bash
@@ -132,7 +166,7 @@ same four tools directly; they do not need a model turn per calculation. See
 [docs/agent-runtime.md](docs/agent-runtime.md) for admission, retries, load
 evidence, and direct-host usage.
 
-Math Anchor 0.4 supports this explicit structured route. Cold selection from a
+Math Anchor 0.5 supports this explicit structured route. Cold selection from a
 fresh natural-language Agent session is host/model-dependent integration
 behavior, not a guaranteed zero-configuration feature or a source-release
 condition.
@@ -152,6 +186,18 @@ Symbolic formula checks and dimension inference are documented in
 dimensional consistency only and never claim that a physical law is correct.
 
 `script/package_runtime.sh` builds the standalone mathematical runtime used by both the installed plugin and the macOS app bundle. The packaged app and plugin do not depend on this repository or its `.venv` after installation.
+
+For a headless-only verification and distributable Python artifacts:
+
+```bash
+./script/check_headless.sh
+.venv/bin/python script/build_python_dist.py build
+.venv/bin/python script/build_python_dist.py verify
+docker build --tag math-anchor-runtime .
+```
+
+The resulting wheel/source archive and OCI definition are release inputs. A
+GitHub tag is still required before they become published release assets.
 
 Generated runtimes are deliberately excluded from Git. Before installing the
 local Plugin, run `./script/bootstrap.sh`, `./script/package_runtime.sh`, and

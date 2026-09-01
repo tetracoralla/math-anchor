@@ -1,15 +1,15 @@
 from __future__ import annotations
 
 import signal
+import sys
 import time
 from contextlib import contextmanager
 from typing import Any, Iterator
 
-import mpmath
-
 from .catalog import OPERATIONS
 from .contracts import validate_operation_arguments, validate_result
 from .errors import CalculatorError
+from .research_contract import apply_research_contract
 
 # Mirrors sandbox.DEFAULT_TIMEOUT_MS (10_000 ms) so direct in-process callers
 # observe the same bound as the sandboxed worker pool. Kept as a literal here
@@ -31,7 +31,11 @@ _DEFAULT_MPMATH_PRECISION = 53
 
 
 def ensure_mpmath_default_precision() -> None:
-    if mpmath.mp.prec > _MPMATH_PRECISION_CEILING:
+    # Pure-Python integer/decimal operations should not import mpmath merely
+    # to reset state that they cannot have changed. Mathematical handlers that
+    # use mpmath import it before this cleanup path runs.
+    mpmath = sys.modules.get("mpmath")
+    if mpmath is not None and mpmath.mp.prec > _MPMATH_PRECISION_CEILING:
         mpmath.mp.prec = _DEFAULT_MPMATH_PRECISION
 
 
@@ -143,7 +147,7 @@ def execute_direct(
         timeout_seconds = timeout_ms / 1000
     with in_process_evaluation_timeout(timeout_seconds):
         try:
-            result = spec.handler(arguments)
+            result = apply_research_contract(spec, spec.handler(arguments))
             validate_result(result)
             return result
         except CalculatorError:

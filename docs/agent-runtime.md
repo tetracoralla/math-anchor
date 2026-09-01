@@ -7,7 +7,7 @@ operation and arguments. A high-frequency coding tool should start
 `math.batch` calls over that session. Starting the CLI once per calculation is
 correct but repeatedly pays process and import startup.
 
-The supported 0.4 boundary is explicit invocation. Cold natural-language
+The supported 0.5 boundary is explicit invocation. Cold natural-language
 selection by a fresh Agent remains useful integration research, but it depends
 on the host, model, installed catalogue, and context budget. It is not a
 release gate and must not be presented as guaranteed automatic adoption.
@@ -47,12 +47,25 @@ leases, leaving one lane for an interactive `math.run`. Active calls share a
 calls may wait. A request's `timeoutMs` remains cumulative across admission, worker
 startup, and execution.
 
+Before admission, one run is limited to an 8 MiB JSON transport graph,
+250,000 cumulative nodes, and depth 64; a batch is limited to 16 MiB and
+500,000 nodes. The MCP stdio carrier allows 17 MiB including JSON-RPC overhead,
+so the SDK never parses an unbounded line before those runtime limits apply.
+The app and child-worker JSON-lines carriers use the same bounded-read rule and
+recover alignment after rejecting an oversized line.
+
 Each lease owns one isolated persistent child. Serial use prewarms one child;
 observed parallel demand raises the retained warm target. Workers are replaced
 after a bounded request count, high resident-memory watermark, cancellation,
 timeout, memory breach, protocol failure, or crash. Internal telemetry records
 only aggregate counts and queue/startup/execution/total timings, never input
 expressions or result values.
+
+Operation handlers and heavy engines load on demand. A fresh pure-Python
+machine-integer or combinatorics worker therefore does not pay for SymPy,
+NumPy, Pint, or mpmath. Once a worker uses an engine it retains it for later
+calls until normal recycle; this keeps the common path small without creating
+a second cache or weakening isolation.
 
 ## Error policy
 
@@ -82,8 +95,9 @@ ordered/coalesced batches, mixed caller failures, cancellation, worker crash,
 recovery, and final child/thread/file-descriptor/RSS cleanup. An optional
 wall-clock soak records throughput, sampled p50/p95/p99, operation counts,
 queue/execution telemetry, and process-tree RSS trend. Timing samples use a
-bounded deterministic reservoir, so a long run does not accumulate unbounded
-measurement memory.
+bounded deterministic reservoir, and completed result payloads are discarded
+after verification, so a long run does not accumulate unbounded measurement
+memory.
 
 Receipts are written under `build/load-checks/`. `script/check_all.sh` runs the
 bounded 1,000-call form on every complete development verification. For a

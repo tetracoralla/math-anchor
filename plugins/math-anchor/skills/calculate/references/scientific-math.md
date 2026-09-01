@@ -16,9 +16,10 @@ below identify semantic boundaries that must survive presentation.
   `errorBoundCertified` is false it is not a rigorous enclosure. `status:
   uncertain` means only the local estimate was met. Supply breakpoints only
   when they cover material discontinuities or localized features.
-- `numeric.minimize` returns interval-arithmetic enclosures. Treat `uncertain`
-  as the best certified bound, not a finished answer, and avoid undefined
-  points in the bracket.
+- `numeric.minimize` returns internal mpmath interval enclosures over its
+  supported expression subset. Treat `uncertain` as the best reported bound,
+  not a finished answer, external certificate, or proof-kernel result, and
+  avoid undefined points in the bracket.
 - For exact matrix solving, rank, RREF, bases, eigenspaces, LU, and Cholesky,
   use integers or rational text. Do not turn approximate decimals into exact
   structural claims.
@@ -30,3 +31,7 @@ below identify semantic boundaries that must survive presentation.
   provably real vector algebra. Do not guess complex inner-product semantics.
 - `solution.verify` checks supplied candidates. Call them exhaustive only when
   `omissionRisk` is `none_proven`.
+- `certificate.polynomial_identity` is for bounded polynomials over rational
+  coefficients. Write exact fractions as integer division, preserve the
+  returned certificate, and do not describe `checkedBy: null` as formal proof
+  or completed independent verification.

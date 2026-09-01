@@ -8,4 +8,6 @@ __pycache__/
 *.egg-info/
 dist/
 plugins/math-anchor/runtime/
+integrations/lean/.lake/
+integrations/lean-reference/.lake/
 .DS_Store

@@ -15,7 +15,7 @@ from pathlib import Path
 import re
 import sys
 import tomllib
-from typing import Any, Iterable
+from typing import Any, Callable, Iterable
 
 from packaging.markers import Marker, default_environment
 from packaging.requirements import Requirement
@@ -176,20 +176,39 @@ def _marker_applies(marker: Marker | None, extras: Iterable[str]) -> bool:
     return False
 
 
-def validate_dependency_closure(
-    project_path: Path,
-    packages: list[tuple[str, str]],
-    *,
-    project_extras: Iterable[str] = (),
-) -> dict[str, str]:
-    project = tomllib.loads(project_path.read_text(encoding="utf-8"))
-    requirements = list(project["project"].get("dependencies", []))
-    optional = project["project"].get("optional-dependencies", {})
-    for extra in project_extras:
-        if extra not in optional:
-            raise SystemExit(f"unknown project extra: {extra}")
-        requirements.extend(optional[extra])
+def _marker_applies_supported(marker: Marker | None, extras: Iterable[str]) -> bool:
+    """Return whether a dependency applies to a supported macOS/Linux build."""
+    if marker is None:
+        return True
+    active_extras = {"", *(extra.lower() for extra in extras)}
+    base = default_environment()
+    platforms = (
+        ("darwin", "posix", "Darwin"),
+        ("linux", "posix", "Linux"),
+    )
+    machines = ("arm64", "aarch64", "x86_64")
+    for sys_platform, os_name, platform_system in platforms:
+        for platform_machine in machines:
+            for extra in active_extras:
+                environment = dict(base)
+                environment.update(
+                    {
+                        "sys_platform": sys_platform,
+                        "os_name": os_name,
+                        "platform_system": platform_system,
+                        "platform_machine": platform_machine,
+                        "extra": extra,
+                    }
+                )
+                if marker.evaluate(environment):
+                    return True
+    return False
 
+
+def _dependency_closure(
+    requirements: Iterable[str],
+    marker_applies: Callable[[Marker | None, Iterable[str]], bool],
+) -> dict[str, str]:
     closure: dict[str, str] = {}
     processed: set[tuple[str, tuple[str, ...]]] = set()
     pending = [Requirement(value) for value in requirements]
@@ -222,18 +241,37 @@ def validate_dependency_closure(
         closure[normalized] = installed.version
         for raw_requirement in installed.requires or []:
             requirement = Requirement(raw_requirement)
-            if _marker_applies(requirement.marker, active_extras):
+            if marker_applies(requirement.marker, active_extras):
                 pending.append(requirement)
+    return closure
+
+
+def validate_dependency_closure(
+    project_path: Path,
+    packages: list[tuple[str, str]],
+    *,
+    project_extras: Iterable[str] = (),
+) -> dict[str, str]:
+    project = tomllib.loads(project_path.read_text(encoding="utf-8"))
+    requirements = list(project["project"].get("dependencies", []))
+    optional = project["project"].get("optional-dependencies", {})
+    for extra in project_extras:
+        if extra not in optional:
+            raise SystemExit(f"unknown project extra: {extra}")
+        requirements.extend(optional[extra])
+
+    closure = _dependency_closure(requirements, _marker_applies)
+    supported_closure = _dependency_closure(requirements, _marker_applies_supported)
 
     locked = {canonicalize_name(name): version for name, version in packages}
-    if closure != locked:
-        missing = sorted(set(closure) - set(locked))
-        extra = sorted(set(locked) - set(closure))
-        drift = sorted(
-            name
-            for name in set(closure) & set(locked)
-            if closure[name] != locked[name]
-        )
+    missing = sorted(set(closure) - set(locked))
+    extra = sorted(set(locked) - set(supported_closure))
+    drift = sorted(
+        name
+        for name in set(supported_closure) & set(locked)
+        if supported_closure[name] != locked[name]
+    )
+    if missing or extra or drift:
         raise SystemExit(
             "dependency lock does not match the installed project dependency closure; "
             f"missing={missing}, extra={extra}, versionDrift={drift}"

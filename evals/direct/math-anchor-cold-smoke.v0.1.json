@@ -6,8 +6,8 @@
   "title": "Math Anchor structured direct-host cold smoke",
   "purpose": "development-smoke",
   "suiteRef": {"id": "math-anchor.direct-host.coding-agent-profile", "version": "0.1.0"},
-  "targetRef": {"id": "math-anchor", "version": "0.4.0"},
-  "providerRef": {"id": "math-anchor-local-runtime", "version": "0.4.0"},
+  "targetRef": {"id": "math-anchor", "version": "0.5.0"},
+  "providerRef": {"id": "math-anchor-local-runtime", "version": "0.5.0"},
   "repeats": 1,
   "budget": {
     "perCallTimeoutMs": 15000,

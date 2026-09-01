@@ -9,12 +9,26 @@ and Apple notarization record exist.
 
 ### Added
 
+- Added assurance contract version `1.0`, operation-path and selected-backend
+  provenance, plus an optional Lean 4.33.1/Mathlib 4.33.1 bridge that translates
+  a true rational-polynomial certificate into a generated theorem and records
+  `kernel_checked` only after Lean accepts the proof. The formal toolchain stays
+  outside the ordinary runtime and four-tool MCP surface.
+- Added one runtime-owned assurance envelope to every successful Agent result,
+  including claim scope, assumptions, runtime/backend versions, certificate
+  presence, and actual kernel-check identity. Added the bounded
+  `certificate.polynomial_identity` operation plus a separate standard-library
+  checker that recomputes its rational-polynomial statement and coefficients
+  without importing SymPy or the producing operation.
+- Added verified wheel and source-archive builds, x86_64 and arm64 Linux CI,
+  and a digest-pinned non-root OCI runtime definition. Versioned GitHub releases
+  now collect the headless Python artifacts beside the signed macOS assets.
 - Expanded the existing `calculus.multivariate` operation with exact
   unnormalized directional derivatives, divergence, three-dimensional curl,
   and the Laplacian. Expanded `matrix.reduce` with exact eigenspaces and
   diagonalizability plus row-pivoted LU and positive-definite Hermitian
   Cholesky decompositions, including explicit factor relations and negative
-  shape/domain regressions. The registry remains at 44 operations and the MCP
+  shape/domain regressions. The registry now contains 45 operations and the MCP
   boundary remains four tools.
 - Added safe-expression registrations for Airy Ai/Bi, Bessel Y, beta, and
   polygamma alongside the existing Bessel J, gamma, error, Lambert W, and zeta
@@ -31,6 +45,10 @@ and Apple notarization record exist.
   provider from Controller oracles, grades typed Math Anchor results, preserves
   unknown cost, and stays structurally separate from Agent routing and utility
   claims.
+- Added independently graded public-mathematics Agent suites for specialized
+  Putnam 2023 B1/B6 tasks, NIST Hilbert-matrix diagnostics, and Buckingham-Pi
+  nullity. Terra/Luna smoke and a bounded repeated Luna lane keep incomplete or
+  over-budget runs from being promoted into adoption or utility claims.
 
 - Expanded the typed Agent registry from 34 to 44 operations without adding a
   fifth MCP tool: programmer integer/bitwise semantics, decimal quantization,
@@ -57,12 +75,37 @@ and Apple notarization record exist.
 
 ### Fixed
 
+- Corrected interval optimization for ordinary SymPy function nodes,
+  non-monotone `cosh`, inverse-trigonometric endpoints, and directed interval
+  rounding. Its contract now distinguishes an internal mpmath interval bound
+  from an external certificate or proof-kernel result.
+- Bound production and reference Lean subprocess output while draining both
+  pipes, terminate timed-out process groups, require one complete axiom
+  readback with no `sorryAx`, and bind checks to exact transitive Mathlib
+  revisions and executable/manifest digests.
+- Bound Agent-evaluation reports to the repository build directory, stage the
+  packaged runtime outside denied source roots, and reject evaluator, task,
+  run-membership, isolation, or target-server identity drift before a report
+  can be treated as comparison-valid.
+- Canonicalized macOS and Linux host/binary architecture aliases in runtime
+  manifests and Swift setup, validated shared dependency locks against
+  supported platform markers, used the repository's exact lowercase Swift
+  test path, and restored idle worker unit-registry warming after
+  bounded-ingress refactoring. Cross-host cancellation, warmup, and app-timeout
+  checks now observe the intended lifecycle instead of assuming one fixed
+  machine-speed interval.
+- Made local Plugin installation consume Codex's authoritative
+  `installedPath`, compare the installed bytes before execution, and reject an
+  MCP route that does not resolve to that exact installed artifact.
+- Gave the assurance/Lean milestone the distinct `0.5.0` package identity so a
+  verified Plugin installation cannot retain older bytes behind version
+  `0.4.0`.
 - Returned scalar derivative contracts for directional derivative, divergence,
   and the Laplacian while retaining matrix contracts and shapes for gradient,
   Jacobian, Hessian, and curl. This keeps mathematical rank aligned across the
   registry, runtime, and MCP result schema.
 - Kept the installed Codex `math.run` declaration typed by replacing the
-  oversized always-listed 44-branch union with a 1.8 KB host-safe envelope
+  oversized always-listed 45-branch union with a compact host-safe envelope
   carrying every stable operation id and execution limit. Exact closed
   argument schemas remain registry-owned, are returned by `math.describe`, and
   are still enforced before execution; current Codex no longer compacts the

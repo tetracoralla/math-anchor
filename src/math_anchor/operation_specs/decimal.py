@@ -63,6 +63,7 @@ SPECS = (
             {"action": "increment", "value": "1.23", "increment": "0.05", "roundingMode": "half_up"},
         ),
         handler=rounding.quantize,
+        backends=("python",),
         keywords=("round", "decimal places", "significant digits", "cash rounding", "quantize", "舍入", "四舍五入", "有效数字", "小数位", "定点数"),
     ),
 )

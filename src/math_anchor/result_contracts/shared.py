@@ -13,6 +13,7 @@ from ..output_policy import (
     MAX_OUTPUT_BYTES,
     MIN_OUTPUT_BYTES,
 )
+from .assurance import BASE_ASSURANCE_PROPERTIES
 
 
 _LIMIT_VALIDATORS = {
@@ -244,6 +245,7 @@ _BASE_OK_PROPERTIES = {
     "operation": {"type": "string"},
     "kind": {"type": "string"},
     "warnings": {"type": "array", "items": {"type": "string"}},
+    **BASE_ASSURANCE_PROPERTIES,
 }
 
 
@@ -266,7 +268,21 @@ def _ok_schema(
             "kind": {"const": kind},
             **properties,
         },
-        "required": ["status", "operation", "kind", "warnings", *required],
+        "required": [
+            "status",
+            "operation",
+            "kind",
+            "warnings",
+            "assuranceContractVersion",
+            "assurance",
+            "claim",
+            "scope",
+            "assumptions",
+            "provenance",
+            "certificate",
+            "checkedBy",
+            *required,
+        ],
     }
 
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from decimal import Decimal, ROUND_HALF_EVEN
+from fractions import Fraction
 import importlib.util
 import json
 import math
@@ -59,6 +60,31 @@ def _determinant_bareiss(matrix: list[list[int]]) -> int:
     return sign * values[-1][-1]
 
 
+def _fraction_rank(matrix: list[list[Fraction]]) -> int:
+    values = [row[:] for row in matrix]
+    rank = 0
+    for column in range(len(values[0])):
+        pivot = next(
+            (row for row in range(rank, len(values)) if values[row][column] != 0),
+            None,
+        )
+        if pivot is None:
+            continue
+        values[rank], values[pivot] = values[pivot], values[rank]
+        divisor = values[rank][column]
+        values[rank] = [value / divisor for value in values[rank]]
+        for row in range(len(values)):
+            if row == rank or values[row][column] == 0:
+                continue
+            factor = values[row][column]
+            values[row] = [
+                value - factor * pivot_value
+                for value, pivot_value in zip(values[row], values[rank], strict=True)
+            ]
+        rank += 1
+    return rank
+
+
 def _cubic_root() -> float:
     value = 1.5
     for _ in range(20):
@@ -113,7 +139,7 @@ def test_coding_agent_suite_has_independent_oracles_and_balanced_opportunities()
     by_id = {task["id"]: task for task in tasks}
     assert len(tasks) == 30
     assert len(by_id) == 30
-    assert suite["targetRef"] == {"id": "math-anchor", "version": "0.4.0"}
+    assert suite["targetRef"] == {"id": "math-anchor", "version": "0.5.0"}
     assert {opportunity: sum(task["opportunity"] == opportunity for task in tasks) for opportunity in ("required", "optional", "irrelevant")} == {
         "required": 24,
         "optional": 3,
@@ -167,13 +193,13 @@ def test_experiments_fix_one_agent_harness_driver_and_target() -> None:
         )
         task_count = len(_load(suite_name)["tasks"])
         assert experiment["suiteRef"] == {"id": suite_id, "version": "0.1.0"}
-        assert experiment["targetRef"] == {"id": "math-anchor", "version": "0.4.0"}
+        assert experiment["targetRef"] == {"id": "math-anchor", "version": "0.5.0"}
         assert experiment["purpose"] == purpose
         assert experiment["repeats"] == repeats
         assert experiment["agent"] == {"provider": "openai", "model": "gpt-5.6-luna"}
-        assert experiment["harness"] == {"id": "codex-cli", "version": "0.150.0-alpha.8"}
+        assert experiment["harness"] == {"id": "codex-cli", "version": "0.152.0"}
         assert experiment["driver"]["id"] == "codex-cli-driver"
-        assert experiment["driver"]["version"] == "0.4.1"
+        assert experiment["driver"]["version"] == "0.5.0"
         arguments = experiment["driver"]["args"]
         reasoning_index = arguments.index("--config") + 1
         assert arguments[reasoning_index] == 'model_reasoning_effort="low"'
@@ -196,6 +222,102 @@ def test_policy_assisted_experiments_use_one_provider_neutral_policy_in_both_con
     assert "math anchor" not in policy
     assert "math.run" not in policy
     assert "trivial low-risk arithmetic" in policy
+
+
+def test_research_smoke_pairs_terra_and_luna_with_the_same_direct_mcp_task() -> None:
+    suite = _load("research-putnam-1976-a2.v0.1.json")
+    assert suite["targetRef"] == {"id": "math-anchor", "version": "0.5.0"}
+    assert len(suite["tasks"]) == 1
+    assert suite["tasks"][0]["evaluator"]["expected"] == "2,63,90,3"
+    assert suite["tasks"][0]["opportunity"] == "required"
+
+    for model in ("terra", "luna"):
+        experiment = _load(f"codex-{model}-research-putnam-1976-a2.v0.1.json")
+        assert experiment["suiteRef"] == {
+            "id": "math-anchor.research-putnam-1976-a2",
+            "version": "0.1.0",
+        }
+        assert experiment["agent"] == {
+            "provider": "openai",
+            "model": f"gpt-5.6-{model}",
+        }
+        assert experiment["targetRef"] == {"id": "math-anchor", "version": "0.5.0"}
+        assert experiment["harness"] == {"id": "codex-cli", "version": "0.152.0"}
+        assert experiment["driver"]["version"] == "0.5.0"
+        arguments = experiment["driver"]["args"]
+        assert "--target-plugin-id" not in arguments
+        assert "${MATH_ANCHOR_MCP_COMMAND}" in arguments
+        assert "${MATH_ANCHOR_MCP_CWD}" in arguments
+        assert "${MATH_ANCHOR_CODING_AGENT_POLICY}" in arguments
+        assert len(experiment["conditions"]) * experiment["repeats"] == 2
+
+
+def test_public_math_smoke_uses_independent_oracles_and_two_named_agents() -> None:
+    suite = _load("research-public-math-smoke.v0.1.json")
+    by_id = {task["id"]: task for task in suite["tasks"]}
+    assert suite["targetRef"] == {"id": "math-anchor", "version": "0.5.0"}
+    assert len(by_id) == 4
+
+    assert by_id["putnam-2023-b1.m37-n64"]["evaluator"]["expected"] == str(
+        math.comb(99, 36)
+    )
+
+    matrix = [
+        [
+            sum(
+                1
+                for a in range(12 // row + 1)
+                for b in range(12 // column + 1)
+                if a * row + b * column == 12
+            )
+            for column in range(1, 13)
+        ]
+        for row in range(1, 13)
+    ]
+    determinant = _determinant_bareiss(matrix)
+    b6 = by_id["putnam-2023-b6.n12"]
+    assert b6["evaluator"]["expected"] == determinant == -12
+    assert f"S={json.dumps(matrix, separators=(',', ':'))}" in b6["prompt"]
+
+    hilbert = [
+        [Fraction(1, row + column + 1) for column in range(12)]
+        for row in range(12)
+    ]
+    assert _fraction_rank(hilbert) == 12
+    assert by_id["nist-hilbert-12.stability"]["evaluator"]["expected"] == (
+        "ill_conditioned,12,null"
+    )
+
+    dimensions = [
+        [1, -3, 1, 1, -1],
+        [1, 1, -1, 0, -1],
+        [-2, 0, 0, -1, -1],
+    ]
+    dimension_rank = _fraction_rank(
+        [[Fraction(value) for value in row] for row in dimensions]
+    )
+    assert by_id["buckingham-pi.drag-nullity"]["evaluator"]["expected"] == (
+        5 - dimension_rank
+    ) == 2
+
+    for task in suite["tasks"]:
+        prompt = task["prompt"].lower()
+        assert "math anchor" not in prompt
+        assert "math.run" not in prompt
+        assert "certificate.polynomial_identity" not in prompt
+
+    for model in ("terra", "luna"):
+        experiment = _load(f"codex-{model}-research-public-math-smoke.v0.1.json")
+        assert experiment["suiteRef"] == {
+            "id": suite["id"],
+            "version": suite["version"],
+        }
+        assert experiment["agent"] == {
+            "provider": "openai",
+            "model": f"gpt-5.6-{model}",
+        }
+        assert experiment["harness"] == {"id": "codex-cli", "version": "0.152.0"}
+        assert len(suite["tasks"]) * len(experiment["conditions"]) == 8
 
 
 def test_installed_plugin_smoke_uses_one_isolated_target_plugin_without_policy_injection() -> None:
@@ -234,6 +356,109 @@ def test_isolated_agent_environment_restores_home(monkeypatch) -> None:
         assert agent_eval.os.environ["HOME"] == "/tmp/math-anchor-isolated-home"
 
     assert agent_eval.os.environ["HOME"] == "/tmp/math-anchor-original-home"
+
+
+def test_direct_mcp_pair_uses_one_temporary_empty_codex_home(
+    monkeypatch, tmp_path: Path
+) -> None:
+    source_home = tmp_path / "source-codex"
+    source_home.mkdir()
+    auth = source_home / "auth.json"
+    auth.write_text('{"token":"fixture"}', encoding="utf-8")
+    monkeypatch.setenv("CODEX_HOME", str(source_home))
+    monkeypatch.setenv("HOME", str(tmp_path / "original-home"))
+
+    with agent_eval._isolated_direct_codex_home(True):
+        isolated = Path(agent_eval.os.environ["CODEX_HOME"])
+        assert agent_eval.os.environ["HOME"] == str(isolated)
+        assert isolated != source_home
+        assert (isolated / "auth.json").resolve() == auth.resolve()
+        assert (isolated / "config.toml").read_text(encoding="utf-8") == ""
+
+    assert agent_eval.os.environ["CODEX_HOME"] == str(source_home)
+    assert agent_eval.os.environ["HOME"] == str(tmp_path / "original-home")
+
+
+def test_static_research_validation_does_not_require_a_packaged_runtime(
+    tmp_path: Path,
+) -> None:
+    experiment_path = EVAL_DIR / "codex-terra-research-putnam-1976-a2.v0.1.json"
+    experiment = _load(experiment_path.name)
+
+    with agent_eval._prepared_experiment(
+        experiment_path,
+        experiment,
+        prepare_installed_plugin=False,
+        prepare_direct_runtime=False,
+    ) as prepared:
+        prepared_experiment = json.loads(prepared.read_text(encoding="utf-8"))
+
+    arguments = prepared_experiment["driver"]["args"]
+    assert "${MATH_ANCHOR_MCP_COMMAND}" in arguments
+    assert "${MATH_ANCHOR_MCP_CWD}" in arguments
+
+
+def test_model_run_preparation_requires_the_packaged_direct_runtime(
+    monkeypatch,
+) -> None:
+    experiment_path = EVAL_DIR / "codex-terra-research-putnam-1976-a2.v0.1.json"
+    experiment = _load(experiment_path.name)
+    monkeypatch.setattr(
+        agent_eval,
+        "PACKAGED_MCP_COMMAND",
+        ROOT / "build" / "missing-math-anchor-runtime",
+    )
+
+    with pytest.raises(SystemExit, match="packaged Math Anchor MCP runtime is unavailable"):
+        with agent_eval._prepared_experiment(
+            experiment_path,
+            experiment,
+            prepare_installed_plugin=False,
+            prepare_direct_runtime=True,
+        ):
+            pass
+
+
+def test_direct_runtime_is_staged_outside_denied_source_root(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    bundle = tmp_path / "source-runtime"
+    bundle.mkdir()
+    executable = bundle / "math-anchor-runtime"
+    executable.write_text("fixture", encoding="utf-8")
+    executable.chmod(0o755)
+    (bundle / ".math-anchor-build-manifest.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(agent_eval, "PACKAGED_MCP_COMMAND", executable)
+    monkeypatch.setattr(agent_eval, "verify_manifest", lambda *_args: None)
+    experiment_path = EVAL_DIR / "codex-terra-research-putnam-1976-a2.v0.1.json"
+    experiment = _load(experiment_path.name)
+
+    with agent_eval._prepared_experiment(
+        experiment_path,
+        experiment,
+        prepare_installed_plugin=False,
+        prepare_direct_runtime=True,
+    ) as prepared:
+        prepared_experiment = json.loads(prepared.read_text(encoding="utf-8"))
+        arguments = prepared_experiment["driver"]["args"]
+        command = Path(arguments[arguments.index("--target-server-command") + 1])
+        cwd = Path(arguments[arguments.index("--target-server-cwd") + 1])
+        assert command.is_file()
+        assert cwd.is_dir()
+        assert not command.is_relative_to(ROOT)
+        assert not cwd.is_relative_to(ROOT)
+
+    assert not command.exists()
+    assert not cwd.exists()
+
+
+def test_report_output_cannot_escape_the_gitignored_eval_directory(tmp_path: Path) -> None:
+    inside = agent_eval.DEFAULT_OUTPUT_DIR / "nested" / "report.json"
+    assert agent_eval._report_output(str(inside), "experiment") == inside.resolve()
+
+    with pytest.raises(SystemExit, match="must stay under"):
+        agent_eval._report_output(str(tmp_path / "outside.json"), "experiment")
 
 
 def test_installed_skill_routes_machine_semantics_to_one_nested_run_call() -> None:

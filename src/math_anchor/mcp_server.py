@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+import sys
 import threading
 from typing import Annotated, Any
 
+import anyio
 from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp import server as fastmcp_server
+from mcp.server.stdio import stdio_server
 from mcp.types import CallToolResult, TextContent, ToolAnnotations
 from pydantic import Field, WithJsonSchema
 
@@ -31,6 +34,7 @@ from .output_policy import DEFAULT_BATCH_MAX_OUTPUT_BYTES, DEFAULT_MAX_OUTPUT_BY
 from .runtime_control import MAX_ACTIVE_REQUESTS, MAX_QUEUED_REQUESTS
 from .runtime_telemetry import RUNTIME_TELEMETRY
 from .sandbox import run_batch, run_operation, warm_worker_pool
+from .transport_budget import MAX_BATCH_REQUEST_BYTES
 
 
 _READ_ONLY = ToolAnnotations(
@@ -41,6 +45,36 @@ _READ_ONLY = ToolAnnotations(
 )
 _MCP_INGRESS_LIMIT = MAX_ACTIVE_REQUESTS + MAX_QUEUED_REQUESTS
 _MCP_INGRESS = threading.BoundedSemaphore(_MCP_INGRESS_LIMIT)
+MAX_MCP_MESSAGE_BYTES = MAX_BATCH_REQUEST_BYTES + 1024 * 1024
+_OVERSIZED_MCP_SENTINEL = "<math-anchor-mcp-message-limit>\n"
+
+
+class _BoundedMCPInput:
+    def __init__(self, binary_stream: Any, max_bytes: int = MAX_MCP_MESSAGE_BYTES) -> None:
+        self.stream = binary_stream
+        self.max_bytes = max_bytes
+
+    def __aiter__(self) -> "_BoundedMCPInput":
+        return self
+
+    async def __anext__(self) -> str:
+        line = await self._readline()
+        if not line:
+            raise StopAsyncIteration
+        if len(line) > self.max_bytes:
+            while line and not line.endswith(b"\n"):
+                line = await self._readline()
+            # The SDK turns this bounded invalid line into its normal JSON-RPC
+            # parse error. The original oversized body never reaches its JSON
+            # parser, and draining it keeps the next message aligned.
+            return _OVERSIZED_MCP_SENTINEL
+        return line.decode("utf-8", "replace")
+
+    async def _readline(self) -> bytes:
+        return await anyio.to_thread.run_sync(
+            self.stream.readline,
+            self.max_bytes + 1,
+        )
 
 # PyInstaller freezes the postponed annotations used by FastMCP's Settings
 # model before pydantic-settings can always resolve them itself. Rebuild with
@@ -81,7 +115,8 @@ def _caught(callable_: Any, *arguments: Any) -> dict[str, Any]:
         "uncertainty, probability, numerical methods, or finance. Do not use for trivial low-risk arithmetic. "
         "Always pass operation-specific fields inside the arguments object: {operation, arguments}; never flatten them. "
         "Known direct shapes need no describe call: integer.machine_arithmetic arguments include action, left, right, "
-        "bitWidth, signedness, inputMode, and overflowBehavior; combinatorics.count arguments use action, n, and k. "
+        "bitWidth, signedness, inputMode, and overflowBehavior; combinatorics.count arguments use action, n, and k; "
+        "certificate.polynomial_identity arguments use left, right, and variables. "
         "The typed operation keeps exact and approximate results separate; one successful ordinary call is sufficient."
     ),
     annotations=_READ_ONLY,
@@ -275,7 +310,17 @@ def main() -> None:
     # Overlap one worker's startup with client initialization so the first
     # calculation does not pay it once the session is already interactive.
     warm_worker_pool()
-    mcp.run(transport="stdio")
+    anyio.run(_run_bounded_stdio)
+
+
+async def _run_bounded_stdio() -> None:
+    bounded_stdin = _BoundedMCPInput(sys.stdin.buffer)
+    async with stdio_server(stdin=bounded_stdin) as (read_stream, write_stream):
+        await mcp._mcp_server.run(
+            read_stream,
+            write_stream,
+            mcp._mcp_server.create_initialization_options(),
+        )
 
 
 if __name__ == "__main__":

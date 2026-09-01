@@ -37,6 +37,9 @@ additional curated physical categories listed below.
 12. fixed-width checked/wrapping/saturating machine arithmetic, width-bound
     bit-field and alignment operations, and IEEE-754 binary32/binary64
     inspection and comparison.
+13. bounded rational polynomial-identity certificates with a separately
+    implemented standard-library checker that recomputes the statement and
+    coefficients without trusting the producer.
 
 ## Shared model
 
@@ -56,7 +59,10 @@ additional curated physical categories listed below.
   in the latter. Model-generated Python is never executed.
 - Exact values, decimal/binary approximations, error bounds, residuals, and
   method-dependent conclusions remain distinct fields.
-- The current catalog contains 44 operations, but the public surface remains
+- Every success carries a runtime-owned assurance level, claim scope,
+  assumptions, runtime/backend version provenance, and explicit certificate
+  and kernel-check state. A handler cannot promote its own assurance metadata.
+- The current catalog contains 45 operations, but the public surface remains
   four tools. Every listed input stays below the current Codex 4,800-byte
   compatibility regression; registry validation remains complete and closed.
 

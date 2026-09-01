@@ -53,8 +53,8 @@ def _timed_calls(
     count: int,
     concurrency: int,
     profile: str,
-) -> tuple[list[float], list[dict[str, Any]], Counter[str]]:
-    def one(index: int) -> tuple[float, dict[str, Any], str]:
+) -> tuple[list[float], Counter[str]]:
+    def one(index: int) -> tuple[float, str]:
         started = time.perf_counter()
         if profile == "coding-agent":
             case = case_for_index(index)
@@ -67,7 +67,7 @@ def _timed_calls(
             if result.get("exact") != str(expected):
                 raise AssertionError(f"expression-{index} expected {expected}, got {result}")
             label = "expression.evaluate"
-        return (time.perf_counter() - started) * 1000, result, label
+        return (time.perf_counter() - started) * 1000, label
 
     if concurrency == 1:
         completed = [one(index) for index in range(count)]
@@ -76,15 +76,8 @@ def _timed_calls(
             completed = list(executor.map(one, range(count)))
     return (
         [item[0] for item in completed],
-        [item[1] for item in completed],
-        Counter(item[2] for item in completed),
+        Counter(item[1] for item in completed),
     )
-
-
-def _require_success(results: list[dict[str, Any]], label: str) -> None:
-    failures = [result for result in results if result.get("status") != "ok"]
-    if failures:
-        raise AssertionError(f"{label}: {len(failures)} calls failed; first={failures[0]}")
 
 
 def _cancellation_storm(count: int) -> dict[str, Any]:
@@ -197,19 +190,16 @@ def main() -> int:
     sandbox._WORKER_POOL.shutdown()
     before = resources()
 
-    serial_timings, serial_results, serial_operations = _timed_calls(
+    serial_timings, serial_operations = _timed_calls(
         arguments.calls, 1, arguments.profile
     )
-    _require_success(serial_results, "serial soak")
     burst_count = max(100, arguments.calls // 10)
-    cold_burst_timings, cold_burst_results, cold_burst_operations = _timed_calls(
+    cold_burst_timings, cold_burst_operations = _timed_calls(
         burst_count, arguments.concurrency, arguments.profile
     )
-    _require_success(cold_burst_results, "concurrent scale-up burst")
-    warm_burst_timings, warm_burst_results, warm_burst_operations = _timed_calls(
+    warm_burst_timings, warm_burst_operations = _timed_calls(
         burst_count, arguments.concurrency, arguments.profile
     )
-    _require_success(warm_burst_results, "concurrent warm burst")
     sustained = sustained_profile(
         arguments.sustained_seconds, arguments.concurrency, arguments.profile
     )
@@ -239,8 +229,8 @@ def main() -> int:
         raise AssertionError(f"threads leaked: delta={delta['threads']}")
     if delta["fileDescriptors"] > 0:
         raise AssertionError(f"file descriptors leaked: delta={delta['fileDescriptors']}")
-    if delta["rssBytes"] > 256 * 1024 * 1024:
-        raise AssertionError(f"parent RSS grew by more than 256 MiB: {delta['rssBytes']}")
+    if delta["rssBytes"] > 64 * 1024 * 1024:
+        raise AssertionError(f"parent RSS grew by more than 64 MiB: {delta['rssBytes']}")
 
     report = {
         "status": "PASS",

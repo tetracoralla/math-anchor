@@ -1,0 +1,61 @@
+{
+  "schemaVersion": "openadam.agent-tool-eval.task-suite.v0.1",
+  "id": "math-anchor.research-public-math-smoke",
+  "version": "0.1.0",
+  "title": "Public mathematics calculation and diagnostic smoke",
+  "targetRef": {"id": "math-anchor", "version": "0.5.0"},
+  "tasks": [
+    {
+      "id": "putnam-2023-b1.m37-n64",
+      "prompt": "In the 2023 Putnam B1 coin-sliding problem, the number of reachable configurations on an m-by-n board is binomial(m+n-2, m-1). For m=37 and n=64, compute the exact integer. This is a reliability-sensitive large exact count; use an available deterministic calculation tool if one is present. Return only the full base-10 integer, with no commas.",
+      "opportunity": "required",
+      "tags": ["public", "putnam", "combinatorics", "exact"],
+      "evaluator": {
+        "kind": "string-equality",
+        "actualPointer": "",
+        "expected": "1265410932572757113244012912",
+        "trim": true,
+        "caseSensitive": true
+      }
+    },
+    {
+      "id": "putnam-2023-b6.n12",
+      "prompt": "For the n=12 instance of Putnam 2023 B6, compute the exact determinant of the following integer matrix S. This is a reliability-sensitive 12-by-12 determinant; use an available deterministic calculation tool if one is present. Return only the determinant. S=[[13,7,5,4,3,3,2,2,2,2,2,2],[7,7,3,4,2,3,1,2,1,2,1,2],[5,3,5,2,1,3,1,1,2,1,1,2],[4,4,2,4,1,2,1,2,1,1,1,2],[3,2,1,1,0,1,1,0,0,0,0,1],[3,3,3,2,1,3,1,1,1,1,1,2],[2,1,1,1,1,1,0,0,0,0,0,1],[2,2,1,2,0,1,0,0,0,0,0,1],[2,1,2,1,0,1,0,0,0,0,0,1],[2,2,1,1,0,1,0,0,0,0,0,1],[2,1,1,1,0,1,0,0,0,0,0,1],[2,2,2,2,1,2,1,1,1,1,1,2]].",
+      "opportunity": "required",
+      "tags": ["public", "putnam", "matrix", "exact"],
+      "evaluator": {
+        "kind": "numeric-tolerance",
+        "actualPointer": "",
+        "expected": -12,
+        "absoluteTolerance": 0,
+        "relativeTolerance": 0
+      }
+    },
+    {
+      "id": "nist-hilbert-12.stability",
+      "prompt": "Solve the binary64 system Hx=b where H is the 12-by-12 Hilbert matrix below and b is the supplied decimal vector. Use tolerance 1e-18 and 15 significant digits. This is a numerical-stability diagnostic; use an available deterministic calculation tool if one is present. Return exactly three comma-separated fields: the stability classification, numeric rank, and relative forward error bound (write null when no finite bound is available). H=[[\"1\",\"0.5\",\"0.33333333333333331\",\"0.25\",\"0.20000000000000001\",\"0.16666666666666666\",\"0.14285714285714285\",\"0.125\",\"0.1111111111111111\",\"0.10000000000000001\",\"0.090909090909090912\",\"0.083333333333333329\"],[\"0.5\",\"0.33333333333333331\",\"0.25\",\"0.20000000000000001\",\"0.16666666666666666\",\"0.14285714285714285\",\"0.125\",\"0.1111111111111111\",\"0.10000000000000001\",\"0.090909090909090912\",\"0.083333333333333329\",\"0.076923076923076927\"],[\"0.33333333333333331\",\"0.25\",\"0.20000000000000001\",\"0.16666666666666666\",\"0.14285714285714285\",\"0.125\",\"0.1111111111111111\",\"0.10000000000000001\",\"0.090909090909090912\",\"0.083333333333333329\",\"0.076923076923076927\",\"0.071428571428571425\"],[\"0.25\",\"0.20000000000000001\",\"0.16666666666666666\",\"0.14285714285714285\",\"0.125\",\"0.1111111111111111\",\"0.10000000000000001\",\"0.090909090909090912\",\"0.083333333333333329\",\"0.076923076923076927\",\"0.071428571428571425\",\"0.066666666666666666\"],[\"0.20000000000000001\",\"0.16666666666666666\",\"0.14285714285714285\",\"0.125\",\"0.1111111111111111\",\"0.10000000000000001\",\"0.090909090909090912\",\"0.083333333333333329\",\"0.076923076923076927\",\"0.071428571428571425\",\"0.066666666666666666\",\"0.0625\"],[\"0.16666666666666666\",\"0.14285714285714285\",\"0.125\",\"0.1111111111111111\",\"0.10000000000000001\",\"0.090909090909090912\",\"0.083333333333333329\",\"0.076923076923076927\",\"0.071428571428571425\",\"0.066666666666666666\",\"0.0625\",\"0.058823529411764705\"],[\"0.14285714285714285\",\"0.125\",\"0.1111111111111111\",\"0.10000000000000001\",\"0.090909090909090912\",\"0.083333333333333329\",\"0.076923076923076927\",\"0.071428571428571425\",\"0.066666666666666666\",\"0.0625\",\"0.058823529411764705\",\"0.055555555555555552\"],[\"0.125\",\"0.1111111111111111\",\"0.10000000000000001\",\"0.090909090909090912\",\"0.083333333333333329\",\"0.076923076923076927\",\"0.071428571428571425\",\"0.066666666666666666\",\"0.0625\",\"0.058823529411764705\",\"0.055555555555555552\",\"0.052631578947368418\"],[\"0.1111111111111111\",\"0.10000000000000001\",\"0.090909090909090912\",\"0.083333333333333329\",\"0.076923076923076927\",\"0.071428571428571425\",\"0.066666666666666666\",\"0.0625\",\"0.058823529411764705\",\"0.055555555555555552\",\"0.052631578947368418\",\"0.050000000000000003\"],[\"0.10000000000000001\",\"0.090909090909090912\",\"0.083333333333333329\",\"0.076923076923076927\",\"0.071428571428571425\",\"0.066666666666666666\",\"0.0625\",\"0.058823529411764705\",\"0.055555555555555552\",\"0.052631578947368418\",\"0.050000000000000003\",\"0.047619047619047616\"],[\"0.090909090909090912\",\"0.083333333333333329\",\"0.076923076923076927\",\"0.071428571428571425\",\"0.066666666666666666\",\"0.0625\",\"0.058823529411764705\",\"0.055555555555555552\",\"0.052631578947368418\",\"0.050000000000000003\",\"0.047619047619047616\",\"0.045454545454545456\"],[\"0.083333333333333329\",\"0.076923076923076927\",\"0.071428571428571425\",\"0.066666666666666666\",\"0.0625\",\"0.058823529411764705\",\"0.055555555555555552\",\"0.052631578947368418\",\"0.050000000000000003\",\"0.047619047619047616\",\"0.045454545454545456\",\"0.043478260869565216\"]]. b=[\"3.1032106782106781\",\"2.1801337551337552\",\"1.7515623265623266\",\"1.48489565989566\",\"1.29739565989566\",\"1.1562191893074245\",\"1.0451080781963136\",\"0.95488251428653903\",\"0.87988251428653907\",\"0.81639045079447559\",\"0.76184499624902102\",\"0.71441416620949527\"].",
+      "opportunity": "required",
+      "tags": ["public", "nist", "matrix", "numerical-stability"],
+      "evaluator": {
+        "kind": "string-equality",
+        "actualPointer": "",
+        "expected": "ill_conditioned,12,null",
+        "trim": true,
+        "caseSensitive": true
+      }
+    },
+    {
+      "id": "buckingham-pi.drag-nullity",
+      "prompt": "A drag model uses five quantities: force FD in newtons, density rho in kilograms per cubic meter, speed V in meters per second, length L in meters, and dynamic viscosity mu in pascal-seconds. Under the Buckingham Pi theorem, compute the exact nullity of the dimensional-exponent matrix. Use an available deterministic dimensional-analysis tool if one is present. Return only the integer nullity.",
+      "opportunity": "optional",
+      "tags": ["public", "physics", "dimension", "buckingham-pi"],
+      "evaluator": {
+        "kind": "numeric-tolerance",
+        "actualPointer": "",
+        "expected": 2,
+        "absoluteTolerance": 0,
+        "relativeTolerance": 0
+      }
+    }
+  ]
+}

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "math-anchor"
-version = "0.4.0"
+version = "0.5.0"
 description = "A safe scientific calculation runtime for humans and Agents"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -49,3 +49,4 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests/python"]
 addopts = "-q"
+pythonpath = ["src"]

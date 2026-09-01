@@ -3,12 +3,14 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
+import sys
 import tempfile
 import time
 from pathlib import Path
 
 import psutil
-from mcp import ClientSession
+from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from mcp.shared.exceptions import McpError
 from mcp.types import (
@@ -18,6 +20,7 @@ from mcp.types import (
 )
 
 from math_anchor.catalog import OPERATIONS
+from math_anchor.certificate_checker import verify_polynomial_identity_certificate
 from plugin_server import plugin_server_parameters, tools_listing_bytes
 
 
@@ -32,13 +35,54 @@ def persistent_worker_cpu_seconds() -> dict[int, float]:
     return snapshot
 
 
-async def main(plugin_root: Path | None = None) -> None:
+async def wait_for_persistent_workers_to_quiesce(
+    *,
+    timeout: float = 6.0,
+    stable_for: float = 0.8,
+) -> dict[int, float]:
+    """Wait past the idle unit-registry warmup before attributing worker CPU."""
+    deadline = time.monotonic() + timeout
+    previous = persistent_worker_cpu_seconds()
+    stable_since = time.monotonic()
+    while time.monotonic() < deadline:
+        await asyncio.sleep(0.1)
+        current = persistent_worker_cpu_seconds()
+        changed = set(current) != set(previous) or any(
+            current[pid] - previous[pid] > 0.01 for pid in current.keys() & previous.keys()
+        )
+        if changed:
+            stable_since = time.monotonic()
+        elif time.monotonic() - stable_since >= stable_for:
+            return current
+        previous = current
+    raise AssertionError("persistent workers did not quiesce before cancellation check")
+
+
+async def main(
+    plugin_root: Path | None = None,
+    *,
+    source_runtime: bool = False,
+) -> None:
     root = Path(__file__).resolve().parent.parent
     selected_plugin = plugin_root or root / "plugins/math-anchor"
     expected_version = json.loads(
         (selected_plugin / ".codex-plugin" / "plugin.json").read_text(encoding="utf-8")
     )["version"]
-    parameters = plugin_server_parameters(selected_plugin)
+    source_environment = dict(os.environ)
+    source_path = str(root / "src")
+    if existing_python_path := source_environment.get("PYTHONPATH"):
+        source_path = f"{source_path}{os.pathsep}{existing_python_path}"
+    source_environment["PYTHONPATH"] = source_path
+    parameters = (
+        StdioServerParameters(
+            command=sys.executable,
+            args=["-m", "math_anchor.mcp_server"],
+            cwd=str(root),
+            env=source_environment,
+        )
+        if source_runtime
+        else plugin_server_parameters(selected_plugin)
+    )
     server_errors = tempfile.TemporaryFile(mode="w+", encoding="utf-8")
     async with stdio_client(parameters, errlog=server_errors) as (read_stream, write_stream):
         async with ClientSession(read_stream, write_stream) as session:
@@ -79,16 +123,46 @@ async def main(plugin_root: Path | None = None) -> None:
             assert set(describe_tool.inputSchema["properties"]["operation"]["enum"]) == set(OPERATIONS)
             assert run_output_schema_bytes < 2_000
             assert run_tool.outputSchema["required"] == ["status"]
-            assert {"exact", "approx", "warnings", "error"} <= set(
+            assert {
+                "exact",
+                "approx",
+                "warnings",
+                "assurance",
+                "claim",
+                "scope",
+                "assumptions",
+                "provenance",
+                "certificate",
+                "checkedBy",
+                "error",
+            } <= set(
                 run_tool.outputSchema["properties"]
             )
 
+            first_call_start = time.perf_counter()
             direct = await session.call_tool(
                 "math.run",
                 {"operation": "expression.evaluate", "arguments": {"expression": "6*7"}},
             )
+            first_call_elapsed = time.perf_counter() - first_call_start
             assert direct.isError is False
             assert direct.structuredContent["exact"] == "42"
+            # The lazy-import contract makes discovery cheap and defers engine
+            # loading to this first real calculation. A generous ceiling stays
+            # under the server-side 10 s E_TIMEOUT so a lost lazy import or a
+            # dead prewarm shows up here instead of as an error result, while
+            # slow shared CI runners stay far below it.
+            assert (
+                first_call_elapsed < 8.0
+            ), f"first cold math.run call took {first_call_elapsed:.3f}s"
+            assert direct.structuredContent["assurance"] == "deterministic"
+            assert direct.structuredContent["scope"] == "declared_operation_result"
+            assert direct.structuredContent["provenance"]["runtime"] == {
+                "name": "math-anchor",
+                "version": expected_version,
+            }
+            assert direct.structuredContent["certificate"] is None
+            assert direct.structuredContent["checkedBy"] is None
 
             represented = await session.call_tool(
                 "math.run",
@@ -297,6 +371,47 @@ async def main(plugin_root: Path | None = None) -> None:
 
             described = await session.call_tool("math.describe", {"operation": "calculus.integrate"})
             assert described.structuredContent["operation"]["inputSchema"]["required"] == ["expression", "variable"]
+
+            described_certificate = await session.call_tool(
+                "math.describe", {"operation": "certificate.polynomial_identity"}
+            )
+            assert described_certificate.structuredContent["operation"]["assurance"] == {
+                "level": "certified",
+                "scope": "polynomial_identity_over_rationals",
+                "certificateAvailable": True,
+            }
+            certificate = await session.call_tool(
+                "math.run",
+                {
+                    "operation": "certificate.polynomial_identity",
+                    "arguments": {
+                        "left": "(x + y)^2",
+                        "right": "x^2 + 2*x*y + y^2",
+                        "variables": ["x", "y"],
+                    },
+                },
+            )
+            assert certificate.isError is False
+            assert certificate.structuredContent["assurance"] == "certified"
+            assert certificate.structuredContent["checkedBy"] is None
+            checked_certificate = verify_polynomial_identity_certificate(
+                certificate.structuredContent["certificate"]
+            )
+            assert checked_certificate["valid"] is True
+            assert checked_certificate["identity"] is True
+            inexact_certificate = await session.call_tool(
+                "math.run",
+                {
+                    "operation": "certificate.polynomial_identity",
+                    "arguments": {
+                        "left": "0.1*x",
+                        "right": "x/10",
+                        "variables": ["x"],
+                    },
+                },
+            )
+            assert inexact_certificate.isError is True
+            assert inexact_certificate.structuredContent["error"]["code"] == "E_DOMAIN"
 
             searched_dimension = await session.call_tool(
                 "math.search", {"query": "检查物理公式的量纲一致性"}
@@ -804,6 +919,11 @@ async def main(plugin_root: Path | None = None) -> None:
             # call consumes the current counter value; if this private field
             # disappears in a future SDK, fail here rather than silently
             # testing nothing.
+            # Each persistent worker performs one delayed unit-registry warm
+            # after becoming idle. Let that bounded work finish before CPU is
+            # used to attribute the request below, or an idle worker can be
+            # mistaken for the cancelled one on slower shared runners.
+            previous_workers = await wait_for_persistent_workers_to_quiesce()
             cancelled_request_id = session._request_id
             cancelled_call = asyncio.create_task(
                 session.call_tool(
@@ -823,7 +943,6 @@ async def main(plugin_root: Path | None = None) -> None:
             # cancellation it deliberately starts a replacement prewarm; PID
             # identity keeps both from being mistaken for the cancelled job.
             active_workers: set[int] = set()
-            previous_workers = persistent_worker_cpu_seconds()
             active_deadline = time.monotonic() + 2
             while not active_workers and time.monotonic() < active_deadline:
                 await asyncio.sleep(0.1)
@@ -888,14 +1007,15 @@ async def main(plugin_root: Path | None = None) -> None:
 
     print(
         "MCP runtime check passed through plugin transport: one-call typed run, multilingual discovery, "
-        "description, equivalence and solution verification, stable unit discovery, calendar-safe conversions, unit expressions, symbolic dimensional analysis and Pi groups, financial math, stability-aware "
+        "description, runtime-owned assurance metadata, equivalence and solution verification, independently checkable polynomial certificates, stable unit discovery, calendar-safe conversions, unit expressions, symbolic dimensional analysis and Pi groups, financial math, stability-aware "
         "linear solving, vector calculus, exact eigenspaces and decompositions, exact vector algebra, diagnostic SVD, numerical integration, extended probability distributions, comparative inference, covariance uncertainty propagation, registered special functions, standard algebra, exact/high-precision results, "
         "schema rejection, MCP tool-error signaling, domain errors, precision provenance, large integer output, ordered partial batch, cancellation recovery, "
         "and unsafe-input rejection. "
         f"math.run advertises {len(run_tool.inputSchema['properties']['operation']['enum'])} operation ids in a Codex-host-safe {run_schema_bytes}-byte envelope; "
         f"its result contract is {run_output_schema_bytes} bytes; "
         f"compact math.batch input is {batch_schema_bytes} bytes and all four listed tools total {listed_bytes} bytes; "
-        f"five warm expression calls completed in {warm_elapsed:.3f}s."
+        f"five warm expression calls completed in {warm_elapsed:.3f}s; "
+        f"first cold call completed in {first_call_elapsed:.3f}s."
     )
 
 
@@ -906,5 +1026,10 @@ if __name__ == "__main__":
         type=Path,
         help="installed or source Plugin directory (defaults to plugins/math-anchor)",
     )
+    parser.add_argument(
+        "--source-runtime",
+        action="store_true",
+        help="start the current installed Python package instead of the packaged Plugin runtime",
+    )
     arguments = parser.parse_args()
-    asyncio.run(main(arguments.plugin_root))
+    asyncio.run(main(arguments.plugin_root, source_runtime=arguments.source_runtime))

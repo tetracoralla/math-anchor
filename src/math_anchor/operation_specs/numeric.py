@@ -62,6 +62,9 @@ SPECS = (
         ),
         handler=calculus.numeric_root,
         keywords=("numerically solve", "nonlinear", "high precision", "zero", "all roots", "数值求根", "数值解", "零点", "所有根"),
+        assurance="diagnostic",
+        assurance_scope="bracketed_roots_under_declared_resolution",
+        backends=("mpmath", "sympy"),
     ),
     OperationSpec(
         id="numeric.integrate",
@@ -97,12 +100,15 @@ SPECS = (
         ),
         handler=numerical.integrate,
         keywords=("numerical integration", "quadrature", "error estimate", "adaptive Clenshaw-Curtis", "数值积分", "误差估计", "区间结果"),
+        assurance="diagnostic",
+        assurance_scope="estimated_quadrature_interval_not_rigorous_enclosure",
+        backends=("mpmath", "sympy"),
     ),
     OperationSpec(
         id="numeric.minimize",
         category="numeric",
-        summary="Certifiably locate the global minimum or maximum over a bracket.",
-        description="Interval-arithmetic branch and bound returns a rigorous enclosure of the global extremum value plus cover intervals for every minimizer, or degrades honestly to the best certified bound when the evaluation budget runs out. The expression must be defined everywhere on the bracket; brackets containing poles or undefined points are rejected rather than certified.",
+        summary="Bound a global minimum or maximum over a bracket with interval arithmetic.",
+        description="Interval-arithmetic branch and bound returns an internal enclosure of the global extremum value plus cover intervals for every minimizer over the supported expression subset, or degrades honestly to the best bound obtained when the evaluation budget runs out. The expression must be defined everywhere on the bracket; brackets containing poles or undefined points are rejected. This is not an external certificate or a proof-kernel result.",
         input_schema=_object(
             {
                 "expression": _EXPRESSION,
@@ -122,7 +128,7 @@ SPECS = (
                 "tolerance": {
                     **_DECIMAL_TEXT,
                     "default": "1e-12",
-                    "description": "Requested width of the certified value enclosure.",
+                    "description": "Requested width of the internal value enclosure.",
                 },
                 "argminTolerance": {
                     **_DECIMAL_TEXT,
@@ -139,7 +145,10 @@ SPECS = (
             {"expression": "sin(x) + x/3", "variable": "x", "bracket": ["-4", "4"], "objective": "minimum"},
         ),
         handler=optimization.minimize,
-        keywords=("global minimum", "global maximum", "optimization", "argmin", "certified", "interval arithmetic", "全局最优", "最小值", "最大值", "区间分支定界"),
+        keywords=("global minimum", "global maximum", "optimization", "argmin", "interval bound", "interval arithmetic", "全局最优", "最小值", "最大值", "区间分支定界"),
+        assurance="diagnostic",
+        assurance_scope="internal_mpmath_interval_enclosure_for_supported_expression_subset",
+        backends=("mpmath", "sympy"),
     ),
     OperationSpec(
         id="float.ieee754",
@@ -175,6 +184,7 @@ SPECS = (
             {"action": "compare", "left": "0.1", "right": "0.10000000000000001", "format": "binary64"},
         ),
         handler=floating.ieee754,
+        backends=("python",),
         keywords=("IEEE 754", "binary32", "binary64", "float bits", "ULP", "subnormal", "NaN", "rounding error", "浮点", "尾数", "指数", "舍入误差"),
     ),
     OperationSpec(
@@ -197,6 +207,9 @@ SPECS = (
         ),
         handler=numerical.solve_approximate_linear_system,
         keywords=("numerical linear algebra", "condition number", "backward error", "ill conditioned", "数值线性代数", "条件数", "病态矩阵", "数值稳定性"),
+        assurance="diagnostic",
+        assurance_scope="binary64_solution_under_declared_rank_tolerance",
+        backends=("numpy",),
     ),
     OperationSpec(
         id="linear_algebra.numeric",
@@ -253,6 +266,9 @@ SPECS = (
         ),
         handler=linear_algebra.numeric,
         keywords=("least squares", "QR decomposition", "SVD", "singular value decomposition", "pseudoinverse", "Moore Penrose", "numerical linear algebra", "最小二乘", "QR分解", "奇异值分解", "伪逆"),
+        assurance="diagnostic",
+        assurance_scope="binary64_linear_algebra_under_declared_tolerance",
+        backends=("numpy",),
     ),
 )
 

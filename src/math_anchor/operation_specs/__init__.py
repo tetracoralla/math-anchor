@@ -3,6 +3,7 @@ from __future__ import annotations
 from .expression import SPECS_BY_ID as _EXPRESSION
 from .decimal import SPECS_BY_ID as _DECIMAL
 from .verification import SPECS_BY_ID as _VERIFICATION
+from .certificate import SPECS_BY_ID as _CERTIFICATE
 from .algebra import SPECS_BY_ID as _ALGEBRA
 from .calculus import SPECS_BY_ID as _CALCULUS
 from .numeric import SPECS_BY_ID as _NUMERIC
@@ -20,6 +21,7 @@ _GROUPS = (
     _EXPRESSION,
     _DECIMAL,
     _VERIFICATION,
+    _CERTIFICATE,
     _ALGEBRA,
     _CALCULUS,
     _NUMERIC,
@@ -40,6 +42,7 @@ _ORDER = (
     'decimal.quantize',
     'function.sample',
     'expression.equivalent',
+    'certificate.polynomial_identity',
     'algebra.transform',
     'algebra.solve',
     'solution.verify',

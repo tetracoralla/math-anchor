@@ -1,12 +1,12 @@
 {
   "schemaVersion": "openadam.agent-tool-eval.experiment.v0.1",
-  "id": "math-anchor.codex-luna.policy-coding-agent-utility-0-3",
-  "title": "Math Anchor 0.4 policy-assisted Coding Agent utility estimate in Codex Luna",
+  "id": "math-anchor.codex-luna.policy-coding-agent-utility-0-5",
+  "title": "Math Anchor 0.5 policy-assisted Coding Agent utility estimate in Codex Luna",
   "purpose": "utility-estimate",
   "suiteRef": {"id": "math-anchor.coding-agent-utility", "version": "0.1.0"},
-  "targetRef": {"id": "math-anchor", "version": "0.4.0"},
+  "targetRef": {"id": "math-anchor", "version": "0.5.0"},
   "agent": {"provider": "openai", "model": "gpt-5.6-luna"},
-  "harness": {"id": "codex-cli", "version": "0.150.0-alpha.8"},
+  "harness": {"id": "codex-cli", "version": "0.152.0"},
   "repeats": 3,
   "seed": "math-anchor-policy-coding-agent-utility-2026-08-24",
   "budget": {
@@ -21,7 +21,7 @@
   "capture": {"answer": "digest", "toolArguments": "digest", "toolResults": "digest"},
   "driver": {
     "id": "codex-cli-driver",
-    "version": "0.4.1",
+    "version": "0.5.0",
     "command": "node",
     "args": [
       "src/adapters/codex-driver.mjs",
@@ -30,7 +30,7 @@
       "--target-plugin-id", "math-anchor@openadam",
       "--target-mcp-server-id", "math-anchor",
       "--target-tool-prefix", "math.",
-      "--target-tool-prefix", "math-anchor.",
+      "--target-tool-prefix", "math-anchor.math.",
       "--shared-instructions-file", "${MATH_ANCHOR_CODING_AGENT_POLICY}"
     ],
     "cwd": "."

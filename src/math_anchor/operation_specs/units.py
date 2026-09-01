@@ -9,6 +9,7 @@ from .shared import (
     quantity,
     units,
 )
+from ..operations.units import CALENDAR_POLICIES, UNIT_CATEGORIES
 
 
 SPECS = (
@@ -20,7 +21,7 @@ SPECS = (
         input_schema=_object(
             {
                 "query": {"type": "string", "maxLength": 128, "default": ""},
-                "category": {"type": "string", "enum": list(units.UNIT_CATEGORIES)},
+                "category": {"type": "string", "enum": list(UNIT_CATEGORIES)},
                 "limit": {"type": "integer", "minimum": 1, "maximum": 50, "default": 20},
             },
             (),
@@ -32,6 +33,7 @@ SPECS = (
         ),
         handler=units.search,
         keywords=("unit catalog", "unit id", "measurement discovery", "单位目录", "查找单位", "数据量", "频率", "力", "扭矩", "密度"),
+        backends=("python",),
     ),
     OperationSpec(
         id="units.convert",
@@ -45,7 +47,7 @@ SPECS = (
                 "toUnit": {"type": "string", "maxLength": 128},
                 "calendarPolicy": {
                     "type": "string",
-                    "enum": list(units.CALENDAR_POLICIES),
+                    "enum": list(CALENDAR_POLICIES),
                     "default": "reject",
                     "description": "Reject civil months/years by default; average_duration explicitly selects fixed average lengths.",
                 },
@@ -60,6 +62,7 @@ SPECS = (
         ),
         handler=data.units_convert,
         keywords=("measurement", "dimension", "temperature", "length", "energy", "单位换算", "单位转换", "温度转换"),
+        backends=("pint", "sympy"),
     ),
     OperationSpec(
         id="quantity.evaluate",
@@ -76,7 +79,7 @@ SPECS = (
                 "toUnit": {"type": "string", "maxLength": 128},
                 "calendarPolicy": {
                     "type": "string",
-                    "enum": list(units.CALENDAR_POLICIES),
+                    "enum": list(CALENDAR_POLICIES),
                     "default": "reject",
                 },
                 "precision": _PRECISION,
@@ -88,6 +91,7 @@ SPECS = (
             {"expression": "3 * meter + 25 * centimeter", "toUnit": "meter"},
         ),
         handler=quantity.evaluate,
+        backends=("pint", "sympy"),
         keywords=("dimensional analysis", "unit expression", "force", "compound units", "带单位表达式", "带单位的表达式", "量纲分析", "维度单位", "单位运算"),
     ),
 )

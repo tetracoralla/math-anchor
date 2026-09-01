@@ -44,6 +44,7 @@ SPECS = (
             },
         ),
         handler=dimension.check,
+        backends=("pint", "sympy"),
         keywords=(
             "dimensional consistency",
             "dimensional analysis",
@@ -56,6 +57,7 @@ SPECS = (
             "公式维度",
             "物理公式检查",
         ),
+        assurance_scope="dimensional_consistency_only",
     ),
     OperationSpec(
         id="dimension.infer",
@@ -94,6 +96,7 @@ SPECS = (
             },
         ),
         handler=dimension.infer,
+        backends=("pint", "sympy"),
         keywords=(
             "infer dimensions",
             "infer variable dimension",
@@ -106,6 +109,7 @@ SPECS = (
             "量纲约束",
             "公式推理",
         ),
+        assurance_scope="dimensional_consistency_only",
     ),
     OperationSpec(
         id="dimension.pi_groups",
@@ -137,6 +141,7 @@ SPECS = (
             },
         ),
         handler=dimension.pi_groups,
+        backends=("pint", "sympy"),
         keywords=(
             "Buckingham Pi theorem",
             "Buckingham π theorem",
@@ -149,6 +154,7 @@ SPECS = (
             "白金汉 Pi 定理",
             "相似性分析",
         ),
+        assurance_scope="dimensionless_basis_only",
     ),
 )
 

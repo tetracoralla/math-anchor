@@ -42,6 +42,7 @@ SPECS = (
             {"action": "multinomial", "counts": [2, 3, 1]},
         ),
         handler=combinatorics.count,
+        backends=("python",),
         keywords=("combination", "permutation", "multinomial", "choose", "组合数", "排列数", "多项式系数"),
     ),
 )

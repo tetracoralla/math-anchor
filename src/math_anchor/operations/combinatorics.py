@@ -3,10 +3,8 @@ from __future__ import annotations
 import math
 from typing import Any
 
-import sympy as sp
-
 from ..errors import require
-from ..formatting import typed_scalar_result
+from ..integer_format import exact_integer_result
 from ..validation import enum_arg, integer_arg, list_arg
 
 
@@ -33,10 +31,10 @@ def count(arguments: dict[str, Any]) -> dict[str, Any]:
         k = integer_arg(arguments, "k", default=0, minimum=0, maximum=_MAX_COUNT)
         require(k <= n, "E_DOMAIN", "k must not exceed n")
         result = math.comb(n, k) if action == "binomial" else math.perm(n, k)
-    return typed_scalar_result(
+    return exact_integer_result(
         "combinatorics.count",
         "integer_count",
-        sp.Integer(result),
+        result,
         16,
         action=action,
     )

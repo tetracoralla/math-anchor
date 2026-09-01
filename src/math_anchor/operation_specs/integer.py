@@ -28,6 +28,7 @@ SPECS = (
         input_schema=_object({"value": _EXACT_INTEGER}, ("value",)),
         examples=({"value": 360}, {"value": "9007199254740991"}),
         handler=number_theory.factorization,
+        backends=("sympy",),
         keywords=("prime factors", "is prime", "factor integer", "质因数分解", "素数判断", "整数分解"),
     ),
     OperationSpec(
@@ -48,6 +49,7 @@ SPECS = (
         ),
         examples=({"values": [12, 18, 30]},),
         handler=number_theory.gcd_lcm,
+        backends=("python",),
         keywords=("greatest common divisor", "least common multiple", "gcd", "lcm", "最大公约数", "最小公倍数"),
     ),
     OperationSpec(
@@ -81,6 +83,7 @@ SPECS = (
             {"action": "inverse", "value": 3, "modulus": 11},
         ),
         handler=number_theory.modular,
+        backends=("python",),
         keywords=("modulo", "modular inverse", "modular exponent", "模运算", "模逆", "模幂"),
     ),
     OperationSpec(
@@ -106,6 +109,7 @@ SPECS = (
             {"dividend": "-99", "divisor": "-10", "divisionMode": "euclidean"},
         ),
         handler=rounding.divide_integer,
+        backends=("python",),
         keywords=("integer division", "quotient", "remainder", "truncate division", "floor division", "Euclidean division", "整除", "商和余数", "截断除法", "欧几里得除法"),
     ),
     OperationSpec(
@@ -127,6 +131,7 @@ SPECS = (
             {"value": "375", "bitWidth": 64},
         ),
         handler=programmer.represent,
+        backends=("python",),
         keywords=("binary", "octal", "hexadecimal", "base conversion", "two's complement", "ASCII", "Unicode", "进制转换", "二进制", "十六进制", "补码", "字符编码"),
     ),
     OperationSpec(
@@ -233,6 +238,7 @@ SPECS = (
             {"action": "reverse_words", "value": "0xABCD1234", "bitWidth": 32, "inputMode": "bits"},
         ),
         handler=programmer.bitwise,
+        backends=("python",),
         keywords=("bitwise", "AND", "OR", "XOR", "NOR", "NOT", "shift", "rotate", "popcount", "leading zeros", "trailing zeros", "bit field", "alignment", "byte flip", "word flip", "位运算", "移位", "循环移位", "位域", "内存对齐", "字节翻转"),
     ),
     OperationSpec(
@@ -287,6 +293,7 @@ SPECS = (
             {"action": "divide", "left": "-99", "right": "10", "bitWidth": 16, "signedness": "twos_complement", "divisionMode": "euclidean"},
         ),
         handler=programmer.machine_arithmetic,
+        backends=("python",),
         keywords=("machine integer", "checked arithmetic", "wrapping", "saturating", "fixed width add", "overflow", "机器整数", "溢出", "环绕", "饱和算术"),
     ),
 )

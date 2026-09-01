@@ -1,0 +1,35 @@
+{
+  "schemaVersion": "openadam.agent-tool-eval.task-suite.v0.1",
+  "id": "math-anchor.research-public-math-adoption",
+  "version": "0.1.0",
+  "title": "Public mathematics tasks with observed tool adoption",
+  "targetRef": {"id": "math-anchor", "version": "0.5.0"},
+  "tasks": [
+    {
+      "id": "putnam-2023-b6.n12",
+      "prompt": "For the n=12 instance of Putnam 2023 B6, compute the exact determinant of the following integer matrix S. This is a reliability-sensitive 12-by-12 determinant; use an available deterministic calculation tool if one is present. Return only the determinant. S=[[13,7,5,4,3,3,2,2,2,2,2,2],[7,7,3,4,2,3,1,2,1,2,1,2],[5,3,5,2,1,3,1,1,2,1,1,2],[4,4,2,4,1,2,1,2,1,1,1,2],[3,2,1,1,0,1,1,0,0,0,0,1],[3,3,3,2,1,3,1,1,1,1,1,2],[2,1,1,1,1,1,0,0,0,0,0,1],[2,2,1,2,0,1,0,0,0,0,0,1],[2,1,2,1,0,1,0,0,0,0,0,1],[2,2,1,1,0,1,0,0,0,0,0,1],[2,1,1,1,0,1,0,0,0,0,0,1],[2,2,2,2,1,2,1,1,1,1,1,2]].",
+      "opportunity": "required",
+      "tags": ["public", "putnam", "matrix", "exact"],
+      "evaluator": {
+        "kind": "numeric-tolerance",
+        "actualPointer": "",
+        "expected": -12,
+        "absoluteTolerance": 0,
+        "relativeTolerance": 0
+      }
+    },
+    {
+      "id": "buckingham-pi.drag-nullity",
+      "prompt": "A drag model uses five quantities: force FD in newtons, density rho in kilograms per cubic meter, speed V in meters per second, length L in meters, and dynamic viscosity mu in pascal-seconds. Under the Buckingham Pi theorem, compute the exact nullity of the dimensional-exponent matrix. Use an available deterministic dimensional-analysis tool if one is present. Return only the integer nullity.",
+      "opportunity": "optional",
+      "tags": ["public", "physics", "dimension", "buckingham-pi"],
+      "evaluator": {
+        "kind": "numeric-tolerance",
+        "actualPointer": "",
+        "expected": 2,
+        "absoluteTolerance": 0,
+        "relativeTolerance": 0
+      }
+    }
+  ]
+}

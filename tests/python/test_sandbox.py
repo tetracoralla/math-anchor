@@ -6,11 +6,37 @@ import sys
 import threading
 import time
 
+import psutil
+
 import math_anchor.sandbox as sandbox
 from math_anchor import sandbox_testing
 from math_anchor import worker
 from math_anchor.errors import CalculatorError
 from math_anchor.sandbox import run_batch, run_operation
+
+
+def _wait_for_idle_worker_warm(process_id: int, timeout: float = 8.0) -> None:
+    """Observe the delayed registry warm and its completion without guessing its duration."""
+    process = psutil.Process(process_id)
+    deadline = time.monotonic() + timeout
+    earliest_warm = time.monotonic() + worker.UNIT_REGISTRY_WARM_IDLE_SECONDS * 0.8
+    previous_cpu = sum(process.cpu_times()[:2])
+    observed_warm = False
+    quiet_since: float | None = None
+    while time.monotonic() < deadline:
+        time.sleep(0.05)
+        now = time.monotonic()
+        current_cpu = sum(process.cpu_times()[:2])
+        delta = current_cpu - previous_cpu
+        previous_cpu = current_cpu
+        if now >= earliest_warm and delta > 0.005:
+            observed_warm = True
+            quiet_since = None
+        elif observed_warm:
+            quiet_since = quiet_since or now
+            if now - quiet_since >= 0.3:
+                return
+    raise AssertionError("persistent worker unit-registry warm did not complete")
 
 
 def test_isolated_execution_and_structured_error() -> None:
@@ -397,29 +423,6 @@ def test_worker_applies_output_budget_before_writing_its_response() -> None:
     assert len(json.dumps(response, separators=(",", ":")).encode()) < 1_200
 
 
-def test_unit_registry_warm_waits_for_a_real_idle_interval(monkeypatch) -> None:
-    from math_anchor.operations import data
-
-    activity = worker._RequestActivity()
-    warmed = threading.Event()
-    monkeypatch.setattr(worker, "UNIT_REGISTRY_WARM_IDLE_SECONDS", 0.2)
-    monkeypatch.setattr(data, "warm_unit_registries", warmed.set)
-
-    # Establish the active request before the background thread starts. Starting
-    # the thread first made the test depend on whether a busy runner scheduled
-    # it for a full idle interval before the main thread called begin().
-    activity.begin()
-    worker._warm_unit_registries_in_background(activity)
-    time.sleep(0.25)
-    assert warmed.is_set() is False
-    activity.end()
-    time.sleep(0.01)
-    activity.begin()
-    activity.end()
-    assert warmed.is_set() is False
-    assert warmed.wait(timeout=0.75)
-
-
 def test_completed_response_is_not_rejudged_against_the_deadline(monkeypatch) -> None:
     # Negative regression: the reader thread used to stamp the response with
     # time.monotonic() taken after readline() returned; a worker that answered
@@ -527,7 +530,7 @@ def test_persistent_worker_serves_the_first_units_call_within_a_short_budget() -
         )
         assert worker_process is not None, startup_error
         try:
-            time.sleep(1.0)  # allow the background registry warm to finish
+            _wait_for_idle_worker_warm(worker_process.process.pid)
             result, reusable, output_policy_applied = sandbox._execute_worker(
                 worker_process,
                 json.dumps(

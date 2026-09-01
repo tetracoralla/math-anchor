@@ -14,7 +14,9 @@ from math_anchor.contracts import (
     RUN_TOOL_OUTPUT_SCHEMA,
     _LIMIT_PROPERTIES,
     batch_tool_parameters,
+    validate_result,
 )
+from math_anchor.errors import CalculatorError
 from math_anchor import mcp_server
 from math_anchor.mcp_server import _run_cancellable, _tool_result, mcp
 from math_anchor.output_policy import (
@@ -23,6 +25,7 @@ from math_anchor.output_policy import (
     MAX_OUTPUT_BYTES,
     MIN_OUTPUT_BYTES,
 )
+from math_anchor.runtime import execute_direct
 
 
 def _tool_payload(name: str) -> dict:
@@ -54,6 +57,7 @@ def test_tool_discovery_survives_current_codex_host_compaction() -> None:
     assert "Known direct shapes need no describe call" in run_tool.description
     assert "integer.machine_arithmetic" in run_tool.description
     assert "combinatorics.count" in run_tool.description
+    assert "certificate.polynomial_identity" in run_tool.description
     output_bytes = len(
         json.dumps(run_tool.output_schema, separators=(",", ":")).encode()
     )
@@ -88,6 +92,21 @@ def test_tool_discovery_survives_current_codex_host_compaction() -> None:
         assert tool.parameters["additionalProperties"] is False
         with pytest.raises(ValidationError):
             tool.fn_metadata.arg_model.model_validate({"unexpected": True})
+
+
+def test_ordinary_assurance_envelope_stays_small() -> None:
+    spec = OPERATIONS["expression.evaluate"]
+    arguments = {"expression": "6*7"}
+    raw = spec.handler(arguments)
+    annotated = execute_direct(spec.id, arguments)
+
+    def encoded(value: dict) -> int:
+        return len(
+            json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode()
+        )
+
+    assert encoded(annotated) < 512
+    assert encoded(annotated) - encoded(raw) <= 320
 
 
 def test_compact_run_output_schema_accepts_scalar_and_matrix_lanes_only() -> None:
@@ -199,6 +218,34 @@ def test_advertised_result_envelope_stays_a_projection_of_the_result_union() -> 
     )
     missing = common_required - set(RUN_TOOL_OUTPUT_SCHEMA["properties"])
     assert not missing, f"envelope dropped common result fields: {sorted(missing)}"
+
+
+def test_result_validation_dispatch_keeps_the_complete_variant_contract() -> None:
+    valid = execute_direct(
+        "integer.machine_arithmetic",
+        {
+            "action": "add",
+            "left": "250",
+            "right": "20",
+            "bitWidth": 8,
+            "overflowBehavior": "wrapping",
+        },
+    )
+    invalid = dict(valid)
+    invalid.pop("overflow")
+
+    with pytest.raises(CalculatorError, match="outside the public contract"):
+        validate_result(invalid)
+
+    # Kinds with multiple action-discriminated variants must not accept the
+    # fields of a sibling action after fast dispatch.
+    vector = execute_direct(
+        "linear_algebra.exact",
+        {"action": "dot", "left": [1, 2], "right": [3, 4]},
+    )
+    vector["action"] = "cross"
+    with pytest.raises(CalculatorError, match="outside the public contract"):
+        validate_result(vector)
 
 
 def test_tool_results_signal_error_envelopes_through_is_error() -> None:

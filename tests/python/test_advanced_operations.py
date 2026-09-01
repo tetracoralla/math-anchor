@@ -801,6 +801,35 @@ def test_numeric_minimize_certifies_global_extrema() -> None:
         assert undefined.value.code == "E_DOMAIN"
 
 
+def test_numeric_minimize_handles_supported_transcendentals_without_raw_runtime_errors() -> None:
+    import mpmath as mp
+
+    cosh_result = execute_direct(
+        "numeric.minimize",
+        {"expression": "cosh(x)", "variable": "x", "bracket": ["-1", "1"]},
+    )
+    low, high = (mp.mpf(value) for value in cosh_result["valueEnclosure"])
+    assert cosh_result["status"] == "ok"
+    assert low <= 1 <= high
+    covered = [(mp.mpf(a), mp.mpf(b)) for a, b in cosh_result["extremumIntervals"]]
+    assert any(a <= 0 <= b for a, b in covered)
+
+    cases = (
+        ("acos(x)", ["-1", "1"]),
+        ("atan(x)", ["-1", "1"]),
+        ("gamma(x)", ["1", "3"]),
+        ("sinh(x)", ["-1", "1"]),
+        ("tanh(x)", ["-1", "1"]),
+    )
+    for expression_text, bracket in cases:
+        result = execute_direct(
+            "numeric.minimize",
+            {"expression": expression_text, "variable": "x", "bracket": bracket},
+        )
+        assert result["status"] in {"ok", "uncertain"}
+        assert mp.mpf(result["valueEnclosure"][0]) <= mp.mpf(result["valueEnclosure"][1])
+
+
 def test_equivalence_probe_skips_negligible_numeric_differences() -> None:
     # A true-but-negligible difference must not mint a counterexample from
     # rounding noise: the probe threshold keeps tiny deltas at "unknown".
