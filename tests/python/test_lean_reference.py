@@ -123,3 +123,41 @@ def test_kernel_output_with_sorry_axiom_is_rejected() -> None:
         )
 
     assert error.value.code == "E_KERNEL"
+
+
+@pytest.mark.parametrize(
+    "output",
+    (
+        b"",
+        b"kernel accepted",
+        b"'mathAnchorCertificate' depends on axioms: []\n" + b"x" * 70_000,
+    ),
+)
+def test_kernel_output_requires_one_complete_axiom_report(output: bytes) -> None:
+    with pytest.raises(lean_reference.LeanReferenceError) as error:
+        lean_reference._validate_kernel_output(output)
+
+    assert error.value.code == "E_KERNEL"
+
+
+@pytest.mark.parametrize("timeout", (0, -1, 601, True, 1.5))
+def test_reference_rejects_unbounded_timeout_values(timeout: object) -> None:
+    certificate = _certificate("x", "x", ["x"])
+
+    with pytest.raises(lean_reference.LeanReferenceError, match="between 1 and 600") as error:
+        lean_reference.kernel_check(certificate, timeout_seconds=timeout)  # type: ignore[arg-type]
+
+    assert error.value.code == "E_INPUT"
+
+
+def test_reference_rejects_an_unavailable_explicit_lake(tmp_path: Path) -> None:
+    certificate = _certificate("x", "x", ["x"])
+
+    with pytest.raises(lean_reference.LeanReferenceError, match="Lake executable") as error:
+        lean_reference.kernel_check(
+            certificate,
+            timeout_seconds=10,
+            lake=tmp_path / "missing-lake",
+        )
+
+    assert error.value.code == "E_TOOLCHAIN"

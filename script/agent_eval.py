@@ -26,6 +26,7 @@ from typing import Any
 from release_metadata import canonical_version
 from check_installed_plugin import validate as validate_installed_plugin
 from check_installed_plugin import validate_server_route
+from runtime_manifest import verify_manifest
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -51,6 +52,7 @@ TARGET_PLUGIN_VERSION = canonical_version(ROOT)
 PACKAGED_MCP_COMMAND = (
     ROOT / "plugins" / "math-anchor" / "runtime" / "math-anchor-runtime" / "math-anchor-runtime"
 )
+RUNTIME_LOCK = ROOT / "requirements-runtime.lock"
 
 MODES = {
     "smoke": (
@@ -80,6 +82,18 @@ MODES = {
     "research-luna-smoke": (
         EVAL_DIR / "research-putnam-1976-a2.v0.1.json",
         EVAL_DIR / "codex-luna-research-putnam-1976-a2.v0.1.json",
+    ),
+    "public-terra-smoke": (
+        EVAL_DIR / "research-public-math-smoke.v0.1.json",
+        EVAL_DIR / "codex-terra-research-public-math-smoke.v0.1.json",
+    ),
+    "public-luna-smoke": (
+        EVAL_DIR / "research-public-math-smoke.v0.1.json",
+        EVAL_DIR / "codex-luna-research-public-math-smoke.v0.1.json",
+    ),
+    "public-luna-adoption": (
+        EVAL_DIR / "research-public-math-adoption.v0.1.json",
+        EVAL_DIR / "codex-luna-research-public-math-adoption.v0.1.json",
     ),
 }
 
@@ -222,6 +236,47 @@ def _driver_configs(experiment: dict[str, Any]) -> list[str]:
             if isinstance(configured, str):
                 configs.append(configured)
     return configs
+
+
+@contextmanager
+def _staged_direct_runtime(enabled: bool):
+    """Verify and hard-link the standalone runtime outside oracle-denied source roots."""
+
+    if not enabled:
+        yield None
+        return
+    bundle = PACKAGED_MCP_COMMAND.parent
+    if not PACKAGED_MCP_COMMAND.is_file() or not os.access(PACKAGED_MCP_COMMAND, os.X_OK):
+        raise SystemExit(
+            "packaged Math Anchor MCP runtime is unavailable; run script/package_runtime.sh"
+        )
+    verify_manifest(
+        bundle,
+        PACKAGED_MCP_COMMAND,
+        RUNTIME_LOCK,
+        ROOT,
+        TARGET_PLUGIN_VERSION,
+    )
+
+    def link_or_copy(source: str, destination: str) -> str:
+        try:
+            os.link(source, destination)
+            return destination
+        except OSError:
+            return shutil.copy2(source, destination)
+
+    with tempfile.TemporaryDirectory(prefix="math-anchor-agent-eval-runtime-") as directory:
+        staged_bundle = Path(directory).resolve() / bundle.name
+        shutil.copytree(bundle, staged_bundle, copy_function=link_or_copy)
+        staged_command = staged_bundle / PACKAGED_MCP_COMMAND.name
+        verify_manifest(
+            staged_bundle,
+            staged_command,
+            RUNTIME_LOCK,
+            ROOT,
+            TARGET_PLUGIN_VERSION,
+        )
+        yield {"command": staged_command, "cwd": staged_bundle}
 
 
 @contextmanager
@@ -407,6 +462,7 @@ def _prepared_experiment(
     experiment: dict[str, Any],
     *,
     prepare_installed_plugin: bool,
+    prepare_direct_runtime: bool,
 ):
     """Resolve product-owned policy and isolated Plugin coordinates safely."""
 
@@ -419,41 +475,55 @@ def _prepared_experiment(
         needs_isolated_home and prepare_installed_plugin,
         _driver_configs(experiment),
     ) as isolated_root:
-        replacements: dict[str, str] = {}
-        if POLICY_PLACEHOLDER in arguments:
-            if not POLICY_PATH.is_file():
-                raise SystemExit(f"Coding Agent policy is unavailable: {POLICY_PATH}")
-            replacements[POLICY_PLACEHOLDER] = str(POLICY_PATH.resolve())
-        if isolated_root is not None:
-            replacements[ISOLATED_CODEX_HOME_PLACEHOLDER] = str(isolated_root)
-        if MCP_COMMAND_PLACEHOLDER in arguments:
-            if not PACKAGED_MCP_COMMAND.is_file() or not os.access(PACKAGED_MCP_COMMAND, os.X_OK):
-                raise SystemExit(
-                    "packaged Math Anchor MCP runtime is unavailable; run script/package_runtime.sh"
-                )
-            replacements[MCP_COMMAND_PLACEHOLDER] = str(PACKAGED_MCP_COMMAND.resolve())
-        if MCP_CWD_PLACEHOLDER in arguments:
-            replacements[MCP_CWD_PLACEHOLDER] = str(ROOT.resolve())
-        if not replacements:
-            yield path
-            return
-        prepared = json.loads(json.dumps(experiment))
-        prepared_arguments = prepared["driver"]["args"]
-        for placeholder, replacement in replacements.items():
-            prepared_arguments[prepared_arguments.index(placeholder)] = replacement
-        DEFAULT_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-        descriptor, temporary_name = tempfile.mkstemp(
-            prefix=f"{path.stem}-",
-            suffix=".json",
-            dir=DEFAULT_OUTPUT_DIR,
+        needs_direct_runtime = prepare_direct_runtime and (
+            MCP_COMMAND_PLACEHOLDER in arguments or MCP_CWD_PLACEHOLDER in arguments
         )
-        os.close(descriptor)
-        temporary_path = Path(temporary_name)
+        with _staged_direct_runtime(needs_direct_runtime) as staged_runtime:
+            replacements: dict[str, str] = {}
+            if POLICY_PLACEHOLDER in arguments:
+                if not POLICY_PATH.is_file():
+                    raise SystemExit(f"Coding Agent policy is unavailable: {POLICY_PATH}")
+                replacements[POLICY_PLACEHOLDER] = str(POLICY_PATH.resolve())
+            if isolated_root is not None:
+                replacements[ISOLATED_CODEX_HOME_PLACEHOLDER] = str(isolated_root)
+            if staged_runtime is not None:
+                replacements[MCP_COMMAND_PLACEHOLDER] = str(staged_runtime["command"])
+                replacements[MCP_CWD_PLACEHOLDER] = str(staged_runtime["cwd"])
+            if not replacements:
+                yield path
+                return
+            prepared = json.loads(json.dumps(experiment))
+            prepared_arguments = prepared["driver"]["args"]
+            for placeholder, replacement in replacements.items():
+                prepared_arguments[prepared_arguments.index(placeholder)] = replacement
+            DEFAULT_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+            descriptor, temporary_name = tempfile.mkstemp(
+                prefix=f"{path.stem}-",
+                suffix=".json",
+                dir=DEFAULT_OUTPUT_DIR,
+            )
+            os.close(descriptor)
+            temporary_path = Path(temporary_name)
+            try:
+                temporary_path.write_text(json.dumps(prepared, indent=2) + "\n", encoding="utf-8")
+                yield temporary_path
+            finally:
+                temporary_path.unlink(missing_ok=True)
+
+
+def _report_output(argument: str | None, experiment_id: str) -> Path:
+    DEFAULT_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    if argument:
+        output = Path(argument).expanduser().resolve()
         try:
-            temporary_path.write_text(json.dumps(prepared, indent=2) + "\n", encoding="utf-8")
-            yield temporary_path
-        finally:
-            temporary_path.unlink(missing_ok=True)
+            output.relative_to(DEFAULT_OUTPUT_DIR.resolve())
+        except ValueError as error:
+            raise SystemExit(
+                f"report output must stay under {DEFAULT_OUTPUT_DIR.resolve()}"
+            ) from error
+        return output
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    return DEFAULT_OUTPUT_DIR / f"{experiment_id}-{stamp}.json"
 
 
 def main() -> int:
@@ -495,6 +565,7 @@ def main() -> int:
             experiment_path,
             experiment,
             prepare_installed_plugin=arguments.action in {"preflight", "run"},
+            prepare_direct_runtime=direct_mcp and arguments.action == "run",
         ) as prepared_experiment:
             validate = [
                 "node",
@@ -512,11 +583,7 @@ def main() -> int:
                     print("installed Plugin preflight passed without model calls")
                 return 0
 
-            if arguments.output:
-                output = Path(arguments.output).expanduser().resolve()
-            else:
-                stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-                output = DEFAULT_OUTPUT_DIR / f"{experiment['id']}-{stamp}.json"
+            output = _report_output(arguments.output, experiment["id"])
             output.parent.mkdir(parents=True, exist_ok=True)
             if output.exists() or output.is_symlink():
                 raise SystemExit(f"refusing to overwrite existing report: {output}")

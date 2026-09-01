@@ -13,6 +13,11 @@ Digests bind the checked artifact to the input certificate but do not prove the
 mathematics; only successful elaboration and kernel checking of the generated
 theorem controls the `kernel_checked` claim.
 
+The default bootstrap owns an isolated Elan toolchain. A Controller that has
+already verified the same pinned Lean release may instead pass its exact Lake
+executable with `--lake`; the result records that executable's digest and still
+uses this consumer's separate project, translator, and disposable run source.
+
 The first public research fixture is the `n = 4` identity associated with
 Putnam 1976 A2:
 

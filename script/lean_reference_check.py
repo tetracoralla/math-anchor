@@ -9,8 +9,13 @@ from hashlib import sha256
 import json
 import os
 from pathlib import Path
+import re
+import selectors
+import signal
 import subprocess
 import sys
+import tempfile
+import time
 from typing import Any
 
 from math_anchor.certificate_checker import (
@@ -35,6 +40,8 @@ TOOLCHAIN = "leanprover/lean4:v4.33.1"
 MATHLIB_REVISION = "0df444a360eaa60ab8c11dca51a86af692955474"
 MAX_INPUT_BYTES = 1_048_576
 MAX_KERNEL_OUTPUT_BYTES = 65_536
+_REVISION = re.compile(r"^[0-9a-f]{40}$")
+_AXIOM_REPORT = re.compile(r"depends on axioms:\s*\[[^\r\n]*\]")
 
 
 class LeanReferenceError(ValueError):
@@ -213,15 +220,94 @@ theorem mathAnchorCertificate ({binders} : ℚ) :
 
 
 def _bounded_text(value: bytes) -> str:
-    if len(value) > MAX_KERNEL_OUTPUT_BYTES:
-        value = value[:MAX_KERNEL_OUTPUT_BYTES]
-    return value.decode("utf-8", errors="replace")
+    truncated = len(value) > MAX_KERNEL_OUTPUT_BYTES
+    value = value[:MAX_KERNEL_OUTPUT_BYTES]
+    text = value.decode("utf-8", errors="replace")
+    return f"{text}...<truncated>" if truncated else text
 
 
-def _validate_project_lock() -> None:
+def _kill_process_group(process: subprocess.Popen[bytes]) -> None:
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    finally:
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait()
+
+
+def _run_bounded(
+    command: list[str],
+    *,
+    cwd: Path,
+    environment: dict[str, str],
+    timeout_seconds: float,
+) -> subprocess.CompletedProcess[str]:
+    if timeout_seconds <= 0:
+        raise LeanReferenceError("E_TIMEOUT", "Lean kernel check exceeded its deadline")
+    try:
+        process = subprocess.Popen(
+            command,
+            cwd=cwd,
+            env=environment,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            start_new_session=True,
+        )
+    except OSError as error:
+        raise LeanReferenceError("E_TOOLCHAIN", f"Lean could not be started: {error}") from error
+    selector = selectors.DefaultSelector()
+    streams = {"stdout": process.stdout, "stderr": process.stderr}
+    buffers = {"stdout": bytearray(), "stderr": bytearray()}
+    for name, stream in streams.items():
+        assert stream is not None
+        os.set_blocking(stream.fileno(), False)
+        selector.register(stream, selectors.EVENT_READ, name)
+    deadline = time.monotonic() + timeout_seconds
+    try:
+        while selector.get_map():
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise subprocess.TimeoutExpired(command, timeout_seconds)
+            for key, _ in selector.select(timeout=min(remaining, 0.1)):
+                stream = key.fileobj
+                chunk = os.read(stream.fileno(), 65_536)
+                if not chunk:
+                    selector.unregister(stream)
+                    continue
+                buffer = buffers[key.data]
+                capacity = MAX_KERNEL_OUTPUT_BYTES + 1 - len(buffer)
+                if capacity > 0:
+                    buffer.extend(chunk[:capacity])
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise subprocess.TimeoutExpired(command, timeout_seconds)
+        returncode = process.wait(timeout=remaining)
+    except subprocess.TimeoutExpired as error:
+        _kill_process_group(process)
+        raise LeanReferenceError("E_TIMEOUT", "Lean kernel check exceeded its deadline") from error
+    finally:
+        selector.close()
+        for stream in streams.values():
+            if stream is not None:
+                stream.close()
+    return subprocess.CompletedProcess(
+        args=command,
+        returncode=returncode,
+        stdout=_bounded_text(bytes(buffers["stdout"])),
+        stderr=_bounded_text(bytes(buffers["stderr"])),
+    )
+
+
+def _validate_project_lock() -> dict[str, str]:
     try:
         toolchain = (PROJECT / "lean-toolchain").read_text(encoding="utf-8").strip()
-        manifest = json.loads((PROJECT / "lake-manifest.json").read_text(encoding="utf-8"))
+        lakefile = (PROJECT / "lakefile.toml").read_text(encoding="utf-8")
+        manifest_bytes = (PROJECT / "lake-manifest.json").read_bytes()
+        manifest = json.loads(manifest_bytes)
     except (OSError, json.JSONDecodeError) as error:
         raise LeanReferenceError(
             "E_TOOLCHAIN",
@@ -236,60 +322,86 @@ def _validate_project_lock() -> None:
         ),
         None,
     )
-    if toolchain != TOOLCHAIN or mathlib is None or mathlib.get("rev") != MATHLIB_REVISION:
+    revisions_are_exact = bool(packages) and all(
+        isinstance(package, dict)
+        and isinstance(package.get("rev"), str)
+        and _REVISION.fullmatch(package["rev"])
+        for package in packages
+    )
+    lakefile_is_pinned = f'rev = "{MATHLIB_REVISION}"' in lakefile
+    if (
+        toolchain != TOOLCHAIN
+        or mathlib is None
+        or mathlib.get("rev") != MATHLIB_REVISION
+        or not revisions_are_exact
+        or not lakefile_is_pinned
+    ):
         raise LeanReferenceError(
             "E_TOOLCHAIN",
             "isolated Lean project does not match the pinned toolchain and Mathlib revision",
         )
+    return {"manifestDigest": _digest_bytes(manifest_bytes)}
 
 
-def _validate_kernel_output(value: bytes) -> None:
+def _validate_kernel_output(value: bytes | str) -> None:
     # A theorem accepted through an admitted placeholder would not establish
     # the bound claim. The generated source never contains `sorry`; this check
     # also rejects a dependency path that leaked Lean's `sorryAx` into the
     # theorem's printed axioms.
-    if "sorryAx" in _bounded_text(value):
+    text = _bounded_text(value) if isinstance(value, bytes) else value
+    if "...<truncated>" in text:
+        raise LeanReferenceError("E_KERNEL", "Lean kernel output exceeded the supported limit")
+    if "sorryAx" in text:
         raise LeanReferenceError("E_KERNEL", "Lean theorem depends on sorryAx")
+    if len(_AXIOM_REPORT.findall(text)) != 1:
+        raise LeanReferenceError("E_KERNEL", "Lean did not report the generated theorem's axioms")
 
 
-def kernel_check(certificate: dict[str, Any], *, timeout_seconds: int = 180) -> dict[str, Any]:
+def kernel_check(
+    certificate: dict[str, Any],
+    *,
+    timeout_seconds: int = 180,
+    lake: Path | None = None,
+) -> dict[str, Any]:
+    if (
+        not isinstance(timeout_seconds, int)
+        or isinstance(timeout_seconds, bool)
+        or not 1 <= timeout_seconds <= 600
+    ):
+        raise LeanReferenceError("E_INPUT", "timeout-seconds must be between 1 and 600")
     source = build_lean_source(certificate)
-    if not ELAN.is_file() or not os.access(ELAN, os.X_OK):
-        raise LeanReferenceError(
-            "E_TOOLCHAIN",
-            "isolated Lean toolchain is unavailable; run script/bootstrap_lean_reference.sh",
-        )
-    _validate_project_lock()
+    if lake is None:
+        if not ELAN.is_file() or not os.access(ELAN, os.X_OK):
+            raise LeanReferenceError(
+                "E_TOOLCHAIN",
+                "isolated Lean toolchain is unavailable; run script/bootstrap_lean_reference.sh",
+            )
+        checker = ELAN
+        command_prefix = [str(ELAN), "run", TOOLCHAIN, "lake"]
+    else:
+        checker = lake.expanduser().resolve()
+        if not checker.is_file() or not os.access(checker, os.X_OK):
+            raise LeanReferenceError("E_TOOLCHAIN", f"Lake executable is unavailable: {checker}")
+        command_prefix = [str(checker)]
+    lock_metadata = _validate_project_lock()
     artifact_digest = _digest_bytes(source)
-    run_dir = BUILD_ROOT / "runs" / certificate["certificateDigest"].removeprefix("sha256:")
-    run_dir.mkdir(parents=True, exist_ok=True)
-    source_path = run_dir / "MathAnchorCertificate.lean"
-    source_path.write_bytes(source)
     environment = os.environ.copy()
     environment["ELAN_HOME"] = str(ELAN_HOME)
-    try:
-        completed = subprocess.run(
-            [
-                str(ELAN),
-                "run",
-                TOOLCHAIN,
-                "lake",
-                "env",
-                "lean",
-                str(source_path),
-            ],
+    runs_root = BUILD_ROOT / "runs"
+    runs_root.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="certificate-", dir=runs_root) as run_dir:
+        source_path = Path(run_dir) / "MathAnchorCertificate.lean"
+        source_path.write_bytes(source)
+        completed = _run_bounded(
+            [*command_prefix, "env", "lean", str(source_path)],
             cwd=PROJECT,
-            env=environment,
-            capture_output=True,
-            timeout=timeout_seconds,
-            check=False,
+            environment=environment,
+            timeout_seconds=timeout_seconds,
         )
-    except subprocess.TimeoutExpired as error:
-        raise LeanReferenceError("E_TIMEOUT", "Lean kernel check exceeded its deadline") from error
     if completed.returncode != 0:
-        diagnostic = _bounded_text(completed.stderr or completed.stdout).strip()
+        diagnostic = (completed.stderr or completed.stdout).strip()
         raise LeanReferenceError("E_KERNEL", f"Lean rejected the generated theorem: {diagnostic}")
-    kernel_output = completed.stdout + completed.stderr
+    kernel_output = f"{completed.stdout}\n{completed.stderr}"
     _validate_kernel_output(kernel_output)
     return {
         "status": "ok",
@@ -302,10 +414,13 @@ def kernel_check(certificate: dict[str, Any], *, timeout_seconds: int = 180) -> 
             "system": "lean4-kernel",
             "version": f"{TOOLCHAIN}+mathlib@{MATHLIB_REVISION}",
             "artifactDigest": artifact_digest,
+            "checkerExecutableDigest": _digest_bytes(checker.read_bytes()),
+            **lock_metadata,
         },
         "observations": {
             "kernelExitCode": completed.returncode,
-            "kernelOutputDigest": _digest_bytes(kernel_output),
+            "kernelOutputDigest": _digest_bytes(kernel_output.encode("utf-8")),
+            "kernelOutputTruncated": False,
         },
     }
 
@@ -316,6 +431,11 @@ def _parser() -> argparse.ArgumentParser:
     sources.add_argument("--source", help="certificate/result JSON file or - for stdin")
     sources.add_argument("--fixture", help="tracked research fixture id")
     parser.add_argument("--timeout-seconds", type=int, default=180)
+    parser.add_argument(
+        "--lake",
+        type=Path,
+        help="explicit pinned Lake executable; the isolated Elan toolchain remains the default",
+    )
     return parser
 
 
@@ -329,7 +449,11 @@ def main() -> None:
             if arguments.fixture is not None
             else _load_json(arguments.source)
         )
-        result = kernel_check(certificate, timeout_seconds=arguments.timeout_seconds)
+        result = kernel_check(
+            certificate,
+            timeout_seconds=arguments.timeout_seconds,
+            lake=arguments.lake,
+        )
     except LeanReferenceError as error:
         result = {
             "status": "error",

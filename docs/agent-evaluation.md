@@ -65,6 +65,9 @@ Validation makes no model calls:
 .venv/bin/python script/agent_eval.py preflight --mode installed-smoke
 .venv/bin/python script/agent_eval.py validate --mode research-terra-smoke
 .venv/bin/python script/agent_eval.py validate --mode research-luna-smoke
+.venv/bin/python script/agent_eval.py validate --mode public-terra-smoke
+.venv/bin/python script/agent_eval.py validate --mode public-luna-smoke
+.venv/bin/python script/agent_eval.py validate --mode public-luna-adoption
 ```
 
 Every model-backed run requires the exact planned-call confirmation. Reports
@@ -78,6 +81,9 @@ are new files under the gitignored `build/agent-evals/` directory:
 .venv/bin/python script/agent_eval.py run --mode installed-smoke --confirm-model-runs 8
 .venv/bin/python script/agent_eval.py run --mode research-terra-smoke --confirm-model-runs 2
 .venv/bin/python script/agent_eval.py run --mode research-luna-smoke --confirm-model-runs 2
+.venv/bin/python script/agent_eval.py run --mode public-terra-smoke --confirm-model-runs 8
+.venv/bin/python script/agent_eval.py run --mode public-luna-smoke --confirm-model-runs 8
+.venv/bin/python script/agent_eval.py run --mode public-luna-adoption --confirm-model-runs 12
 ```
 
 The matching smoke must be infrastructure-valid and show the intended routing
@@ -191,7 +197,7 @@ provider conformance certificate, evidence of the target-specific installed
 Skill unless that route was separately observed, public-release authorization,
 or owner business acceptance.
 
-## Public-problem research smoke
+## Public-problem research evaluation
 
 The bounded research suite uses the public Putnam 1976 A2 statement from
 PutnamBench but asks only for the coefficients of its fixed `n = 18` instance.
@@ -210,3 +216,23 @@ smoke and a failed adoption probe: quality delta was zero and required-tool
 opportunity recall was zero. It supports no utility, automatic-selection, or
 research-adoption claim, and it is not a basis for expanding to a repeated
 model-backed evaluation.
+
+The separate four-task public-mathematics smoke covers specialized official
+2023 Putnam B1 and B6 problems, a NIST Hilbert-matrix diagnostic, and a
+Buckingham-Pi nullity task. Its source and grading boundaries are recorded in
+`evals/research/public-math-smoke.md`. Exploratory Terra and Luna smoke reports
+exceeded at least one declared token or output budget and are invalid as paired
+comparisons. Complete B6 and Buckingham-Pi treatment runs nevertheless made
+successful `math.describe` plus `math.run` calls in both model lanes; those
+per-run observations were used only to choose the smaller repeated suite.
+
+The valid repeated Luna suite contains B6 and Buckingham Pi, three repeats,
+and both conditions: 12/12 runs completed, all six pairs were correct, and
+baseline target use remained zero. Math Anchor was actually invoked in three
+of six treatment runs, with every observed invocation successful. Correctness
+delta was zero. Relative to baseline, treatment added 103,747 tokens in total
+(median paired delta +30,013.5) and 42.413 seconds in total (median paired
+delta +2.110 seconds). No monetary cost was observed or inferred. This is
+conditional evidence of stochastic 50% adoption and material context cost for
+the named tasks, model, driver, and budgets; it establishes neither a quality
+gain nor broad mathematical-research utility.

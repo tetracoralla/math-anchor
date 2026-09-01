@@ -45,6 +45,10 @@ and Apple notarization record exist.
   provider from Controller oracles, grades typed Math Anchor results, preserves
   unknown cost, and stays structurally separate from Agent routing and utility
   claims.
+- Added independently graded public-mathematics Agent suites for specialized
+  Putnam 2023 B1/B6 tasks, NIST Hilbert-matrix diagnostics, and Buckingham-Pi
+  nullity. Terra/Luna smoke and a bounded repeated Luna lane keep incomplete or
+  over-budget runs from being promoted into adoption or utility claims.
 
 - Expanded the typed Agent registry from 34 to 44 operations without adding a
   fifth MCP tool: programmer integer/bitwise semantics, decimal quantization,
@@ -75,6 +79,14 @@ and Apple notarization record exist.
   non-monotone `cosh`, inverse-trigonometric endpoints, and directed interval
   rounding. Its contract now distinguishes an internal mpmath interval bound
   from an external certificate or proof-kernel result.
+- Bound production and reference Lean subprocess output while draining both
+  pipes, terminate timed-out process groups, require one complete axiom
+  readback with no `sorryAx`, and bind checks to exact transitive Mathlib
+  revisions and executable/manifest digests.
+- Bound Agent-evaluation reports to the repository build directory, stage the
+  packaged runtime outside denied source roots, and reject evaluator, task,
+  run-membership, isolation, or target-server identity drift before a report
+  can be treated as comparison-valid.
 - Made local Plugin installation consume Codex's authoritative
   `installedPath`, compare the installed bytes before execution, and reject an
   MCP route that does not resolve to that exact installed artifact.

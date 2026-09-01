@@ -57,3 +57,10 @@ def test_complete_check_runs_the_swift_package_suite() -> None:
     swift_test = (ROOT / "script/swift_test.sh").read_text(encoding="utf-8")
     assert '"$ROOT_DIR/script/swift_test.sh"' in complete_check
     assert "swift test" in swift_test
+
+
+def test_lean_reference_consumer_is_not_part_of_the_python_package() -> None:
+    packaging = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+
+    assert 'where = ["src"]' in packaging
+    assert not (ROOT / "src" / "math_anchor" / "lean_reference_check.py").exists()

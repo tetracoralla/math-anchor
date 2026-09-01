@@ -5,7 +5,7 @@
   "title": "Math Anchor Putnam 1976 A2 fixed-instance promotion smoke",
   "targetRef": {
     "id": "math-anchor",
-    "version": "0.4.0"
+    "version": "0.5.0"
   },
   "tasks": [
     {
