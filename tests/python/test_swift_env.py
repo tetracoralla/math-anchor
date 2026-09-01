@@ -22,6 +22,7 @@ def test_explicit_sdk_override_is_selected_before_discovery(tmp_path: Path) -> N
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
     _write_executable(fake_bin / "swiftc", "#!/bin/sh\nexit 0\n")
+    _write_executable(fake_bin / "uname", "#!/bin/sh\nprintf 'aarch64\\n'\n")
     _write_executable(
         fake_bin / "xcrun",
         f"#!/bin/sh\nprintf '%s\\n' '{discovered_sdk}'\n",
@@ -34,7 +35,8 @@ def test_explicit_sdk_override_is_selected_before_discovery(tmp_path: Path) -> N
         [
             "/bin/bash",
             "-c",
-            'source script/swift_env.sh; configure_swift_environment "$PWD"; printf "%s" "$SDKROOT"',
+            'source script/swift_env.sh; configure_swift_environment "$PWD"; '
+            'printf "%s|%s" "$SDKROOT" "$MATH_ANCHOR_SWIFT_TARGET"',
         ],
         cwd=ROOT,
         env=environment,
@@ -43,7 +45,7 @@ def test_explicit_sdk_override_is_selected_before_discovery(tmp_path: Path) -> N
         text=True,
     )
 
-    assert completed.stdout == str(explicit_sdk)
+    assert completed.stdout == f"{explicit_sdk}|arm64-apple-macosx14.0"
 
 
 def test_invalid_explicit_sdk_does_not_fall_back_to_discovery(tmp_path: Path) -> None:

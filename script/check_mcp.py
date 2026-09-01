@@ -35,6 +35,29 @@ def persistent_worker_cpu_seconds() -> dict[int, float]:
     return snapshot
 
 
+async def wait_for_persistent_workers_to_quiesce(
+    *,
+    timeout: float = 6.0,
+    stable_for: float = 0.8,
+) -> dict[int, float]:
+    """Wait past the idle unit-registry warmup before attributing worker CPU."""
+    deadline = time.monotonic() + timeout
+    previous = persistent_worker_cpu_seconds()
+    stable_since = time.monotonic()
+    while time.monotonic() < deadline:
+        await asyncio.sleep(0.1)
+        current = persistent_worker_cpu_seconds()
+        changed = set(current) != set(previous) or any(
+            current[pid] - previous[pid] > 0.01 for pid in current.keys() & previous.keys()
+        )
+        if changed:
+            stable_since = time.monotonic()
+        elif time.monotonic() - stable_since >= stable_for:
+            return current
+        previous = current
+    raise AssertionError("persistent workers did not quiesce before cancellation check")
+
+
 async def main(
     plugin_root: Path | None = None,
     *,
@@ -896,6 +919,11 @@ async def main(
             # call consumes the current counter value; if this private field
             # disappears in a future SDK, fail here rather than silently
             # testing nothing.
+            # Each persistent worker performs one delayed unit-registry warm
+            # after becoming idle. Let that bounded work finish before CPU is
+            # used to attribute the request below, or an idle worker can be
+            # mistaken for the cancelled one on slower shared runners.
+            previous_workers = await wait_for_persistent_workers_to_quiesce()
             cancelled_request_id = session._request_id
             cancelled_call = asyncio.create_task(
                 session.call_tool(
@@ -915,7 +943,6 @@ async def main(
             # cancellation it deliberately starts a replacement prewarm; PID
             # identity keeps both from being mistaken for the cancelled job.
             active_workers: set[int] = set()
-            previous_workers = persistent_worker_cpu_seconds()
             active_deadline = time.monotonic() + 2
             while not active_workers and time.monotonic() < active_deadline:
                 await asyncio.sleep(0.1)

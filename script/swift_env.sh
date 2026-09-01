@@ -9,6 +9,7 @@ configure_swift_environment() {
 
   architecture="$(uname -m)"
   case "$architecture" in
+    aarch64) architecture="arm64" ;;
     arm64|x86_64) ;;
     *)
       echo "Unsupported macOS architecture: $architecture" >&2

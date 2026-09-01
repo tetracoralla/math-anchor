@@ -87,10 +87,13 @@ and Apple notarization record exist.
   packaged runtime outside denied source roots, and reject evaluator, task,
   run-membership, isolation, or target-server identity drift before a report
   can be treated as comparison-valid.
-- Normalized macOS and Linux binary architecture names in runtime manifests,
-  validated shared dependency locks against supported platform markers, used
-  the repository's exact lowercase Swift test path, and restored idle worker
-  unit-registry warming after bounded-ingress refactoring.
+- Canonicalized macOS and Linux host/binary architecture aliases in runtime
+  manifests and Swift setup, validated shared dependency locks against
+  supported platform markers, used the repository's exact lowercase Swift
+  test path, and restored idle worker unit-registry warming after
+  bounded-ingress refactoring. Cross-host cancellation, warmup, and app-timeout
+  checks now observe the intended lifecycle instead of assuming one fixed
+  machine-speed interval.
 - Made local Plugin installation consume Codex's authoritative
   `installedPath`, compare the installed bytes before execution, and reject an
   MCP route that does not resolve to that exact installed artifact.

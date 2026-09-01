@@ -900,7 +900,11 @@ struct CalculatorStoreChecks {
         let factorial = try? await liveRuntime.evaluate(expression: "factorial(5000)", precision: 16)
         check(factorial?.exact?.count == 16_326, "maximum allowed factorial survives the warm app protocol")
 
-        let boundedRuntime = MathRuntimeService(requestTimeout: 0.1)
+        // The heavy request must cross a bounded deadline, while the next
+        // request is allowed enough time for a real cold runtime rebuild on
+        // loaded CI machines. A 100 ms threshold accidentally made this a
+        // host-performance assertion after expression imports became lazy.
+        let boundedRuntime = MathRuntimeService(requestTimeout: 2)
         do {
             _ = try await boundedRuntime.evaluate(expression: "factorial(5000)^10000", precision: 16)
             check(false, "heavy app calculation must not run past its deadline")

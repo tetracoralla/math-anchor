@@ -77,6 +77,18 @@ def architectures_from_file_output(output: str) -> list[str]:
     return [name for name, pattern in patterns.items() if re.search(pattern, lowered)]
 
 
+def canonical_architecture(name: str) -> str:
+    normalized = name.strip().lower()
+    aliases = {
+        "aarch64": "arm64",
+        "arm64": "arm64",
+        "amd64": "x86_64",
+        "x86-64": "x86_64",
+        "x86_64": "x86_64",
+    }
+    return aliases.get(normalized, normalized)
+
+
 def binary_architectures(runtime: Path) -> list[str]:
     result = subprocess.run(
         ["file", "-b", str(runtime)],
@@ -95,7 +107,7 @@ def write_manifest(bundle: Path, runtime: Path, lock: Path, source_root: Path, v
         "schemaVersion": 1,
         "productVersion": version,
         "platform": sys.platform,
-        "buildArchitecture": platform.machine(),
+        "buildArchitecture": canonical_architecture(platform.machine()),
         "runtimeArchitectures": binary_architectures(runtime),
         "pythonTag": sys.implementation.cache_tag,
         "pythonVersion": platform.python_version(),
@@ -121,7 +133,7 @@ def verify_manifest(
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     except (OSError, ValueError, TypeError, json.JSONDecodeError) as error:
         raise SystemExit(f"runtime manifest is missing or invalid: {error}") from error
-    expected_architecture = platform.machine()
+    expected_architecture = canonical_architecture(platform.machine())
     checks = {
         "schemaVersion": 1,
         "productVersion": version,

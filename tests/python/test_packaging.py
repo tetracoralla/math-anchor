@@ -194,6 +194,23 @@ def test_runtime_manifest_normalizes_supported_file_architecture_names(
     assert runtime_manifest.architectures_from_file_output(description) == expected
 
 
+@pytest.mark.parametrize(
+    ("reported", "expected"),
+    (
+        ("aarch64", "arm64"),
+        ("arm64", "arm64"),
+        ("AMD64", "x86_64"),
+        ("x86-64", "x86_64"),
+        ("x86_64", "x86_64"),
+    ),
+)
+def test_runtime_manifest_normalizes_supported_host_architecture_names(
+    reported: str,
+    expected: str,
+) -> None:
+    assert runtime_manifest.canonical_architecture(reported) == expected
+
+
 def test_plugin_validation_consumes_the_complete_runtime_manifest(tmp_path: Path) -> None:
     # Negative regression: checking only that the executable existed allowed
     # File Provider conflict copies to pass plugin validation.
@@ -996,8 +1013,9 @@ def test_packaged_runtime_has_matching_manifest_notices_and_sbom() -> None:
     assert project_notice_path.read_bytes() == (ROOT / "NOTICE").read_bytes()
     assert notice_path.stat().st_size > 10_000
     manifest = json.loads(manifest_path.read_text())
-    assert manifest["buildArchitecture"] == platform.machine()
-    assert platform.machine() in manifest["runtimeArchitectures"]
+    host_architecture = runtime_manifest.canonical_architecture(platform.machine())
+    assert manifest["buildArchitecture"] == host_architecture
+    assert host_architecture in manifest["runtimeArchitectures"]
     manifest_paths = {item["path"] for item in manifest["files"]}
     assert {"LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.txt", "sbom.spdx.json"} <= manifest_paths
     sbom = json.loads(sbom_path.read_text())

@@ -6,11 +6,37 @@ import sys
 import threading
 import time
 
+import psutil
+
 import math_anchor.sandbox as sandbox
 from math_anchor import sandbox_testing
 from math_anchor import worker
 from math_anchor.errors import CalculatorError
 from math_anchor.sandbox import run_batch, run_operation
+
+
+def _wait_for_idle_worker_warm(process_id: int, timeout: float = 8.0) -> None:
+    """Observe the delayed registry warm and its completion without guessing its duration."""
+    process = psutil.Process(process_id)
+    deadline = time.monotonic() + timeout
+    earliest_warm = time.monotonic() + worker.UNIT_REGISTRY_WARM_IDLE_SECONDS * 0.8
+    previous_cpu = sum(process.cpu_times()[:2])
+    observed_warm = False
+    quiet_since: float | None = None
+    while time.monotonic() < deadline:
+        time.sleep(0.05)
+        now = time.monotonic()
+        current_cpu = sum(process.cpu_times()[:2])
+        delta = current_cpu - previous_cpu
+        previous_cpu = current_cpu
+        if now >= earliest_warm and delta > 0.005:
+            observed_warm = True
+            quiet_since = None
+        elif observed_warm:
+            quiet_since = quiet_since or now
+            if now - quiet_since >= 0.3:
+                return
+    raise AssertionError("persistent worker unit-registry warm did not complete")
 
 
 def test_isolated_execution_and_structured_error() -> None:
@@ -504,7 +530,7 @@ def test_persistent_worker_serves_the_first_units_call_within_a_short_budget() -
         )
         assert worker_process is not None, startup_error
         try:
-            time.sleep(1.0)  # allow the background registry warm to finish
+            _wait_for_idle_worker_warm(worker_process.process.pid)
             result, reusable, output_policy_applied = sandbox._execute_worker(
                 worker_process,
                 json.dumps(
