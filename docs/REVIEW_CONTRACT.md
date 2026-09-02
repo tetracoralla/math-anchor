@@ -161,6 +161,12 @@ still runs `swift test`, while supplying the Swift Testing framework search and
 runtime paths needed by Command Line Tools installations that do not discover
 the bundled framework automatically.
 
+`script/build_and_run.sh --verify` is the local app-bundle lane. It probes the
+embedded runtime through expression, unit, and unsafe-input requests, launches
+the development-identity app, and confirms that exact bundle executable. It
+must not terminate, mistake, or share calculation history with an installed
+release that has the same process name.
+
 The bounded representative load harness is:
 
 ```sh

@@ -5,7 +5,8 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 MODE="${1:-run}"
 APP_DISPLAY_NAME="Math Anchor"
 APP_EXECUTABLE="MathAnchor"
-BUNDLE_ID="com.openadam.mathanchor"
+PRODUCTION_BUNDLE_ID="com.openadam.mathanchor"
+DEVELOPMENT_BUNDLE_ID="com.openadam.mathanchor.development"
 MIN_SYSTEM_VERSION="14.0"
 APP_VERSION_OVERRIDE="${MATH_ANCHOR_APP_VERSION:-}"
 BUILD_NUMBER="${MATH_ANCHOR_BUILD_NUMBER:-1}"
@@ -14,6 +15,10 @@ BUILD_CONFIGURATION="${MATH_ANCHOR_BUILD_CONFIGURATION:-debug}"
 if [[ "$BUILD_CONFIGURATION" != "debug" && "$BUILD_CONFIGURATION" != "release" ]]; then
   echo "MATH_ANCHOR_BUILD_CONFIGURATION must be debug or release." >&2
   exit 2
+fi
+BUNDLE_ID="$PRODUCTION_BUNDLE_ID"
+if [[ "$BUILD_CONFIGURATION" == "debug" ]]; then
+  BUNDLE_ID="$DEVELOPMENT_BUNDLE_ID"
 fi
 if [[ ! "$BUILD_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
   echo "MATH_ANCHOR_BUILD_NUMBER must be a positive integer." >&2
@@ -33,6 +38,8 @@ APP_RUNTIME_BUNDLE="$APP_RUNTIME_DIR/math-anchor-runtime"
 APP_RUNTIME="$APP_RUNTIME_BUNDLE/math-anchor-runtime"
 APP_ICON="$APP_RESOURCES/AppIcon.icns"
 PATH_VALIDATOR="$ROOT_DIR/script/validate_repo_paths.py"
+PROCESS_CONTROL="$ROOT_DIR/script/app_processes.sh"
+APP_RUNTIME_CHECK="$ROOT_DIR/script/check_app_bundle_runtime.py"
 
 # This must run before the Swift module-cache creation, bootstrap, or any
 # rm -rf / mkdir -p / ditto on the app bundle subtree.
@@ -102,9 +109,22 @@ cat >"$INFO_PLIST" <<PLIST
 </plist>
 PLIST
 
+"$PATH_VALIDATION_PYTHON" "$APP_RUNTIME_CHECK" --runtime "$APP_RUNTIME"
+
 open_app() {
-  pkill -x "$APP_EXECUTABLE" >/dev/null 2>&1 || true
+  "$PROCESS_CONTROL" stop "$APP_EXECUTABLE" "$APP_BINARY"
   /usr/bin/open -n "$APP_BUNDLE"
+}
+
+wait_for_app() {
+  for _ in {1..40}; do
+    if "$PROCESS_CONTROL" check "$APP_EXECUTABLE" "$APP_BINARY"; then
+      return 0
+    fi
+    sleep 0.05
+  done
+  echo "Local Math Anchor app did not start from $APP_BINARY." >&2
+  return 1
 }
 
 case "$MODE" in
@@ -112,7 +132,7 @@ case "$MODE" in
     open_app
     ;;
   --debug|debug)
-    pkill -x "$APP_EXECUTABLE" >/dev/null 2>&1 || true
+    "$PROCESS_CONTROL" stop "$APP_EXECUTABLE" "$APP_BINARY" "$BUILD_BINARY"
     lldb -- "$APP_BINARY"
     ;;
   --logs|logs)
@@ -125,8 +145,7 @@ case "$MODE" in
     ;;
   --verify|verify)
     open_app
-    sleep 1
-    pgrep -x "$APP_EXECUTABLE" >/dev/null
+    wait_for_app
     ;;
   --package|package)
     ;;

@@ -545,6 +545,77 @@ def test_build_and_run_refuses_dist_symlink_before_replacing_the_app_bundle(
     assert sentinel.read_text(encoding="utf-8") == "outside repository"
 
 
+def test_app_process_stop_is_scoped_to_the_expected_executable(tmp_path: Path) -> None:
+    expected_binary = tmp_path / "dist" / "Math Anchor.app" / "Contents" / "MacOS" / "MathAnchor"
+    unrelated_binary = tmp_path / "Applications" / "Math Anchor.app" / "Contents" / "MacOS" / "MathAnchor"
+    expected_binary.parent.mkdir(parents=True)
+    unrelated_binary.parent.mkdir(parents=True)
+    source = tmp_path / "sleep.c"
+    source.write_text(
+        "#include <unistd.h>\nint main(void) { sleep(30); return 0; }\n",
+        encoding="utf-8",
+    )
+    for binary in (expected_binary, unrelated_binary):
+        compiled = subprocess.run(
+            ["/usr/bin/clang", str(source), "-o", str(binary)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert compiled.returncode == 0, compiled.stderr
+
+    expected = subprocess.Popen([str(expected_binary), "30"])
+    unrelated = subprocess.Popen([str(unrelated_binary), "30"])
+    try:
+        stopped = subprocess.run(
+            [
+                str(ROOT / "script" / "app_processes.sh"),
+                "stop",
+                "MathAnchor",
+                str(expected_binary),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert stopped.returncode == 0, stopped.stderr
+        expected.wait(timeout=5)
+        assert unrelated.poll() is None
+        checked = subprocess.run(
+            [
+                str(ROOT / "script" / "app_processes.sh"),
+                "check",
+                "MathAnchor",
+                str(unrelated_binary),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert checked.returncode == 0, checked.stderr
+    finally:
+        for process in (expected, unrelated):
+            if process.poll() is None:
+                process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=5)
+
+
+def test_app_process_stop_rejects_broad_or_mismatched_targets() -> None:
+    process_control = ROOT / "script" / "app_processes.sh"
+    for target in ("/", "/Applications/Another.app/Contents/MacOS/Another"):
+        stopped = subprocess.run(
+            [str(process_control), "stop", "MathAnchor", target],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert stopped.returncode == 2
+
+
 @pytest.mark.parametrize("linked_output", [".build", ".swiftpm"])
 def test_swift_env_refuses_generated_parent_symlink(
     tmp_path: Path, linked_output: str
@@ -940,6 +1011,10 @@ def test_release_scripts_require_versioned_signed_notarized_artifacts() -> None:
     assert "CFBundleVersion" in local_build
     assert 'APP_DISPLAY_NAME="Math Anchor"' in local_build
     assert 'APP_EXECUTABLE="MathAnchor"' in local_build
+    assert 'PRODUCTION_BUNDLE_ID="com.openadam.mathanchor"' in local_build
+    assert 'DEVELOPMENT_BUNDLE_ID="com.openadam.mathanchor.development"' in local_build
+    assert 'if [[ "$BUILD_CONFIGURATION" == "debug" ]]' in local_build
+    assert 'MATH_ANCHOR_BUILD_CONFIGURATION=release' in release
     assert "--options runtime" in release
     assert "notarytool submit" in release
     assert 'NOTARY_KEYCHAIN="${MATH_ANCHOR_NOTARY_KEYCHAIN:-}"' in release
@@ -949,6 +1024,52 @@ def test_release_scripts_require_versioned_signed_notarized_artifacts() -> None:
     assert "check_release_source.sh" in release
     assert 'MATH_ANCHOR_APP_VERSION="$VERSION"' in release
     assert 'MATH_ANCHOR_BUILD_NUMBER="$BUILD_NUMBER"' in release
+
+
+def test_local_app_verification_is_bundle_scoped_and_probes_its_runtime() -> None:
+    script = (ROOT / "script" / "build_and_run.sh").read_text(encoding="utf-8")
+    assert '"$PROCESS_CONTROL" stop "$APP_EXECUTABLE" "$APP_BINARY"' in script
+    assert '"$PROCESS_CONTROL" check "$APP_EXECUTABLE" "$APP_BINARY"' in script
+    assert '"$PATH_VALIDATION_PYTHON" "$APP_RUNTIME_CHECK" --runtime "$APP_RUNTIME"' in script
+    assert 'pgrep -x "$APP_EXECUTABLE"' not in script
+
+
+@pytest.mark.parametrize("linked_component", ["runtime", "parent"])
+def test_app_bundle_runtime_probe_rejects_symbolic_link_components_without_execution(
+    tmp_path: Path, linked_component: str
+) -> None:
+    real_directory = tmp_path / "real"
+    real_directory.mkdir()
+    marker = tmp_path / "runtime-was-executed"
+    runtime = real_directory / "MathAnchorRuntime"
+    runtime.write_text(
+        f'#!/bin/sh\ntouch "{marker}"\nexit 0\n',
+        encoding="utf-8",
+    )
+    runtime.chmod(0o755)
+
+    if linked_component == "runtime":
+        candidate = tmp_path / "linked-runtime"
+        candidate.symlink_to(runtime)
+    else:
+        linked_parent = tmp_path / "linked-parent"
+        linked_parent.symlink_to(real_directory, target_is_directory=True)
+        candidate = linked_parent / runtime.name
+
+    checked = subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "script" / "check_app_bundle_runtime.py"),
+            "--runtime",
+            str(candidate),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert checked.returncode != 0
+    assert "symbolic-link component" in checked.stderr
+    assert not marker.exists()
 
 
 def test_public_repository_has_contribution_and_report_routes() -> None:

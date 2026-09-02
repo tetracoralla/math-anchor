@@ -92,6 +92,10 @@ Developer ID signature, and Apple notarization record.
 ```
 
 The Codex app also exposes the same command as the repository's **Run** action.
+Local debug builds use a separate application identity and calculation history,
+so starting one does not terminate or reuse the history of an installed release.
+Use `./script/build_and_run.sh --verify` to additionally probe the runtime
+embedded in the local app before confirming that exact bundle launched.
 
 ## Use the local runtime
 

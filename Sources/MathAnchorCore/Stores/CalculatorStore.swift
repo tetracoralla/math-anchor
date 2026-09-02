@@ -462,6 +462,12 @@ package final class CalculatorStore: ObservableObject {
                     evaluation: evaluationExpression + "0."
                 )
             }
+            if endsNonNumericValue(expression) {
+                return ExpressionState(
+                    visible: expression + "*0.",
+                    evaluation: evaluationExpression + "*0."
+                )
+            }
         }
 
         if token == ")" {
@@ -481,10 +487,11 @@ package final class CalculatorStore: ObservableObject {
         }
 
         let tokenStartsNamedValue = token.first?.isLetter == true || token.first == "("
-        let followsClosedValue = expression.last == ")" && (
-            token.first?.isNumber == true || token.first == "."
-        )
-        let needsMultiplication = (tokenStartsNamedValue && endsValue(expression)) || followsClosedValue
+        let digitFollowsNonNumericValue = token.count == 1
+            && token.first?.isNumber == true
+            && endsNonNumericValue(expression)
+        let needsMultiplication = (tokenStartsNamedValue && endsValue(expression))
+            || digitFollowsNonNumericValue
         let separator = needsMultiplication ? "*" : ""
         return ExpressionState(
             visible: expression + separator + token,
@@ -611,5 +618,10 @@ package final class CalculatorStore: ObservableObject {
     private func endsValue(_ value: String) -> Bool {
         guard let last = value.last else { return false }
         return last.isNumber || last.isLetter || last == ")" || last == "%"
+    }
+
+    private func endsNonNumericValue(_ value: String) -> Bool {
+        guard let last = value.last else { return false }
+        return last.isLetter || last == ")" || last == "%"
     }
 }
