@@ -81,8 +81,9 @@ benchmark number.
    queued, starting, executing, or returning must eventually release ingress,
    admission, worker, temporary diagnostics, and memory accounting. Dead or
    oversized workers are evicted. Repeated infrastructure faults open the
-   circuit and return `E_UNAVAILABLE`; a half-open probe and later healthy call
-   restore service without a process restart.
+   circuit and return `E_UNAVAILABLE`; only the current half-open probe may
+   restore service. A request admitted before opening cannot close the circuit
+   or release that probe when its result arrives later.
 8. **Output and discovery costs are explicit.** Every always-listed input
    schema remains below the 4,800-byte current-Codex compatibility regression,
    the root `math.run` schema must retain typed operation and arguments fields
@@ -121,7 +122,8 @@ the normal suite:
   would exceed the whole-batch response budget;
 - queue saturation, the 33rd queued request, four active leases, the fourth
   concurrent batch, requested-memory exhaustion, cancellation storms, worker
-  crash/recycle, circuit open/half-open/recovery, and a healthy call after each;
+  crash/recycle, circuit open/half-open/recovery, a stale success that completes
+  after opening, and a healthy call after each;
 - packaged runtime startup without a source checkout or development-only
   environment, plus an explicit structured call through the current installed
   Plugin;

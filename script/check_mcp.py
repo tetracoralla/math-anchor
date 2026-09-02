@@ -40,7 +40,7 @@ async def wait_for_persistent_workers_to_quiesce(
     timeout: float = 6.0,
     stable_for: float = 0.8,
 ) -> dict[int, float]:
-    """Wait past the idle unit-registry warmup before attributing worker CPU."""
+    """Wait for persistent workers to settle before attributing worker CPU."""
     deadline = time.monotonic() + timeout
     previous = persistent_worker_cpu_seconds()
     stable_since = time.monotonic()
@@ -919,8 +919,7 @@ async def main(
             # call consumes the current counter value; if this private field
             # disappears in a future SDK, fail here rather than silently
             # testing nothing.
-            # Each persistent worker performs one delayed unit-registry warm
-            # after becoming idle. Let that bounded work finish before CPU is
+            # Let bounded startup and prior request work finish before CPU is
             # used to attribute the request below, or an idle worker can be
             # mistaken for the cancelled one on slower shared runners.
             previous_workers = await wait_for_persistent_workers_to_quiesce()

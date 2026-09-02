@@ -29,6 +29,7 @@ class _ReusableWorker:
         self.pool_generation: int | None = None
         self.created_at = time.monotonic()
         self.requests_completed = 0
+        self.unit_registry_loaded = False
         # One daemon reader lives with each persistent worker. The previous
         # implementation created and joined a new ThreadPoolExecutor for every
         # operation, which made a cheap warm expression pay thread lifecycle

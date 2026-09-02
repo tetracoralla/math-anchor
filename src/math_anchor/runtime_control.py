@@ -43,6 +43,14 @@ class AdmissionLease:
     queue_ms: float
 
 
+@dataclass(frozen=True)
+class CircuitPermit:
+    """Bind one admitted execution to a circuit generation and probe slot."""
+
+    generation: int
+    probe_id: int | None = None
+
+
 @dataclass
 class _Ticket:
     memory_mb: int
@@ -179,22 +187,28 @@ class CircuitBreaker:
         self.lock = threading.Lock()
         self.consecutive_failures = 0
         self.opened_at: float | None = None
-        self.half_open_probe = False
+        self.generation = 0
+        self.next_probe_id = 0
+        self.active_probe_id: int | None = None
 
-    def allow(self) -> tuple[bool, int | None]:
+    def allow(self) -> tuple[CircuitPermit | None, int | None]:
         now = time.monotonic()
         with self.lock:
             if self.opened_at is None:
-                return True, None
+                return CircuitPermit(generation=self.generation), None
             remaining = self.open_seconds - (now - self.opened_at)
             if remaining > 0:
-                return False, max(1, int(remaining * 1000))
-            if self.half_open_probe:
-                return False, max(1, int(self.open_seconds * 1000))
-            self.half_open_probe = True
-            return True, None
+                return None, max(1, int(remaining * 1000))
+            if self.active_probe_id is not None:
+                return None, max(1, int(self.open_seconds * 1000))
+            self.next_probe_id += 1
+            self.active_probe_id = self.next_probe_id
+            return CircuitPermit(
+                generation=self.generation,
+                probe_id=self.active_probe_id,
+            ), None
 
-    def abandon_probe(self) -> None:
+    def abandon_probe(self, permit: CircuitPermit) -> None:
         """Return a reserved half-open probe that no execution consumed.
 
         allow() reserves the single probe before admission, so a call that
@@ -203,47 +217,91 @@ class CircuitBreaker:
         stale, and every later call is refused forever.
         """
         with self.lock:
-            self.half_open_probe = False
+            if (
+                permit.generation == self.generation
+                and permit.probe_id == self.active_probe_id
+            ):
+                self.active_probe_id = None
 
-    def record(self, *, outcome: str) -> bool:
+    def record(
+        self,
+        *,
+        outcome: str,
+        permit: CircuitPermit | None = None,
+    ) -> bool:
         """Record one completed call and return whether this call opened it.
 
-        outcome is "success", "error", or "infrastructure_failure". Only a
-        successful call closes an open circuit: caller-side errors (timeout,
-        cancellation, memory breach) are not provider-health evidence in
-        either direction, so an in-flight error completing while the circuit
-        is open cannot bypass the open -> half-open -> healthy-probe
-        recovery sequence, and while closed it neither counts as a provider
-        failure nor proves one absent.
+        outcome is "success", "error", or "infrastructure_failure". Only the
+        current half-open probe can close an open circuit: caller-side errors
+        (timeout, cancellation, memory breach) are not provider-health
+        evidence in either direction, so an earlier in-flight completion
+        cannot bypass the open -> half-open -> healthy-probe recovery sequence.
         """
         with self.lock:
+            is_current_generation = (
+                permit is None or permit.generation == self.generation
+            )
+            is_current_probe = (
+                permit is not None
+                and is_current_generation
+                and permit.probe_id is not None
+                and permit.probe_id == self.active_probe_id
+            )
+            if self.opened_at is not None:
+                # Ordinary calls admitted before the circuit opened are stale:
+                # neither their later success nor their caller-side error may
+                # close the circuit or release the current half-open probe.
+                if not is_current_probe:
+                    return False
+                self.active_probe_id = None
+                if outcome == "success":
+                    self.consecutive_failures = 0
+                    self.opened_at = None
+                    return False
+                if outcome == "infrastructure_failure":
+                    self.consecutive_failures = max(
+                        self.consecutive_failures,
+                        self.failure_threshold,
+                    )
+                    self.generation += 1
+                    self.opened_at = time.monotonic()
+                    return True
+                # A caller-side probe error is inconclusive. Keep the circuit
+                # open and let the next call reserve a fresh probe.
+                return False
+
+            # A probe from an earlier open generation completed after another
+            # probe already restored service. It is stale in the closed state
+            # as well and must not start or reset a new failure streak.
+            if not is_current_generation or (
+                permit is not None and permit.probe_id is not None
+            ):
+                return False
             if outcome == "infrastructure_failure":
                 self.consecutive_failures += 1
-                self.half_open_probe = False
                 if self.consecutive_failures >= self.failure_threshold:
+                    self.generation += 1
                     self.opened_at = time.monotonic()
                     return True
                 return False
             if outcome == "success":
                 self.consecutive_failures = 0
                 self.opened_at = None
-                self.half_open_probe = False
                 return False
-            # Inconclusive outcome: free the probe so the next call can try
-            # again, but keep any open circuit open and the streak intact.
-            self.half_open_probe = False
+            # Inconclusive ordinary outcomes do not change provider health.
             return False
 
     def reset(self) -> None:
         with self.lock:
             self.consecutive_failures = 0
             self.opened_at = None
-            self.half_open_probe = False
+            self.active_probe_id = None
+            self.generation += 1
 
     def snapshot(self) -> dict[str, Any]:
         with self.lock:
             return {
                 "consecutiveFailures": self.consecutive_failures,
                 "state": "open" if self.opened_at is not None else "closed",
-                "halfOpenProbe": self.half_open_probe,
+                "halfOpenProbe": self.active_probe_id is not None,
             }

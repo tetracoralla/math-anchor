@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 from pathlib import Path
 import subprocess
@@ -61,6 +62,41 @@ def test_batch_transport_budget_rejects_non_json_before_scheduling() -> None:
     assert result["status"] == "error"
     assert result["error"]["code"] == "E_INPUT"
     assert result["error"]["phase"] == "input"
+
+
+def test_nonfinite_numbers_are_rejected_before_worker_acquisition(monkeypatch) -> None:
+    def unexpected_acquire(*args, **kwargs):
+        raise AssertionError("worker acquisition must happen after request preflight")
+
+    monkeypatch.setattr(sandbox._WORKER_POOL, "acquire", unexpected_acquire)
+    for value in (math.nan, math.inf, -math.inf):
+        result = run_operation(
+            "units.convert",
+            {"value": value, "fromUnit": "meter", "toUnit": "foot"},
+        )
+        assert result["status"] == "error"
+        assert result["error"]["code"] == "E_INPUT"
+        assert result["error"]["phase"] == "input"
+        assert "finite" in result["error"]["message"]
+
+
+def test_batch_rejects_nonfinite_numbers_before_scheduling() -> None:
+    result = run_batch(
+        [
+            {
+                "operation": "units.convert",
+                "arguments": {
+                    "value": math.inf,
+                    "fromUnit": "meter",
+                    "toUnit": "foot",
+                },
+            }
+        ]
+    )
+    assert result["status"] == "error"
+    assert result["error"]["code"] == "E_INPUT"
+    assert result["error"]["phase"] == "input"
+    assert "finite" in result["error"]["message"]
 
 
 def test_batch_deadline_includes_transport_preflight(monkeypatch) -> None:

@@ -255,6 +255,24 @@ def test_symbolic_solve_classifies_infinite_none_and_general_sets() -> None:
     assert contradiction["classification"] == "none"
     assert contradiction["solutionSet"] == "EmptySet"
 
+    contradictory_system = execute_direct(
+        "algebra.solve",
+        {"equations": ["x=1", "x=2"], "variables": ["x"], "domain": "real"},
+    )
+    assert contradictory_system["classification"] == "none"
+    assert contradictory_system["complete"] is True
+    assert contradictory_system["solutions"] == []
+
+    redundant_system = execute_direct(
+        "algebra.solve",
+        {"equations": ["x=1", "2*x=2"], "variables": ["x"], "domain": "real"},
+    )
+    assert redundant_system["classification"] == "finite"
+    assert redundant_system["complete"] is True
+    assert redundant_system["solutions"] == [
+        {"x": {"exact": "1", "approx": "1.000000000000000"}}
+    ]
+
 
 def test_exact_statistics_are_not_limited_by_binary64_range() -> None:
     result = execute_direct("statistics.describe", {"values": ["1e400", "2e400"]})

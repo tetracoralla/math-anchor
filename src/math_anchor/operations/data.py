@@ -43,12 +43,6 @@ def _float_unit_registry() -> Any:
     return _FLOAT_UNIT_REGISTRY
 
 
-def warm_unit_registries() -> None:
-    """Build both lazy registries outside an interactive request budget."""
-    _exact_unit_registry()
-    _float_unit_registry()
-
-
 def statistics_describe(arguments: dict[str, Any]) -> dict[str, Any]:
     import sympy as sp
 

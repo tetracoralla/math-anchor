@@ -52,7 +52,9 @@ Before admission, one run is limited to an 8 MiB JSON transport graph,
 500,000 nodes. The MCP stdio carrier allows 17 MiB including JSON-RPC overhead,
 so the SDK never parses an unbounded line before those runtime limits apply.
 The app and child-worker JSON-lines carriers use the same bounded-read rule and
-recover alignment after rejecting an oversized line.
+recover alignment after rejecting an oversized line. Transport numbers must be
+finite JSON values; `NaN` and infinities are rejected before worker admission
+instead of being emitted as non-standard JSON.
 
 Each lease owns one isolated persistent child. Serial use prewarms one child;
 observed parallel demand raises the retained warm target. Workers are replaced
@@ -65,7 +67,8 @@ Operation handlers and heavy engines load on demand. A fresh pure-Python
 machine-integer or combinatorics worker therefore does not pay for SymPy,
 NumPy, Pint, or mpmath. Once a worker uses an engine it retains it for later
 calls until normal recycle; this keeps the common path small without creating
-a second cache or weakening isolation.
+a second cache or weakening isolation. Unit-backed calls preferentially reuse
+a worker that has already constructed a Pint registry.
 
 ## Error policy
 
@@ -81,8 +84,10 @@ Every structured error contains:
 Correct input/domain/unit errors. Split or reduce timeout, memory, and output
 errors. A full ingress queue returns retryable `E_OVERLOADED`; three consecutive
 provider failures open a short circuit that returns retryable `E_UNAVAILABLE`
-until one half-open probe is allowed. Retry these transient errors at most once
-after the supplied delay. Cancellation is terminal for that request.
+until one half-open probe is allowed. Only that probe may restore service; a
+request admitted before the circuit opened cannot close it later. Retry these
+transient errors at most once after the supplied delay. Cancellation is
+terminal for that request.
 
 ## Current-source validation
 
