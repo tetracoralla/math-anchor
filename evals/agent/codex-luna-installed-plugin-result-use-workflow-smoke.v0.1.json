@@ -1,14 +1,14 @@
 {
   "schemaVersion": "openadam.agent-tool-eval.experiment.v0.1",
-  "id": "math-anchor.codex-luna.installed-plugin-routing-smoke-0-5",
-  "title": "Math Anchor 0.5 isolated installed Plugin routing smoke in Codex Luna",
+  "id": "math-anchor.codex-luna.installed-plugin-result-use-workflow-smoke-0-5",
+  "title": "Math Anchor 0.5 isolated installed Plugin result-use workflow smoke in Codex Luna",
   "purpose": "development-smoke",
-  "suiteRef": {"id": "math-anchor.routing-smoke", "version": "0.1.0"},
+  "suiteRef": {"id": "math-anchor.result-use-workflow-smoke", "version": "0.1.0"},
   "targetRef": {"id": "math-anchor", "version": "0.5.0"},
   "agent": {"provider": "openai", "model": "gpt-5.6-luna"},
   "harness": {"id": "codex-cli", "version": "0.152.0"},
   "repeats": 1,
-  "seed": "math-anchor-installed-plugin-routing-2026-08-24",
+  "seed": "math-anchor-installed-result-use-workflow-2026-09-02",
   "budget": {
     "perRunTimeoutMs": 180000,
     "maxStdoutBytes": 131072,
@@ -53,7 +53,8 @@
       "--target-tool-prefix", "math-anchor.math.",
       "--isolated-plugin-home", "${MATH_ANCHOR_ISOLATED_CODEX_HOME}",
       "--target-context-file", "${MATH_ANCHOR_TARGET_SKILL_FILE}",
-      "--target-context-file", "${MATH_ANCHOR_TARGET_SKILL_AGENT_FILE}"
+      "--target-context-file", "${MATH_ANCHOR_TARGET_SKILL_AGENT_FILE}",
+      "--answer-carrier", "json-string-object"
     ],
     "cwd": "."
   },

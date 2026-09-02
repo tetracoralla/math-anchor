@@ -42,8 +42,11 @@ mathematical truth.
 Direct structured invocation is the supported Agent contract. Natural-language
 tool selection, automatic adoption, quality gain, and research utility are
 separate empirical claims. The current public-task evaluation observed some
-successful tool adoption but no correctness gain and substantial context cost;
-see `docs/agent-evaluation.md`. No broad adoption or utility claim is warranted.
+successful tool adoption, one corrupted-certificate error prevented by the
+explicit route, and one exact two-stage result chain with all declared bindings
+satisfied. Natural installed routing remained incomplete and context cost was
+material; see `docs/agent-evaluation.md`. No broad adoption or utility claim is
+warranted.
 
 ## Validation ladder
 
@@ -67,18 +70,21 @@ local daemon; source inspection cannot promote that runtime lane to PASS.
 
 ## Next product-strengthening sequence
 
-1. Integrate the explicit route into one real external mathematics or physics
-   Agent workflow and measure task-level error prevention, retries, latency,
-   context cost, and whether the returned value is actually used.
-2. Improve operation routing and compact context before expanding model-backed
-   repeats. A correct treatment with no target call is not adoption; a target
-   call with no quality gain is not utility.
-3. Add another certificate family only when the external workflow repeatedly
+1. Preserve the now-observed certificate-decision and determinant-to-remainder
+   procedures as the first explicit external workflow boundary. Expand repeats
+   only after every task in the selected suite conforms and binds its result.
+2. Integrate provider-owned Procedure selection through a public Agent Host
+   extension point once that owning tree is stable. More Skill wording is not
+   a substitute for host-enforced routing; a correct treatment with no target
+   call is not adoption.
+3. Reduce cold context and operation-selection cost before a larger model run.
+   A target call with no quality gain is not utility.
+4. Add another certificate family only when the external workflow repeatedly
    needs it. Keep each family bounded, independently recomputable, and
    separately kernel-checked.
-4. Keep the four-tool boundary and registry-first capability model unless
+5. Keep the four-tool boundary and registry-first capability model unless
    current installed-host measurements demonstrate a concrete reason to change
    it.
-5. Treat signed/notarized macOS distribution, hosted marketplace listing, and
+6. Treat signed/notarized macOS distribution, hosted marketplace listing, and
    owner visual/business acceptance as separate release decisions from public
    source and local Plugin installation.

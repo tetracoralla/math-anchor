@@ -33,22 +33,20 @@ ROOT = Path(__file__).resolve().parent.parent
 EVAL_DIR = ROOT / "evals" / "agent"
 DEFAULT_EVALUATOR_CANDIDATES = (
     ROOT.parent / "agent-tool-labs" / "packages" / "agent-tool-evals",
-    ROOT.parent / "agent-tool-evals",
-    Path.home()
-    / "Development"
-    / "tools-dev"
-    / "agent-tool-labs"
-    / "packages"
-    / "agent-tool-evals",
 )
 DEFAULT_OUTPUT_DIR = ROOT / "build" / "agent-evals"
 POLICY_PATH = EVAL_DIR / "coding-agent-policy.md"
 POLICY_PLACEHOLDER = "${MATH_ANCHOR_CODING_AGENT_POLICY}"
+RESULT_USE_POLICY_PATH = EVAL_DIR / "explicit-result-use-policy.md"
+RESULT_USE_POLICY_PLACEHOLDER = "${MATH_ANCHOR_RESULT_USE_POLICY}"
 ISOLATED_CODEX_HOME_PLACEHOLDER = "${MATH_ANCHOR_ISOLATED_CODEX_HOME}"
+TARGET_SKILL_FILE_PLACEHOLDER = "${MATH_ANCHOR_TARGET_SKILL_FILE}"
+TARGET_SKILL_AGENT_FILE_PLACEHOLDER = "${MATH_ANCHOR_TARGET_SKILL_AGENT_FILE}"
 MCP_COMMAND_PLACEHOLDER = "${MATH_ANCHOR_MCP_COMMAND}"
 MCP_CWD_PLACEHOLDER = "${MATH_ANCHOR_MCP_CWD}"
 TARGET_PLUGIN_ID = "math-anchor@openadam"
 TARGET_PLUGIN_VERSION = canonical_version(ROOT)
+TARGET_REF = {"id": "math-anchor", "version": TARGET_PLUGIN_VERSION}
 PACKAGED_MCP_COMMAND = (
     ROOT / "plugins" / "math-anchor" / "runtime" / "math-anchor-runtime" / "math-anchor-runtime"
 )
@@ -66,6 +64,18 @@ MODES = {
     "installed-smoke": (
         EVAL_DIR / "routing-smoke.v0.1.json",
         EVAL_DIR / "codex-luna-installed-plugin-routing-smoke.v0.1.json",
+    ),
+    "installed-workflow-smoke": (
+        EVAL_DIR / "result-use-workflow-smoke.v0.1.json",
+        EVAL_DIR / "codex-luna-installed-plugin-result-use-workflow-smoke.v0.1.json",
+    ),
+    "explicit-workflow-smoke": (
+        EVAL_DIR / "result-use-workflow-smoke.v0.1.json",
+        EVAL_DIR / "codex-luna-explicit-result-use-workflow-smoke.v0.1.json",
+    ),
+    "explicit-chain-smoke": (
+        EVAL_DIR / "result-chain-explicit.v0.1.json",
+        EVAL_DIR / "codex-luna-explicit-result-chain-smoke.v0.1.json",
     ),
     "utility": (
         EVAL_DIR / "coding-agent-utility.v0.1.json",
@@ -129,14 +139,38 @@ def _evaluator_root(argument: str | None) -> Path:
 
 def _validate_evaluator(root: Path) -> Path:
     cli = root / "src" / "cli.mjs"
+    implementation = root / "src" / "implementation.mjs"
     package = root / "package.json"
-    if not cli.is_file() or not package.is_file():
+    report_schema = root / "schemas" / "evaluation-report.schema.json"
+    if (
+        not cli.is_file()
+        or not implementation.is_file()
+        or not package.is_file()
+        or not report_schema.is_file()
+    ):
         raise SystemExit(
-            f"agent-tool-evals is unavailable at {root}; pass --evaluator-root or set AGENT_TOOL_EVALS_ROOT"
+            "the current hardened agent-tool-evals source is unavailable at "
+            f"{root}; pass --evaluator-root or set AGENT_TOOL_EVALS_ROOT"
         )
+    package_value = _load_json(package)
+    if package_value.get("name") != "@openadam/agent-tool-evals":
+        raise SystemExit(f"unexpected evaluator package identity at {root}")
     if shutil.which("node") is None:
         raise SystemExit("node is required to run agent-tool-evals")
     return cli
+
+
+def _validate_product_identity(
+    suite: dict[str, Any], experiment: dict[str, Any]
+) -> None:
+    if suite.get("targetRef") != TARGET_REF or experiment.get("targetRef") != TARGET_REF:
+        raise SystemExit(
+            "evaluation targetRef must match the current Math Anchor runtime "
+            f"{TARGET_REF['id']}@{TARGET_REF['version']}"
+        )
+    expected_suite_ref = {"id": suite.get("id"), "version": suite.get("version")}
+    if experiment.get("suiteRef") != expected_suite_ref:
+        raise SystemExit("evaluation experiment does not reference the selected suite identity")
 
 
 def _validate_codex_harness(experiment: dict[str, Any]) -> None:
@@ -427,8 +461,18 @@ def _isolated_codex_home(enabled: bool, configs: list[str]):
             f"prepared isolated {TARGET_PLUGIN_ID} version {TARGET_PLUGIN_VERSION}; "
             f"carrier prompt {carrier_prompt_bytes} bytes"
         )
+        target_skill = installed_path / "skills" / "calculate" / "SKILL.md"
+        target_skill_agent = (
+            installed_path / "skills" / "calculate" / "agents" / "openai.yaml"
+        )
+        if not target_skill.is_file() or not target_skill_agent.is_file():
+            raise SystemExit("isolated Math Anchor routing-context files are unavailable")
         with _temporary_environment({"HOME": str(isolated_root)}):
-            yield isolated_root
+            yield {
+                "home": isolated_root,
+                "targetSkill": target_skill,
+                "targetSkillAgent": target_skill_agent,
+            }
 
 
 @contextmanager
@@ -474,7 +518,7 @@ def _prepared_experiment(
     with _isolated_codex_home(
         needs_isolated_home and prepare_installed_plugin,
         _driver_configs(experiment),
-    ) as isolated_root:
+    ) as installed_context:
         needs_direct_runtime = prepare_direct_runtime and (
             MCP_COMMAND_PLACEHOLDER in arguments or MCP_CWD_PLACEHOLDER in arguments
         )
@@ -484,8 +528,24 @@ def _prepared_experiment(
                 if not POLICY_PATH.is_file():
                     raise SystemExit(f"Coding Agent policy is unavailable: {POLICY_PATH}")
                 replacements[POLICY_PLACEHOLDER] = str(POLICY_PATH.resolve())
-            if isolated_root is not None:
-                replacements[ISOLATED_CODEX_HOME_PLACEHOLDER] = str(isolated_root)
+            if RESULT_USE_POLICY_PLACEHOLDER in arguments:
+                if not RESULT_USE_POLICY_PATH.is_file():
+                    raise SystemExit(
+                        f"result-use workflow policy is unavailable: {RESULT_USE_POLICY_PATH}"
+                    )
+                replacements[RESULT_USE_POLICY_PLACEHOLDER] = str(
+                    RESULT_USE_POLICY_PATH.resolve()
+                )
+            if installed_context is not None:
+                replacements[ISOLATED_CODEX_HOME_PLACEHOLDER] = str(
+                    installed_context["home"]
+                )
+                replacements[TARGET_SKILL_FILE_PLACEHOLDER] = str(
+                    installed_context["targetSkill"]
+                )
+                replacements[TARGET_SKILL_AGENT_FILE_PLACEHOLDER] = str(
+                    installed_context["targetSkillAgent"]
+                )
             if staged_runtime is not None:
                 replacements[MCP_COMMAND_PLACEHOLDER] = str(staged_runtime["command"])
                 replacements[MCP_CWD_PLACEHOLDER] = str(staged_runtime["cwd"])
@@ -542,6 +602,7 @@ def main() -> int:
     suite_path, experiment_path = MODES[arguments.mode]
     suite = _load_json(suite_path)
     experiment = _load_json(experiment_path)
+    _validate_product_identity(suite, experiment)
     planned = _planned_runs(suite, experiment)
     evaluator_root = _evaluator_root(arguments.evaluator_root)
     cli = _validate_evaluator(evaluator_root)
@@ -549,8 +610,11 @@ def main() -> int:
     if arguments.action in {"validate", "preflight"}:
         if arguments.confirm_model_runs is not None or arguments.output is not None:
             parser.error("--confirm-model-runs and --output apply only to the run action")
-        if arguments.action == "preflight" and arguments.mode != "installed-smoke":
-            parser.error("preflight currently applies only to --mode installed-smoke")
+        if arguments.action == "preflight" and arguments.mode not in {
+            "installed-smoke",
+            "installed-workflow-smoke",
+        }:
+            parser.error("preflight applies only to installed Plugin evaluation modes")
     elif arguments.confirm_model_runs != planned:
         parser.error(
             f"run requires --confirm-model-runs {planned}; received {arguments.confirm_model_runs!r}"

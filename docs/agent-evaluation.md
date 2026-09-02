@@ -45,7 +45,8 @@ opportunities, three deliberately simple optional tasks, and three irrelevant
 controls. It covers fixed-width arithmetic, bit operations, IEEE-754 facts,
 decimal and division conventions, exact large integers, linear algebra, data
 and physical units, uncertainty, probability, numerical methods, finance, and
-dimensions. The four-task smoke is an exact subset.
+dimensions. The four-task smoke uses the same task prompts and oracles while
+adding exact route policies to its two required tasks.
 
 ## Safe execution
 
@@ -63,6 +64,10 @@ Validation makes no model calls:
 .venv/bin/python script/agent_eval.py validate --mode policy-utility
 .venv/bin/python script/agent_eval.py validate --mode installed-smoke
 .venv/bin/python script/agent_eval.py preflight --mode installed-smoke
+.venv/bin/python script/agent_eval.py validate --mode installed-workflow-smoke
+.venv/bin/python script/agent_eval.py preflight --mode installed-workflow-smoke
+.venv/bin/python script/agent_eval.py validate --mode explicit-workflow-smoke
+.venv/bin/python script/agent_eval.py validate --mode explicit-chain-smoke
 .venv/bin/python script/agent_eval.py validate --mode research-terra-smoke
 .venv/bin/python script/agent_eval.py validate --mode research-luna-smoke
 .venv/bin/python script/agent_eval.py validate --mode public-terra-smoke
@@ -79,6 +84,9 @@ are new files under the gitignored `build/agent-evals/` directory:
 .venv/bin/python script/agent_eval.py run --mode policy-smoke --confirm-model-runs 8
 .venv/bin/python script/agent_eval.py run --mode policy-utility --confirm-model-runs 180
 .venv/bin/python script/agent_eval.py run --mode installed-smoke --confirm-model-runs 8
+.venv/bin/python script/agent_eval.py run --mode installed-workflow-smoke --confirm-model-runs 6
+.venv/bin/python script/agent_eval.py run --mode explicit-workflow-smoke --confirm-model-runs 6
+.venv/bin/python script/agent_eval.py run --mode explicit-chain-smoke --confirm-model-runs 2
 .venv/bin/python script/agent_eval.py run --mode research-terra-smoke --confirm-model-runs 2
 .venv/bin/python script/agent_eval.py run --mode research-luna-smoke --confirm-model-runs 2
 .venv/bin/python script/agent_eval.py run --mode public-terra-smoke --confirm-model-runs 8
@@ -104,6 +112,12 @@ cannot enter the prompt, verifies the target Skill and MCP entry, and removes
 the temporary home after the paired run. Driver arguments remain digest-only in the report.
 This setup cost is Controller overhead and is not confused with per-task Agent
 tokens or tool turns.
+
+Current installed experiments also pass the installed `calculate` Skill and
+its OpenAI metadata file as bounded routing-context inputs. The driver retains
+only their ordered content digest and file count. This closes provenance drift
+between a Plugin binary and the Skill that shaped routing; the digest does not
+establish that the Agent obeyed the Skill.
 
 ## Claim interpretation
 
@@ -181,6 +195,18 @@ reported and none is inferred. This is a valid routing/cost finding with
 started. The current report is
 `build/agent-evals/math-anchor.codex-luna.installed-plugin-routing-smoke-0-5-20260831T171154Z.json`.
 
+Two September 2 current-source routing smokes with Codex CLI 0.152.0, Luna at
+declared low reasoning, exact operation-and-argument route policies, and the
+isolated 0.5.0 Plugin reproduced the same boundary: every answer was correct,
+baseline target use was zero, the combination task used one conforming
+`combinatorics.count` call, and the fixed-width task made no target call.
+Required route conformance remained 1/2 and quality delta remained zero. A
+temporary stronger Skill wording did not change that observation and was not
+retained. These frozen reports preceded the later routing-context provenance
+field, so they are historical diagnostics rather than the final evaluator
+format. They reinforce that Skill text is routing guidance, not a host-enforced
+boundary; the larger installed utility run remains stopped.
+
 The zero-model cold direct-host smoke is a separate observation. The current
 0.5.0 report passed 13/13 workloads with 283 ms median and 328.15 ms mean cold
 latency. It invokes 13
@@ -236,3 +262,41 @@ delta +2.110 seconds). No monetary cost was observed or inferred. This is
 conditional evidence of stochastic 50% adoption and material context cost for
 the named tasks, model, driver, and budgets; it establishes neither a quality
 gain nor broad mathematical-research utility.
+
+## Explicit result-use workflow findings
+
+The three-task workflow suite tests more than answer correctness. It declares
+exact inner operations and arguments, then checks JSON-value equality from
+target results into a downstream target-call argument or final decision fields
+before report redaction. It covers a Putnam B6 determinant-to-remainder chain
+plus valid and deliberately corrupted Putnam 1976 A2 polynomial certificates.
+Stored bindings retain only pointers and value digests.
+
+The September 2 six-run Luna smoke with one provider-neutral workflow policy
+was comparison-valid and recorded the shared policy through one
+`routingContext` digest. Both certificate treatments made one conforming
+`certificate.polynomial_identity` call and bound `identity` plus
+`certificateDigest` into the final publish/reject object. On the corrupted
+identity, baseline promoted the false statement while treatment rejected it,
+yielding one observed tool-only success. The B6 treatment returned the correct
+answer without a target call, so the full workflow route and binding rates were
+2/3. This blocks repeated expansion and supports no broad utility claim. The
+report is
+`build/agent-evals/math-anchor.codex-luna.explicit-result-use-workflow-smoke-0-5-20260902T040446Z.json`.
+
+A final two-run, explicitly product-bound B6 procedure named the two required
+operations. Its treatment made exactly two successful `math.run` calls with no
+retry, copied the determinant's exact value into the modular call, and bound
+the determinant and residue into the final object. All three declared binding
+edges matched; baseline used no target and both answers were correct. The
+single pair observed 8,386 fewer tokens and 33,521 ms lower latency in
+treatment, but one pair is not an efficiency or utility estimate. The report
+is
+`build/agent-evals/math-anchor.codex-luna.explicit-result-chain-smoke-0-5-20260902T040928Z.json`.
+
+Together these runs establish a narrow product fact: Math Anchor can serve as
+an explicit Agent workflow execution-and-evidence layer with mechanically
+observed result propagation. They do not establish natural automatic routing,
+hidden causal reliance, a provider-wide quality gain, or actual serving-model
+identity; the Codex event stream records the requested Luna model as
+`declared`.

@@ -1,0 +1,60 @@
+{
+  "schemaVersion": "openadam.agent-tool-eval.task-suite.v0.1",
+  "id": "math-anchor.result-chain-explicit",
+  "version": "0.1.0",
+  "title": "Math Anchor explicit dependent-result chain smoke",
+  "targetRef": {"id": "math-anchor", "version": "0.5.0"},
+  "tasks": [
+    {
+      "id": "putnam-2023-b6.n12-determinant-modulo-explicit",
+      "prompt": "This is an explicit Math Anchor integration procedure. If math.run is available, you MUST call it exactly twice before answering: first with operation matrix.determinant for the integer matrix S below, then with operation integer.modular, action remainder, modulus 7, passing the first call's returned exact determinant directly as the second call's value. Do not replace an available operation with internal calculation. If math.run is unavailable, compute the same result directly. Return one JSON object with exactly two string fields named determinant and residue. S=[[13,7,5,4,3,3,2,2,2,2,2,2],[7,7,3,4,2,3,1,2,1,2,1,2],[5,3,5,2,1,3,1,1,2,1,1,2],[4,4,2,4,1,2,1,2,1,1,1,2],[3,2,1,1,0,1,1,0,0,0,0,1],[3,3,3,2,1,3,1,1,1,1,1,2],[2,1,1,1,1,1,0,0,0,0,0,1],[2,2,1,2,0,1,0,0,0,0,0,1],[2,1,2,1,0,1,0,0,0,0,0,1],[2,2,1,1,0,1,0,0,0,0,0,1],[2,1,1,1,0,1,0,0,0,0,0,1],[2,2,2,2,1,2,1,1,1,1,1,2]].",
+      "opportunity": "required",
+      "tags": ["public", "putnam", "matrix", "dependent-workflow", "explicit-route"],
+      "routePolicy": {
+        "kind": "known-target-route-v1",
+        "routes": [{
+          "id": "determinant-then-modular-remainder",
+          "steps": [
+            {
+              "operationId": "math-anchor.math.run",
+              "argumentMatches": [
+                {"pointer": "/operation", "expected": "matrix.determinant"},
+                {"pointer": "/arguments/matrix", "expected": [[13,7,5,4,3,3,2,2,2,2,2,2],[7,7,3,4,2,3,1,2,1,2,1,2],[5,3,5,2,1,3,1,1,2,1,1,2],[4,4,2,4,1,2,1,2,1,1,1,2],[3,2,1,1,0,1,1,0,0,0,0,1],[3,3,3,2,1,3,1,1,1,1,1,2],[2,1,1,1,1,1,0,0,0,0,0,1],[2,2,1,2,0,1,0,0,0,0,0,1],[2,1,2,1,0,1,0,0,0,0,0,1],[2,2,1,1,0,1,0,0,0,0,0,1],[2,1,1,1,0,1,0,0,0,0,0,1],[2,2,2,2,1,2,1,1,1,1,1,2]]}
+              ]
+            },
+            {
+              "operationId": "math-anchor.math.run",
+              "argumentMatches": [
+                {"pointer": "/operation", "expected": "integer.modular"},
+                {"pointer": "/arguments/action", "expected": "remainder"},
+                {"pointer": "/arguments/modulus", "expected": 7}
+              ]
+            }
+          ]
+        }]
+      },
+      "resultUse": {
+        "kind": "json-linkage-v1",
+        "links": [
+          {
+            "from": {"targetCall": 0, "pointer": "/structured_content/exact"},
+            "to": {"kind": "target-call-arguments", "targetCall": 1, "pointer": "/arguments/value"}
+          },
+          {
+            "from": {"targetCall": 0, "pointer": "/structured_content/exact"},
+            "to": {"kind": "answer", "pointer": "/determinant"}
+          },
+          {
+            "from": {"targetCall": 1, "pointer": "/structured_content/exact"},
+            "to": {"kind": "answer", "pointer": "/residue"}
+          }
+        ]
+      },
+      "evaluator": {
+        "kind": "json-equality",
+        "actualPointer": "",
+        "expected": {"determinant": "-12", "residue": "2"}
+      }
+    }
+  ]
+}
