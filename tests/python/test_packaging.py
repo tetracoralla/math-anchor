@@ -575,6 +575,10 @@ def test_build_and_run_refuses_dist_symlink_before_replacing_the_app_bundle(
     assert sentinel.read_text(encoding="utf-8") == "outside repository"
 
 
+@pytest.mark.skipif(
+    platform.system() != "Darwin",
+    reason="the scoped process helper controls the native macOS .app carrier",
+)
 def test_app_process_stop_is_scoped_to_the_expected_executable(tmp_path: Path) -> None:
     expected_binary = tmp_path / "dist" / "Math Anchor.app" / "Contents" / "MacOS" / "MathAnchor"
     unrelated_binary = tmp_path / "Applications" / "Math Anchor.app" / "Contents" / "MacOS" / "MathAnchor"
