@@ -13,9 +13,15 @@ _CJK_RUN = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]+")
 _LATIN_TOKEN = re.compile(r"[a-z0-9]+")
 _SEARCH_STOPWORDS = {
     "a", "about", "an", "and", "calculate", "calculation", "check",
-    "compute", "for", "form", "give", "math", "mathematical", "me",
+    "compute", "data", "for", "form", "give", "math", "mathematical", "me",
     "my", "of", "on", "operation", "over", "please", "show",
     "structure", "the", "this", "to", "using", "what", "with",
+}
+_PROVIDER_NATIVE_ROUTE_TOKENS = {"obligation", "obligations", "receipt", "receipts"}
+_TOKEN_NORMALIZATIONS = {
+    "equivalent": "equivalence",
+    "feet": "foot",
+    "matrices": "matrix",
 }
 _CJK_NOISE = (
     "请帮我", "帮我", "并且", "例如", "比如", "这个", "那个", "一个",
@@ -26,9 +32,9 @@ _CJK_NOISE = (
 
 def _search_tokens(normalized_query: str) -> set[str]:
     tokens = {
-        token
+        _canonical_latin_token(token)
         for token in _LATIN_TOKEN.findall(normalized_query)
-        if token not in _SEARCH_STOPWORDS
+        if token not in _SEARCH_STOPWORDS and not token.isdigit()
     }
     cjk_text = normalized_query
     for noise in _CJK_NOISE:
@@ -39,6 +45,17 @@ def _search_tokens(normalized_query: str) -> set[str]:
         else:
             tokens.update(run[index : index + 2] for index in range(len(run) - 1))
     return tokens
+
+
+def _canonical_latin_token(token: str) -> str:
+    normalized = _TOKEN_NORMALIZATIONS.get(token, token)
+    if (
+        len(normalized) > 3
+        and normalized.endswith("s")
+        and not normalized.endswith(("ss", "us", "is"))
+    ):
+        return normalized[:-1]
+    return normalized
 
 
 def _index_entry(
@@ -81,7 +98,10 @@ def search_operations(query: str = "", category: str | None = None) -> dict[str,
 
     normalized_query = query.strip().lower()
     tokens = _search_tokens(normalized_query)
-    if normalized_query and not tokens:
+    route_tokens = set(_LATIN_TOKEN.findall(normalized_query))
+    if route_tokens & _PROVIDER_NATIVE_ROUTE_TOKENS:
+        candidates = []
+    elif normalized_query and not tokens:
         candidates: list[OperationSpec] = []
     elif not normalized_query:
         candidates = [

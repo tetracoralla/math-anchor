@@ -13,6 +13,11 @@ def _restore_stream(stream_name: str) -> None:
 
 def main() -> None:
     mode = sys.argv[1] if len(sys.argv) > 1 else ""
+    if mode == "--version":
+        from math_anchor import __version__
+
+        print(__version__)
+        return
     if mode == "app":
         from math_anchor.app_runtime import main as app_main
         try:
@@ -59,7 +64,7 @@ def main() -> None:
         cli_main()
         return
     raise SystemExit(
-        "usage: math-anchor-runtime app|mcp|obligation-schema|check-obligations|"
+        "usage: math-anchor-runtime --version|app|mcp|obligation-schema|check-obligations|"
         "replay-obligations|verify-certificate|verify-certificate-lean"
     )
 

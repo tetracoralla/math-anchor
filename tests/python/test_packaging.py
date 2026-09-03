@@ -79,6 +79,43 @@ def test_public_identity_uses_math_anchor_across_distribution_surfaces() -> None
     )
 
 
+def test_agent_host_component_exposes_a_version_locked_obligation_launcher() -> None:
+    integration = json.loads(
+        (ROOT / "integrations" / "agent-host" / "tool.integration.json").read_text()
+    )
+    plugin = json.loads(
+        (ROOT / "integrations" / "agent-host" / "plugin.json").read_text()
+    )
+    discovery = integration["discovery"]
+
+    assert integration["schemaVersion"] == "openadam.agent-host-tool-integration.v0.3"
+    assert integration["runtime"]["args"] == ["mcp"]
+    assert integration["runtime"]["expectedTools"] == [
+        "math.search",
+        "math.describe",
+        "math.run",
+        "math.batch",
+    ]
+    assert discovery["kind"] == "skill-cli"
+    assert discovery["skill"] == {
+        "id": "calculate",
+        "root": "marketplace/plugins/math-anchor-obligation-runtime/skills/calculate",
+        "identityFiles": ["SKILL.md"],
+        "launcher": "scripts/math-anchor",
+    }
+    assert discovery["runtime"] == {
+        "executor": "component",
+        "command": integration["runtime"]["command"],
+        "args": [],
+        "versionArguments": ["--version"],
+    }
+    assert "Host-generated, version-locked launcher" in plugin["interface"][
+        "longDescription"
+    ]
+    skill = (PLUGIN / "skills" / "calculate" / "SKILL.md").read_text()
+    assert "Never substitute an ambient command or source checkout" in skill
+
+
 def test_plugin_transport_stays_inside_the_plugin_bundle() -> None:
     config = json.loads((PLUGIN / ".mcp.json").read_text())
     server = config["mcpServers"]["math-anchor"]

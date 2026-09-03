@@ -126,6 +126,11 @@ full receipt outside the model context:
   --quiet-success
 ```
 
+An Agent Host installation exposes the same commands through the
+Host-generated `scripts/math-anchor` launcher inside the installed `calculate`
+Skill. That launcher is version-locked to the component's packaged runtime; do
+not replace it with an ambient command or a source-checkout path.
+
 Exit status is `0` when every obligation is checked, `1` when the compact
 feedback requires attention, and `2` for an invalid request or runtime error.
 The command refuses to overwrite an existing receipt. Inspect the exact request

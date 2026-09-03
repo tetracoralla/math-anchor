@@ -10,6 +10,7 @@ from typing import Any
 
 from .errors import CalculatorError, error_payload
 from .output_policy import DEFAULT_MAX_OUTPUT_BYTES
+from .transport_budget import MAX_BATCH_REQUEST_BYTES
 
 
 MAX_CERTIFICATE_INPUT_BYTES = 1_048_576
@@ -108,7 +109,23 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _batch_items(raw: str) -> list[dict[str, Any]]:
-    source = sys.stdin.read() if raw == "-" else raw
+    if raw == "-":
+        stream = getattr(sys.stdin, "buffer", sys.stdin)
+        encoded = stream.read(MAX_BATCH_REQUEST_BYTES + 1)
+        encoded_bytes = (
+            encoded.encode("utf-8") if isinstance(encoded, str) else encoded
+        )
+        if len(encoded_bytes) > MAX_BATCH_REQUEST_BYTES:
+            raise CalculatorError(
+                "E_LIMIT",
+                f"batch input may contain at most {MAX_BATCH_REQUEST_BYTES} bytes",
+            )
+        try:
+            source = encoded_bytes.decode("utf-8")
+        except UnicodeDecodeError as error:
+            raise CalculatorError("E_INPUT", f"invalid batch JSON: {error}") from error
+    else:
+        source = raw
     value = json.loads(source)
     if not isinstance(value, list):
         raise CalculatorError("E_INPUT", "batch input must be an array")

@@ -61,6 +61,45 @@ def test_catalog_routes_a_registered_single_alias_when_the_complete_query_matche
 
 
 @pytest.mark.parametrize(
+    ("query", "operation"),
+    [
+        ("expression equivalence", "expression.equivalent"),
+        ("equivalent expressions", "expression.equivalent"),
+        ("convert 72 watts to kilowatts", "units.convert"),
+        ("solve cubic equation", "algebra.solve"),
+        ("compound interest future value", "finance.calculate"),
+        ("binomial coefficient 52 choose 5", "combinatorics.count"),
+        ("standard deviation of data", "statistics.describe"),
+        ("compute determinant of matrix", "matrix.determinant"),
+    ],
+)
+def test_catalog_routes_supported_natural_concepts(
+    query: str,
+    operation: str,
+) -> None:
+    searched = search_operations(query)
+
+    assert searched["matchStatus"] == "matched"
+    assert searched["operations"][0]["id"] == operation
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "obligation",
+        "receipt",
+        "check polynomial obligation",
+        "replay mathematical receipt",
+    ],
+)
+def test_catalog_stops_at_provider_native_obligation_terms(query: str) -> None:
+    searched = search_operations(query)
+
+    assert searched["matchStatus"] == "no_registered_operation"
+    assert searched["operations"] == []
+
+
+@pytest.mark.parametrize(
     "call",
     [
         lambda: search_operations("x" * (MAX_SEARCH_QUERY_LENGTH + 1)),

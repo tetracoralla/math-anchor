@@ -89,6 +89,18 @@ and Apple notarization record exist.
 
 ### Fixed
 
+- Made the private Agent Host package's obligation claim real: the Host now
+  projects a version-locked launcher into the installed `calculate` Skill, and
+  the packaged runtime reports its own version. Obligation checks and receipt
+  replay no longer depend on an ambient command or source checkout.
+- Closed and normalized provider-error details embedded in obligation receipts;
+  cumulative deadline failures now use the shared `batch`/
+  `split_or_reduce` error vocabulary.
+- Bounded `math-anchor batch -` at 16 MiB while reading stdin, before JSON
+  parsing or runtime admission.
+- Restored supported natural-concept search for equivalence, unit conversion,
+  equations, finance, combinatorics, statistics, and determinants while
+  stopping obligation/receipt terms at the separate provider-native route.
 - Aligned protocol-level MCP `isError` with structured failures for discovery
   tools as well as calculation tools, so an unknown operation or invalid search
   category cannot be mistaken for a successful tool call.

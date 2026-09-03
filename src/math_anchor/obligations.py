@@ -15,8 +15,9 @@ from .certificate_checker import (
     verify_polynomial_identity_certificate,
 )
 from .contracts import validate_operation_arguments
-from .errors import CalculatorError
+from .errors import CalculatorError, error_payload
 from .output_policy import MAX_OUTPUT_BYTES, MIN_OUTPUT_BYTES
+from .result_contracts.shared import ERROR_RESULT_SCHEMA
 from .sandbox import run_batch, run_operation
 from .transport_budget import TransportBudgetError, encode_json_line
 
@@ -58,6 +59,14 @@ _UNSUPPORTED_PROVIDER_ERRORS = {
     "E_SYNTAX",
     "E_UNIT",
 }
+
+_ERROR_DETAIL_SCHEMA = deepcopy(ERROR_RESULT_SCHEMA["properties"]["error"])
+_ERROR_DETAIL_SCHEMA["properties"].pop("details")
+_ERROR_PHASES = frozenset(_ERROR_DETAIL_SCHEMA["properties"]["phase"]["enum"])
+_ERROR_ACTIONS = frozenset(
+    _ERROR_DETAIL_SCHEMA["properties"]["suggestedAction"]["enum"]
+)
+_PROVIDER_ERROR_REASONS = ("provider_rejected_claim", "provider_inconclusive")
 
 
 def _closed_object(
@@ -219,6 +228,25 @@ _PROVIDER_SCHEMA = {
         ),
     ]
 }
+_DETAIL_SCHEMA = {
+    "type": "object",
+    "maxProperties": 32,
+    "allOf": [
+        {
+            "if": {
+                "properties": {"reason": {"enum": list(_PROVIDER_ERROR_REASONS)}},
+                "required": ["reason"],
+            },
+            "then": _closed_object(
+                {
+                    "reason": {"enum": list(_PROVIDER_ERROR_REASONS)},
+                    "error": _ERROR_DETAIL_SCHEMA,
+                },
+                ("reason", "error"),
+            ),
+        }
+    ],
+}
 _RECEIPT_ENTRY_SCHEMA = _closed_object(
     {
         "id": {"type": "string", "pattern": _IDENTIFIER},
@@ -243,7 +271,7 @@ _RECEIPT_ENTRY_SCHEMA = _closed_object(
             "items": {"type": "string", "pattern": _IDENTIFIER},
         },
         "provider": _PROVIDER_SCHEMA,
-        "detail": {"type": "object", "maxProperties": 32},
+        "detail": _DETAIL_SCHEMA,
         "detailDigest": {"type": "string", "pattern": _DIGEST},
         "detailOmitted": {"type": "boolean"},
         "limitations": {
@@ -554,24 +582,52 @@ def _assurance_level(raw_result: dict[str, Any]) -> str | None:
     }.get(level)
 
 
+def _normalized_provider_error(value: Any) -> dict[str, Any]:
+    raw = value if isinstance(value, dict) else {}
+    code = raw.get("code")
+    message = raw.get("message")
+    if not isinstance(code, str) or not code or len(code) > 64:
+        code = "E_RUNTIME"
+    if not isinstance(message, str) or not message:
+        message = "provider returned an invalid error envelope"
+    elif len(message) > 1_024:
+        message = f"{message[:1_021]}..."
+    phase = raw.get("phase")
+    if phase not in _ERROR_PHASES:
+        phase = None
+    action = raw.get("suggestedAction")
+    if action not in _ERROR_ACTIONS:
+        action = None
+    retry_after_ms = raw.get("retryAfterMs")
+    if (
+        not isinstance(retry_after_ms, int)
+        or isinstance(retry_after_ms, bool)
+        or retry_after_ms < 1
+    ):
+        retry_after_ms = None
+    return error_payload(
+        code,
+        message,
+        phase=phase,
+        suggested_action=action,
+        retry_after_ms=retry_after_ms,
+    )
+
+
 def _error_entry(
     obligation: dict[str, Any],
     assumption_sets: dict[str, list[str]],
     operation: str,
     raw_result: dict[str, Any],
 ) -> dict[str, Any]:
-    error = raw_result.get("error")
-    error = error if isinstance(error, dict) else {"code": "E_RUNTIME"}
-    code = str(error.get("code", "E_RUNTIME"))
+    raw_error = raw_result.get("error")
+    error = _normalized_provider_error(raw_error)
+    code = error["code"]
     status = "unsupported" if code in _UNSUPPORTED_PROVIDER_ERRORS else "unknown"
     scope = OPERATIONS[operation].assurance_scope
     detail = {
         "reason": "provider_rejected_claim" if status == "unsupported" else "provider_inconclusive",
-        "error": {
-            key: error[key]
-            for key in ("code", "message", "retryable", "phase", "suggestedAction", "retryAfterMs")
-            if key in error
-        },
+        "error": error,
     }
     return _entry(
         obligation,
@@ -783,13 +839,12 @@ def _deadline_entry(
     operation = _KNOWN_PROVIDERS[obligation["kind"]]
     raw_result = {
         "status": "error",
-        "error": {
-            "code": "E_TIMEOUT",
-            "message": "obligation set exhausted its cumulative deadline",
-            "retryable": True,
-            "phase": "obligation_set",
-            "suggestedAction": "Retry with a smaller set or a larger timeoutMs budget.",
-        },
+        "error": error_payload(
+            "E_TIMEOUT",
+            "obligation set exhausted its cumulative deadline",
+            phase="batch",
+            suggested_action="split_or_reduce",
+        ),
     }
     return _error_entry(obligation, assumption_sets, operation, raw_result)
 

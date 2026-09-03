@@ -10,6 +10,11 @@ id `math-anchor-obligation-runtime`. `math-anchor` is a reserved built-in Agent
 Host component id, while the product and its MCP server keep the stable Math
 Anchor identity. The dedicated `openadam-math-anchor` marketplace also avoids
 displacing the existing `openadam` marketplace during a future activation.
+Agent Host projects a version-locked `scripts/math-anchor` launcher into the
+installed `calculate` Skill. The launcher executes the component's packaged
+runtime, not an ambient `PATH` command or source checkout. Obligation checks and
+replay use that launcher; the four MCP tools remain the direct-operation
+carrier and do not gain a fifth tool.
 
 ## Request
 

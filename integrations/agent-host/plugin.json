@@ -1,7 +1,7 @@
 {
   "name": "math-anchor-obligation-runtime",
   "version": "0.6.0",
-  "description": "A scoped mathematical obligation runtime backed by Math Anchor's deterministic calculation providers.",
+  "description": "A scoped mathematical obligation and direct-operation runtime backed by Math Anchor's deterministic providers.",
   "author": {
     "name": "openAdam",
     "url": "https://github.com/tetracoralla"
@@ -17,7 +17,7 @@
   "interface": {
     "displayName": "Math Anchor",
     "shortDescription": "Check bounded mathematical obligations safely.",
-    "longDescription": "Give Codex the compact four-tool Math Anchor compatibility surface while a local Agent Host can run scoped obligation checks and retain replayable receipts outside model context.",
+    "longDescription": "Give Codex four compact Math Anchor tools plus a Host-generated, version-locked launcher for scoped obligation checks and replayable receipts outside model context.",
     "developerName": "openAdam",
     "category": "Productivity",
     "capabilities": [

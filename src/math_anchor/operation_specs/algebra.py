@@ -72,7 +72,7 @@ SPECS = (
         ),
         handler=algebra.solve,
         backends=("sympy",),
-        keywords=("equation", "system", "roots", "unknowns", "解方程", "方程组", "求解"),
+        keywords=("equation", "cubic equation", "system", "roots", "unknowns", "解方程", "方程组", "求解"),
     ),
 )
 

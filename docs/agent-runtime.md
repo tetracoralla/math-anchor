@@ -6,6 +6,9 @@ For a larger Agent workflow, the preferred strategic path is one bounded
 returns only failures, unknowns, or unsupported obligations. `--quiet-success`
 emits no stdout when the entire set is checked. The local CLI is also exposed
 by the packaged standalone runtime; it does not require a source checkout.
+An Agent Host installation projects a version-locked launcher into the
+`calculate` Skill, so Agent use reaches those packaged bytes without resolving
+an ambient command or a development repository.
 See `obligation-runtime.md` for the exact request, receipt, replay, and claim
 boundaries.
 

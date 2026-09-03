@@ -5,29 +5,30 @@ description: "Use Math Anchor for reliability-sensitive mathematics. MUST load a
 
 # Calculate
 
-Translate the request into explicit mathematics, then use the cheapest reliable
-route.
-
 ## Decide and route
 
 - Do not load it for trivial, low-risk arithmetic the model can immediately
   verify.
 - Treat fixed-width wrapping/saturating arithmetic as mandatory; do not classify them as trivial arithmetic.
-- Always use it for fixed-width arithmetic, bit fields, IEEE-754 facts, exact or
-  high-precision output, symbolic work, matrices, units, statistics,
-  probability, finance, verification, repeated calculations, standard
-  algorithms, or consequential results.
+- Always use it for fixed-width or IEEE-754 facts, exact/high-precision or
+  symbolic work, matrices, units, statistics, probability, finance,
+  verification, repeated calculations, or consequential results.
 - Ask for a missing assumption when it changes the problem; a call must not
   hide ambiguity.
 - The four tools are registered. Never call `list_mcp_resources`, inspect
   source, or use a shell to find them. Use `math.run` for a known operation;
-  otherwise call `math.search`, then `math.describe` only if its schema is
-  needed.
+  otherwise search, then describe only if needed.
+- For an obligation DAG, failures-only checkpoint, or receipt replay, do not
+  search the MCP catalog. When this installed Skill contains the Host-generated
+  `scripts/math-anchor` launcher, invoke it relative to this Skill directory
+  with `check-obligations` or `replay-obligations`; retain receipts outside
+  model context. Never substitute an ambient command or source checkout. If
+  the launcher is absent, report that this carrier has no obligation checkpoint.
 - Every run uses the outer envelope `{operation, arguments}`. Put all
   operation-specific fields inside `arguments`; never flatten them beside
   `operation`.
 
-Three common routes are fully known. Call `math.run` directly; never search or
+Call these fully known routes directly; never search or
 describe these shapes first:
 
 - Fixed-width arithmetic: `{"operation":"integer.machine_arithmetic","arguments":{"action":"add","left":"255","right":"2","bitWidth":8,"signedness":"unsigned","inputMode":"value","overflowBehavior":"wrapping"}}`
@@ -39,14 +40,12 @@ describe these shapes first:
 - Use one `math.run`, `math.batch` for 2–32 independent ordered calculations,
   or `function.sample` for one expression at many points. Batch is not a
   dependency graph.
-- For bulky output, select `resultMode` (`exact` or `approx`) and raise
-  `maxOutputBytes` only when useful.
+- For bulky output, select `resultMode` and raise `maxOutputBytes` only when useful.
 - Control digits with `arguments.precision`; `precision` is not a top-level `math.run` field.
   It counts significant digits. Exact fields stay exact. For decimal places,
   include integer digits plus at least two guard digits in the first call and
   round once for presentation.
-- Supply variables, bounds, units, conventions, brackets, data, and tolerances
-  explicitly. Never invent an answer-changing assumption.
+- Supply answer-changing variables, bounds, units, conventions, and tolerances.
 
 Load a reference only when needed. A fully specified
 `integer.machine_arithmetic` call needs no reference.

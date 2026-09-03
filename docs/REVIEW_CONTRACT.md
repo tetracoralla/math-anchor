@@ -34,7 +34,9 @@ benchmark number.
   and replay contracts. It may compose registry operations, but it cannot add a
   fifth MCP tool, interpret caller assumption prose, or promote a local result
   into whole-proof coverage. `cli.py` and `bundled_runtime.py` expose this same
-  contract to local harnesses.
+  contract to local harnesses. The private Agent Host integration projects a
+  version-locked packaged-runtime launcher into the installed Skill; it must
+  not resolve an ambient command or development checkout.
 - `Sources/MathAnchorCore/` owns the testable Swift models, services, stores,
   and pure formatting/state helpers. `Sources/MathAnchor/` is the SwiftUI/AppKit
   carrier, and `Tests/MathAnchorCoreTests/` exercises the package core without
@@ -146,9 +148,10 @@ the normal suite:
   crash/recycle, circuit open/half-open/recovery, a stale success that completes
   after opening, and a healthy call after each;
 - packaged runtime startup without a source checkout or development-only
-  environment, a silent successful `check-obligations` call that writes a full
-  receipt, plus an explicit structured call through the current installed
-  Plugin;
+  environment, a Host-projected launcher whose `--version` and obligation
+  command resolve to those packaged bytes, a silent successful
+  `check-obligations` call that writes a full receipt, plus an explicit
+  structured call through the current installed Plugin;
 - only when making a natural-language selection or Agent-value claim, a cold
   task that reaches the intended public tool, the current `evals/agent/`
   routing smoke before any larger paired run, and then a reviewed three-repeat

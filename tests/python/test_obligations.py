@@ -311,6 +311,61 @@ def test_known_provider_operation_mismatch_is_inconclusive(
     assert entry["detail"]["error"]["code"] == "E_OPERATION"
 
 
+def test_provider_error_is_normalized_to_the_closed_shared_error_vocabulary(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def reject(*_args: object, **_kwargs: object) -> dict[str, object]:
+        return {
+            "status": "error",
+            "error": {
+                "code": "E_TIMEOUT",
+                "message": "injected timeout",
+                "retryable": True,
+                "phase": "provider_private_phase",
+                "suggestedAction": "Try harder.",
+                "extra": "must not cross the receipt ABI",
+            },
+        }
+
+    monkeypatch.setattr("math_anchor.obligations.run_operation", reject)
+    feedback, receipt = check_obligation_set(
+        _request(_polynomial("identity", "x^2 + 2*x*y + y^2"))
+    )
+
+    error = receipt["obligations"][0]["detail"]["error"]
+    assert error == {
+        "code": "E_TIMEOUT",
+        "message": "injected timeout",
+        "retryable": False,
+        "phase": "execution",
+        "suggestedAction": "split_or_reduce",
+    }
+    Draft202012Validator(obligation_receipt_schema()).validate(receipt)
+    Draft202012Validator(obligation_feedback_schema()).validate(feedback)
+
+
+def test_cumulative_deadline_uses_the_shared_batch_error_contract(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ticks = iter((0.0, 1.0))
+    monkeypatch.setattr("math_anchor.obligations.time.monotonic", lambda: next(ticks))
+    request = _request(_polynomial("identity", "x^2 + 2*x*y + y^2"))
+    request["limits"] = {"timeoutMs": 100}
+
+    feedback, receipt = check_obligation_set(request)
+
+    error = receipt["obligations"][0]["detail"]["error"]
+    assert error == {
+        "code": "E_TIMEOUT",
+        "message": "obligation set exhausted its cumulative deadline",
+        "retryable": False,
+        "phase": "batch",
+        "suggestedAction": "split_or_reduce",
+    }
+    Draft202012Validator(obligation_receipt_schema()).validate(receipt)
+    Draft202012Validator(obligation_feedback_schema()).validate(feedback)
+
+
 def test_replay_matches_and_detects_runtime_only_drift() -> None:
     request = _request(_polynomial("identity", "x^2 + 2*x*y + y^2"))
     _feedback, receipt = check_obligation_set(request)

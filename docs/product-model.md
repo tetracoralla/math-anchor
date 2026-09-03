@@ -29,7 +29,7 @@ The Agent surface is a deterministic mathematical runtime for assistants, Hosts,
 6. **Agent or harness obligation check:** submit one bounded obligation DAG through the local library or `check-obligations` CLI; receive a full replayable receipt outside the main context and, by default, only falsified, unknown, unsupported, or dependency-blocked entries in feedback.
 7. **Agent direct execution:** leave trivial, low-risk arithmetic with the model; otherwise call `math.run` once for a known operation using the host-safe stable-id envelope and known arguments.
 8. **Agent discovery and batch:** use `math.search` and `math.describe` only for unfamiliar operations, or `math.batch` for independent work; receive structured success or a stable structured error. `matchStatus: no_registered_operation` is an explicit stop signal, not permission to substitute a lexical near-match.
-9. **Installation:** the repository contains a local Codex Plugin whose thin Skill explains when to use the four tools. Mathematical truth remains in the runtime. Host-triggered obligation checking is a separate local integration path and does not add a fifth MCP tool.
+9. **Installation:** the repository contains a local Codex Plugin whose thin Skill explains when to use the four tools. Agent Host additionally projects a version-locked launcher into that Skill for obligation checks and receipt replay against the packaged runtime, never an ambient command or source checkout. Neither route adds a fifth MCP tool.
 
 ## Shared inventory
 
@@ -76,8 +76,9 @@ The earlier time-zone utility supplied the reusable product pattern—shared det
 ## Agent contract
 
 The provider-native obligation contract is `math-anchor.obligation-set.v0.1`.
-It is available through the Python library and local CLI, not as a fifth MCP
-tool. The request accepts up to 32 obligations and 16 shared assumption sets.
+It is available through the Python library and packaged CLI, including the
+Agent Host-generated launcher, not as a fifth MCP tool. The request accepts up
+to 32 obligations and 16 shared assumption sets.
 Caller-authored assumption text is hash-bound and marked
 `bound_not_evaluated`; any assumption that changes provider semantics must be
 represented in the typed claim itself. Dependencies control execution order
