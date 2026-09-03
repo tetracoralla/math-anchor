@@ -13,11 +13,51 @@ from math_anchor.runtime import execute_direct
 
 def test_catalog_discovery_is_compact_and_descriptions_are_precise() -> None:
     searched = search_operations("numerically solve nonlinear equation")
+    assert searched["matchStatus"] == "matched"
     assert searched["operations"][0]["id"] in {"numeric.root", "algebra.solve"}
     assert all(set(item) == {"id", "category", "summary"} for item in searched["operations"])
 
     described = describe_operation("calculus.integrate")
     assert described["operation"]["inputSchema"]["required"] == ["expression", "variable"]
+
+
+def test_catalog_rejects_single_term_collisions_for_unsupported_domains() -> None:
+    for query in (
+        "cohomology characteristic class",
+        "compute Dolbeault cohomology of this complex manifold",
+        "compute characteristic classes of a complex manifold",
+        "integrate a differential form over a complex manifold",
+        "solve the PDE for a complex manifold",
+        "integrate the Nijenhuis tensor",
+        "计算复流形的层上同调",
+        "计算复流形的 Dolbeault 上同调",
+        "求解复流形上的偏微分方程",
+        "积分复流形上的微分形式",
+        "计算复流形的陈类",
+        "验证六维球面存在可积复结构",
+    ):
+        unsupported = search_operations(query)
+        assert unsupported["matchStatus"] == "no_registered_operation", query
+        assert unsupported["operations"] == []
+        assert unsupported["count"] == 0
+
+    generic = search_operations("the")
+    assert generic["matchStatus"] == "no_registered_operation"
+    assert generic["operations"] == []
+
+
+def test_catalog_routes_local_almost_complex_queries_without_overclaiming_global_support() -> None:
+    searched = search_operations("tensor differential form manifold Nijenhuis")
+
+    assert searched["matchStatus"] == "matched"
+    assert searched["operations"][0]["id"] == "geometry.almost_complex.local_check"
+
+
+def test_catalog_routes_a_registered_single_alias_when_the_complete_query_matches() -> None:
+    searched = search_operations("factor expression")
+
+    assert searched["matchStatus"] == "matched"
+    assert searched["operations"][0]["id"] == "algebra.transform"
 
 
 @pytest.mark.parametrize(

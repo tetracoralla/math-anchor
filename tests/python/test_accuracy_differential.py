@@ -669,6 +669,19 @@ def _build_corpus() -> None:
               lambda result, value=value, modulus=modulus: _assert_agrees("inverse", result["approx"], sp.Integer(pow(value, -1, modulus)), result["precision"]))
     _case("quantity.evaluate", {"expression": "5 * kilometer / hour", "toUnit": "meter / second"})
     _case("quantity.evaluate", {"expression": "100 * centimeter", "toUnit": "meter"})
+    _case(
+        "geometry.almost_complex.local_check",
+        {
+            "coordinates": ["x", "y"],
+            "structure": [["0", "-1"], ["1", "0"]],
+        },
+        lambda result: (
+            result["square"]["satisfied"] is True
+            and result["nijenhuis"]["vanished"] is True
+            and result["nijenhuis"]["independentComponentsChecked"] == 2
+        )
+        or (_ for _ in ()).throw(AssertionError("local almost-complex oracle mismatch")),
+    )
     _case("algebra.solve", {"equations": "2^x = 8", "variables": ["x"]})
     _case("algebra.solve", {"equations": ["x + y + z = 6", "x - y + z = 2", "x + y - z = 0"], "variables": ["x", "y", "z"]})
     _case("solution.verify", {"constraints": "x^3 = 27", "variables": ["x"], "candidates": [{"x": 3}]})

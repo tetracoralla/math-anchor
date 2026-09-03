@@ -1,0 +1,33 @@
+{
+  "name": "math-anchor-obligation-runtime",
+  "version": "0.6.0",
+  "description": "A scoped mathematical obligation runtime backed by Math Anchor's deterministic calculation providers.",
+  "author": {
+    "name": "openAdam",
+    "url": "https://github.com/tetracoralla"
+  },
+  "license": "Apache-2.0",
+  "keywords": [
+    "calculator",
+    "mathematics",
+    "verification",
+    "agent-tools"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Math Anchor",
+    "shortDescription": "Check bounded mathematical obligations safely.",
+    "longDescription": "Give Codex the compact four-tool Math Anchor compatibility surface while a local Agent Host can run scoped obligation checks and retain replayable receipts outside model context.",
+    "developerName": "openAdam",
+    "category": "Productivity",
+    "capabilities": [
+      "Read"
+    ],
+    "defaultPrompt": [
+      "Check whether these two expressions are equivalent under the stated variables.",
+      "Verify this polynomial identity and retain a replayable receipt.",
+      "Check whether the dimensions on both sides of this equation agree."
+    ]
+  },
+  "mcpServers": "./.mcp.json"
+}

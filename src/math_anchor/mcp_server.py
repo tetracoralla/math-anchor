@@ -87,11 +87,9 @@ fastmcp_server.Settings.model_rebuild(
 mcp = FastMCP(
     "Math Anchor",
     instructions=(
-        "Use this runtime for reliability-sensitive mathematics, not trivial low-risk arithmetic. "
-        "For ordinary supported requests, call math.run directly using its operation-specific typed schema. "
-        "Stop after the first successful ordinary call; repeating identical inputs is not independent validation. "
-        "Use search and describe only when the operation is genuinely unfamiliar or ambiguous. "
-        "Preserve the distinction between exact and approximate results."
+        "Use for reliability-sensitive mathematics, not trivial arithmetic. "
+        "Call math.run directly when the operation is known; search and describe only when needed. "
+        "Keep exact and approximate results distinct and stop after one successful ordinary call."
     ),
 )
 # FastMCP 1.x otherwise reports the MCP SDK version as the server version.
@@ -114,7 +112,7 @@ def _caught(callable_: Any, *arguments: Any) -> dict[str, Any]:
         "IEEE-754, named rounding or division conventions, large integers, matrices, units and dimensions, "
         "uncertainty, probability, numerical methods, or finance. Do not use for trivial low-risk arithmetic. "
         "Always pass operation-specific fields inside the arguments object: {operation, arguments}; never flatten them. "
-        "Known direct shapes need no describe call: integer.machine_arithmetic arguments include action, left, right, "
+        "Known direct shapes: integer.machine_arithmetic arguments include action, left, right, "
         "bitWidth, signedness, inputMode, and overflowBehavior; combinatorics.count arguments use action, n, and k; "
         "certificate.polynomial_identity arguments use left, right, and variables. "
         "The typed operation keeps exact and approximate results separate; one successful ordinary call is sufficient."
@@ -172,7 +170,11 @@ async def math_batch(
 @mcp.tool(
     name="math.search",
     title="Search mathematical operations",
-    description="Search operations only when the id is unknown; otherwise use math.run.",
+    description=(
+        "Search operations only when the id is unknown; otherwise use math.run. "
+        "matchStatus=no_registered_operation means the catalog does not support the requested domain; "
+        "do not substitute a lexical near-match."
+    ),
     annotations=_READ_ONLY,
     structured_output=True,
 )

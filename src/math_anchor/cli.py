@@ -2,19 +2,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 import sys
+import tempfile
 from typing import Any
 
-from .catalog import describe_operation, search_operations
-from .certificate_checker import (
-    CertificateValidationError,
-    verify_polynomial_identity_certificate,
-)
 from .errors import CalculatorError, error_payload
-from .lean_bridge import verify_polynomial_identity_with_lean
 from .output_policy import DEFAULT_MAX_OUTPUT_BYTES
-from .sandbox import run_batch, run_operation
 
 
 MAX_CERTIFICATE_INPUT_BYTES = 1_048_576
@@ -72,6 +67,43 @@ def build_parser() -> argparse.ArgumentParser:
     verify_lean.add_argument("--project", required=True, type=Path)
     verify_lean.add_argument("--artifact-output", type=Path)
     verify_lean.add_argument("--timeout", type=int, default=120)
+
+    obligation_schema = subparsers.add_parser(
+        "obligation-schema",
+        help="Print the versioned obligation request, receipt, or feedback schema",
+    )
+    obligation_schema.add_argument(
+        "kind",
+        choices=("request", "receipt", "feedback"),
+    )
+
+    check_obligations = subparsers.add_parser(
+        "check-obligations",
+        help="Check one bounded obligation set for a local Agent Host or harness",
+    )
+    check_obligations.add_argument("source", help="Obligation-set JSON file or - for stdin")
+    check_obligations.add_argument(
+        "--receipt-output",
+        type=Path,
+        help="Write the full replayable receipt to a new file",
+    )
+    check_obligations.add_argument(
+        "--quiet-success",
+        action="store_true",
+        help="Emit nothing when every obligation is checked",
+    )
+
+    replay_obligations = subparsers.add_parser(
+        "replay-obligations",
+        help="Re-run an obligation set and compare it with a prior full receipt",
+    )
+    replay_obligations.add_argument("request", help="Obligation-set JSON file or - for stdin")
+    replay_obligations.add_argument("receipt", help="Prior full receipt JSON file")
+    replay_obligations.add_argument(
+        "--receipt-output",
+        type=Path,
+        help="Write the current full receipt to a new file",
+    )
     return parser
 
 
@@ -102,7 +134,7 @@ def _certificate_value(source: str) -> dict[str, Any]:
         )
     try:
         value = json.loads(raw)
-    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+    except (UnicodeDecodeError, json.JSONDecodeError, RecursionError) as error:
         raise CalculatorError("E_INPUT", f"invalid certificate JSON: {error}") from error
     if not isinstance(value, dict):
         raise CalculatorError("E_INPUT", "certificate JSON must be an object")
@@ -114,15 +146,75 @@ def _certificate_value(source: str) -> dict[str, Any]:
     return value
 
 
+def _json_document(source: str, *, maximum_bytes: int, label: str) -> dict[str, Any]:
+    if source == "-":
+        raw = sys.stdin.buffer.read(maximum_bytes + 1)
+    else:
+        try:
+            with Path(source).open("rb") as handle:
+                raw = handle.read(maximum_bytes + 1)
+        except OSError as error:
+            raise CalculatorError("E_INPUT", f"{label} file could not be read: {error}") from error
+    if len(raw) > maximum_bytes:
+        raise CalculatorError(
+            "E_LIMIT",
+            f"{label} input may contain at most {maximum_bytes} bytes",
+        )
+    try:
+        value = json.loads(raw)
+    except (UnicodeDecodeError, json.JSONDecodeError, RecursionError) as error:
+        raise CalculatorError("E_INPUT", f"invalid {label} JSON: {error}") from error
+    if not isinstance(value, dict):
+        raise CalculatorError("E_INPUT", f"{label} JSON must be an object")
+    return value
+
+
+def _write_new_json(path: Path, value: dict[str, Any], *, label: str) -> None:
+    temporary_path: Path | None = None
+    try:
+        encoded = (
+            json.dumps(value, ensure_ascii=False, indent=2) + "\n"
+        ).encode("utf-8")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        descriptor, temporary_name = tempfile.mkstemp(
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            dir=path.parent,
+        )
+        temporary_path = Path(temporary_name)
+        with os.fdopen(descriptor, "wb") as handle:
+            handle.write(encoded)
+            handle.flush()
+            os.fsync(handle.fileno())
+        # A same-directory hard link publishes the complete bytes atomically
+        # and fails rather than replacing an existing receipt.
+        os.link(temporary_path, path)
+    except FileExistsError as error:
+        raise CalculatorError("E_INPUT", f"{label} already exists; refusing to overwrite it") from error
+    except OSError as error:
+        raise CalculatorError("E_INPUT", f"{label} could not be written: {error}") from error
+    finally:
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
+
+
 def main() -> None:
     parser = build_parser()
+    exit_code = 0
+    emit = True
     try:
         arguments = parser.parse_args()
         if arguments.command == "search":
+            from .catalog import search_operations
+
             result = search_operations(arguments.query, arguments.category)
         elif arguments.command == "describe":
+            from .catalog import describe_operation
+
             result = describe_operation(arguments.operation)
         elif arguments.command == "run":
+            from .sandbox import run_operation
+
             result = run_operation(
                 arguments.operation,
                 arguments.arguments,
@@ -132,8 +224,15 @@ def main() -> None:
                 max_output_bytes=arguments.max_output_bytes,
             )
         elif arguments.command == "batch":
+            from .sandbox import run_batch
+
             result = run_batch(_batch_items(arguments.items))
         elif arguments.command == "verify-certificate":
+            from .certificate_checker import (
+                CertificateValidationError,
+                verify_polynomial_identity_certificate,
+            )
+
             try:
                 check = verify_polynomial_identity_certificate(
                     _certificate_value(arguments.source)
@@ -145,7 +244,10 @@ def main() -> None:
                 "kind": "certificate_check",
                 **check,
             }
-        else:
+        elif arguments.command == "verify-certificate-lean":
+            from .certificate_checker import CertificateValidationError
+            from .lean_bridge import verify_polynomial_identity_with_lean
+
             try:
                 result = verify_polynomial_identity_with_lean(
                     _certificate_value(arguments.source),
@@ -156,14 +258,71 @@ def main() -> None:
                 )
             except CertificateValidationError as error:
                 raise CalculatorError("E_CERTIFICATE", str(error)) from error
+        elif arguments.command == "obligation-schema":
+            from .obligations import (
+                obligation_feedback_schema,
+                obligation_receipt_schema,
+                obligation_request_schema,
+            )
+
+            result = {
+                "request": obligation_request_schema,
+                "receipt": obligation_receipt_schema,
+                "feedback": obligation_feedback_schema,
+            }[arguments.kind]()
+        elif arguments.command == "check-obligations":
+            from .obligations import (
+                MAX_OBLIGATION_REQUEST_BYTES,
+                check_obligation_set,
+            )
+
+            request = _json_document(
+                arguments.source,
+                maximum_bytes=MAX_OBLIGATION_REQUEST_BYTES,
+                label="obligation request",
+            )
+            result, receipt = check_obligation_set(request)
+            if arguments.receipt_output is not None:
+                _write_new_json(arguments.receipt_output, receipt, label="receipt output")
+            if result["status"] == "attention_required":
+                exit_code = 1
+            elif arguments.quiet_success:
+                emit = False
+        else:
+            from .obligations import (
+                MAX_OBLIGATION_REQUEST_BYTES,
+                MAX_RECEIPT_BYTES,
+                replay_obligation_set,
+            )
+
+            request = _json_document(
+                arguments.request,
+                maximum_bytes=MAX_OBLIGATION_REQUEST_BYTES,
+                label="obligation request",
+            )
+            previous_receipt = _json_document(
+                arguments.receipt,
+                maximum_bytes=MAX_RECEIPT_BYTES,
+                label="obligation receipt",
+            )
+            result, _feedback, receipt = replay_obligation_set(request, previous_receipt)
+            if arguments.receipt_output is not None:
+                _write_new_json(arguments.receipt_output, receipt, label="receipt output")
+            if result["status"] != "matched":
+                exit_code = 1
     except CalculatorError as error:
         result = {"status": "error", "error": error.as_dict()}
+        exit_code = 2
     except json.JSONDecodeError as error:
         result = {"status": "error", "error": error_payload("E_INPUT", f"invalid JSON: {error}")}
-    json.dump(result, sys.stdout, ensure_ascii=False, indent=2)
-    sys.stdout.write("\n")
+        exit_code = 2
     if result.get("status") == "error":
-        raise SystemExit(2)
+        exit_code = 2
+    if emit:
+        json.dump(result, sys.stdout, ensure_ascii=False, indent=2)
+        sys.stdout.write("\n")
+    if exit_code:
+        raise SystemExit(exit_code)
 
 
 if __name__ == "__main__":

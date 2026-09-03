@@ -104,6 +104,7 @@ SPECS = (
             "unknown dimension",
             "dimension constraints",
             "formula analysis",
+            "推断未知变量的量纲",
             "推断量纲",
             "未知维度",
             "量纲约束",

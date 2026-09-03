@@ -8,6 +8,7 @@ cd "$ROOT_DIR"
 "$ROOT_DIR/script/bootstrap.sh"
 "$ROOT_DIR/.venv/bin/python" -m pytest
 "$ROOT_DIR/.venv/bin/python" "$ROOT_DIR/script/check_source_safety.py"
+"$ROOT_DIR/.venv/bin/python" "$ROOT_DIR/script/check_obligations.py"
 "$ROOT_DIR/.venv/bin/python" "$ROOT_DIR/script/check_mcp.py" --source-runtime
 "$ROOT_DIR/.venv/bin/python" "$ROOT_DIR/script/load_check.py" --calls 1000
 "$ROOT_DIR/.venv/bin/python" "$ROOT_DIR/script/build_python_dist.py" build

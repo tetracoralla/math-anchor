@@ -54,7 +54,7 @@ def test_tool_discovery_survives_current_codex_host_compaction() -> None:
     assert run_tool is not None
     assert "one successful ordinary call is sufficient" in run_tool.description
     assert "{operation, arguments}; never flatten" in run_tool.description
-    assert "Known direct shapes need no describe call" in run_tool.description
+    assert "Known direct shapes" in run_tool.description
     assert "integer.machine_arithmetic" in run_tool.description
     assert "combinatorics.count" in run_tool.description
     assert "certificate.polynomial_identity" in run_tool.description
@@ -85,7 +85,16 @@ def test_tool_discovery_survives_current_codex_host_compaction() -> None:
     assert describe_tool is not None
     assert search_tool.parameters["properties"]["query"]["maxLength"] == 256
     assert search_tool.parameters["properties"]["category"]["anyOf"][0]["maxLength"] == 64
-    assert set(describe_tool.parameters["properties"]["operation"]["enum"]) == set(OPERATIONS)
+    assert describe_tool.parameters["properties"]["operation"] == {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128,
+        "description": "Operation ID returned by math.search or listed by math.run.",
+    }
+    assert (
+        len(json.dumps(describe_tool.parameters, separators=(",", ":")).encode())
+        < 512
+    )
     for name in ("math.search", "math.describe", "math.run", "math.batch"):
         tool = mcp._tool_manager.get_tool(name)
         assert tool is not None

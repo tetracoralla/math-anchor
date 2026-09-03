@@ -1,5 +1,14 @@
 # Agent runtime usage and resilience
 
+For a larger Agent workflow, the preferred strategic path is one bounded
+`math-anchor.obligation-set.v0.1` checkpoint. A Host or harness invokes
+`check-obligations`, stores the full receipt outside the model context, and
+returns only failures, unknowns, or unsupported obligations. `--quiet-success`
+emits no stdout when the entire set is checked. The local CLI is also exposed
+by the packaged standalone runtime; it does not require a source checkout.
+See `obligation-runtime.md` for the exact request, receipt, replay, and claim
+boundaries.
+
 Math Anchor's four MCP tools are a direct deterministic provider boundary.
 They do not require a language-model turn once a structured caller knows the
 operation and arguments. A high-frequency coding tool should start
@@ -7,18 +16,18 @@ operation and arguments. A high-frequency coding tool should start
 `math.batch` calls over that session. Starting the CLI once per calculation is
 correct but repeatedly pays process and import startup.
 
-The supported 0.5 boundary is explicit invocation. Cold natural-language
+The supported 0.6 boundary is explicit invocation. Cold natural-language
 selection by a fresh Agent remains useful integration research, but it depends
 on the host, model, installed catalogue, and context budget. It is not a
 release gate and must not be presented as guaranteed automatic adoption.
 
 The practical low-cost topology is therefore: use an Agent only to translate
-an ambiguous natural-language request into a closed `{operation, arguments}`
-invocation, then let the host reuse that invocation shape for direct calls. Do
-not start a fresh Coding Agent turn for every item in a loop, file, test case,
-or dataset. When the Agent already has several independent calculations, send
-them together through `math.batch`; when a program already has structured
-inputs, skip the model entirely.
+ambiguous natural language into a closed obligation or operation, then let the
+Host execute the typed request outside the model loop. Do not start a fresh
+Coding Agent turn for every item in a loop, file, test case, or dataset. Use an
+obligation set for claim-checking workflows, `math.batch` for independent
+compatibility operations, and no model at all when a program already has
+structured inputs.
 
 ## Choose the cheapest request shape
 

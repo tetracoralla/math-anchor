@@ -68,6 +68,16 @@ def test_public_identity_uses_math_anchor_across_distribution_surfaces() -> None
     assert manifest["interface"]["displayName"] == "Math Anchor"
     assert set(transport["mcpServers"]) == {"math-anchor"}
 
+    agent_tool = json.loads((ROOT / "agent-tool.json").read_text())
+    host_plugin = json.loads(
+        (ROOT / "integrations" / "agent-host" / "plugin.json").read_text()
+    )
+    assert agent_tool["version"] == project["project"]["version"]
+    assert host_plugin["version"] == project["project"]["version"]
+    assert agent_tool["package"]["artifact"].endswith(
+        f"-{project['project']['version']}.tar.gz"
+    )
+
 
 def test_plugin_transport_stays_inside_the_plugin_bundle() -> None:
     config = json.loads((PLUGIN / ".mcp.json").read_text())
@@ -101,7 +111,7 @@ def test_local_codex_marketplace_exposes_the_packaged_plugin() -> None:
 def test_calculation_skill_keeps_cost_and_trust_boundaries() -> None:
     skill_path = PLUGIN / "skills" / "calculate" / "SKILL.md"
     skill = skill_path.read_text()
-    assert len(skill.encode("utf-8")) <= 6_000
+    assert len(skill.encode("utf-8")) <= 5_200
     assert "Do not load it for trivial, low-risk arithmetic" in skill
     assert "MUST load and use it for fixed-width" in skill
     assert "A successful tool response proves that the declared operation ran" in skill
@@ -156,6 +166,26 @@ def test_runtime_packaging_accepts_both_supported_python_loader_layouts() -> Non
     assert "-name 'libpython*.dylib'" in script
     assert '[[ "$python_loader_count" -eq 0 ]]' in script
     assert 'find "$PLUGIN_RUNTIME_BUNDLE" -type l' in script
+    assert 'cmp -s "$PYTHON_RUNTIME_LOADER" "$PYTHON_FRAMEWORK_BINARY"' in script
+    assert 'rm -rf "$PYTHON_FRAMEWORK"' in script
+
+
+def test_runtime_packaging_excludes_only_unused_numpy_feature_families() -> None:
+    script = (ROOT / "script" / "package_runtime.sh").read_text()
+    assert "--exclude-module numpy.fft" in script
+    assert "--exclude-module numpy.random" in script
+
+    source = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in sorted((ROOT / "src" / "math_anchor").rglob("*.py"))
+    )
+    for forbidden_reference in (
+        "numpy.fft",
+        "numpy.random",
+        "np.fft",
+        "np.random",
+    ):
+        assert forbidden_reference not in source
 
 
 def test_runtime_manifest_rejects_installer_unsafe_symbolic_links(tmp_path: Path) -> None:
@@ -1129,6 +1159,7 @@ def test_packaged_runtime_has_matching_manifest_notices_and_sbom() -> None:
     ]
     assert loaders
     assert all(not loader.is_symlink() for loader in loaders)
+    assert not (bundle / "_internal" / "Python.framework").exists()
     assert not any(path.is_symlink() for path in bundle.rglob("*"))
     assert project_license_path.read_bytes() == (ROOT / "LICENSE").read_bytes()
     assert project_notice_path.read_bytes() == (ROOT / "NOTICE").read_bytes()

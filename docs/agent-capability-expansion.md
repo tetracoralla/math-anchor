@@ -9,6 +9,12 @@ development-state claim, not a signed-release claim. The human calculator keeps
 its focused interaction model while its existing Convert picker gains the
 additional curated physical categories listed below.
 
+This file is now an inventory of compatibility providers, not the product
+roadmap. New operation families are frozen unless repeated current workflows
+and a falsifiable conformance case establish the need. The strategic Agent
+surface is the provider-native obligation and receipt runtime documented in
+`obligation-runtime.md`; operation count is not a completion or value measure.
+
 1. semantic expression equivalence with an explicit domain and definedness
    check;
 2. candidate solution verification with per-constraint residuals and an honest
@@ -40,11 +46,17 @@ additional curated physical categories listed below.
 13. bounded rational polynomial-identity certificates with a separately
     implemented standard-library checker that recomputes the statement and
     coefficients without trusting the producer.
+14. bounded local almost-complex candidate checks over rational-polynomial
+    coordinate components, with exact `J^2 = -I` and Nijenhuis results plus
+    explicit unverified global obligations.
 
 ## Shared model
 
-- The target user is an Agent that has already translated a human request into
-  a mathematical task and should normally finish in one `math.run` call.
+- The target integration is an Agent Host or harness that has translated a
+  larger workflow into bounded mathematical obligations, keeps the full
+  receipt outside the main context, and returns only actionable failures. A
+  compatibility caller that already knows one operation should still finish in
+  one `math.run` call.
 - Discovery, direct execution, ordered batch execution, and the packaged plugin
   remain the related flows. No additional public MCP tool is introduced.
 - Every operation is one registry entry with a bounded, discriminated input
@@ -62,16 +74,17 @@ additional curated physical categories listed below.
 - Every success carries a runtime-owned assurance level, claim scope,
   assumptions, runtime/backend version provenance, and explicit certificate
   and kernel-check state. A handler cannot promote its own assurance metadata.
-- The current catalog contains 45 operations, but the public surface remains
+- The current catalog contains 46 operations, but the public surface remains
   four tools. Every listed input stays below the current Codex 4,800-byte
   compatibility regression; registry validation remains complete and closed.
 
 ## Sequencing and acceptance
 
-The verification and quantity layer lands first because later financial and
-statistical work depends on trustworthy comparison, provenance, and units. The
-numeric layer then adds explicit accuracy contracts before finance and
-statistics expose approximation-sensitive results.
+The implemented provider families remain available. Further sequencing starts
+with obligation-contract stability, harness integration, cost measurement, and
+conformance against seeded errors. A new mathematical family comes later and
+only from a demonstrated repeated obligation; a topical research problem alone
+is not sufficient basis.
 
 Acceptance is separated into:
 

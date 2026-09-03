@@ -45,7 +45,23 @@ def main() -> None:
 
         worker_main()
         return
-    raise SystemExit("usage: math-anchor-runtime app|mcp")
+    if mode in {
+        "obligation-schema",
+        "check-obligations",
+        "replay-obligations",
+        "verify-certificate",
+        "verify-certificate-lean",
+    }:
+        _restore_stream("stdout")
+        _restore_stream("stderr")
+        from math_anchor.cli import main as cli_main
+
+        cli_main()
+        return
+    raise SystemExit(
+        "usage: math-anchor-runtime app|mcp|obligation-schema|check-obligations|"
+        "replay-obligations|verify-certificate|verify-certificate-lean"
+    )
 
 
 if __name__ == "__main__":

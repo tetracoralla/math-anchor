@@ -30,6 +30,11 @@ benchmark number.
 - `mcp_server.py` owns the public Agent carrier. `cli.py`, `app_runtime.py`, and
   `bundled_runtime.py` are adapters and must not invent different operation or
   result semantics.
+- `obligations.py` owns the provider-native obligation-set, feedback, receipt,
+  and replay contracts. It may compose registry operations, but it cannot add a
+  fifth MCP tool, interpret caller assumption prose, or promote a local result
+  into whole-proof coverage. `cli.py` and `bundled_runtime.py` expose this same
+  contract to local harnesses.
 - `Sources/MathAnchorCore/` owns the testable Swift models, services, stores,
   and pure formatting/state helpers. `Sources/MathAnchor/` is the SwiftUI/AppKit
   carrier, and `Tests/MathAnchorCoreTests/` exercises the package core without
@@ -103,6 +108,17 @@ benchmark number.
     conversions, errors, and app restart are human-runtime concerns and need
     real app evidence. A correct MCP test is not visual or interaction
     acceptance.
+11. **Obligation receipts stay scoped and replayable.** The versioned local
+    obligation contract accepts only bounded JSON and an acyclic dependency
+    graph. Caller assumption text is hash-bound and marked unevaluated. Unknown
+    kinds return `unsupported` without lexical substitution; inconclusive or
+    infrastructure results return `unknown`; a failed dependency prevents its
+    dependent provider from running. `checked` and `falsified` require the
+    exact provider-specific mapping, and polynomial certificate output must
+    pass the independent checker before promotion. Receipt, outcome, detail,
+    claim, assumption, and provider-result digests must be deterministic and
+    validated on replay. Default feedback omits checked details, while the
+    full receipt remains available outside model context.
 
 ## Mandatory adversarial review matrix
 
@@ -112,6 +128,11 @@ the normal suite:
 - registry entry -> generated `math.run` schema -> `math.describe` -> runtime
   validation -> plugin example; reject unknown and extra fields at every live
   ingress;
+- obligation request schema -> exact provider claim schema -> dependency order
+  -> terminal status/scope -> full receipt -> failures-only projection ->
+  replay; cover duplicate ids, missing references, cycles, unsupported kinds,
+  caller-assumption binding, blocked dependencies, a corrupted certificate,
+  runtime drift, and receipt-content corruption;
 - exact versus approximate lanes, large integers, rounding/tie conventions,
   matrices, units and dimensions, domain boundaries, and independent-library
   differential checks where an oracle exists;
@@ -125,7 +146,8 @@ the normal suite:
   crash/recycle, circuit open/half-open/recovery, a stale success that completes
   after opening, and a healthy call after each;
 - packaged runtime startup without a source checkout or development-only
-  environment, plus an explicit structured call through the current installed
+  environment, a silent successful `check-obligations` call that writes a full
+  receipt, plus an explicit structured call through the current installed
   Plugin;
 - only when making a natural-language selection or Agent-value claim, a cold
   task that reaches the intended public tool, the current `evals/agent/`
@@ -155,6 +177,19 @@ integration/build, the real MCP
 protocol probe, a bounded load/recovery run, plugin packaging, and release
 hygiene. For focused iteration, use the owning narrow test first, then return to
 the complete command before closeout.
+
+The focused obligation conformance route is:
+
+```sh
+.venv/bin/python script/check_obligations.py
+```
+
+It checks the versioned corpus in `evals/obligations/core.v0.1.json`. Its green
+result establishes only those seeded finite cases and the failures-only
+projection; it is not a research-utility or whole-proof verdict. Encoded-byte
+cost components can be observed with
+`.venv/bin/python script/measure_obligation_cost.py`; null routing and repair
+token fields are intentionally unavailable rather than zero.
 
 `script/swift_test.sh` is the repository-owned SwiftPM test entry point. It
 still runs `swift test`, while supplying the Swift Testing framework search and

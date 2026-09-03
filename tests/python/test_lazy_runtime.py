@@ -36,6 +36,32 @@ def test_catalog_import_does_not_load_unselected_heavy_engines() -> None:
     }
 
 
+def test_cli_import_does_not_load_command_specific_stacks() -> None:
+    code = (
+        "import json,sys; import math_anchor.cli; "
+        "print(json.dumps({name: name in sys.modules for name in "
+        "('math_anchor.catalog','math_anchor.certificates','math_anchor.lean_bridge',"
+        "'math_anchor.obligations','math_anchor.sandbox')}))"
+    )
+    environment = {**os.environ, "PYTHONPATH": str(ROOT / "src")}
+    completed = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=ROOT,
+        env=environment,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert json.loads(completed.stdout) == {
+        "math_anchor.catalog": False,
+        "math_anchor.certificates": False,
+        "math_anchor.lean_bridge": False,
+        "math_anchor.obligations": False,
+        "math_anchor.sandbox": False,
+    }
+
+
 def test_lazy_handler_preserves_provenance_and_loads_only_on_execution() -> None:
     spec = OPERATIONS["integer.machine_arithmetic"]
     assert spec.handler.__module__ == "math_anchor.operations.programmer"

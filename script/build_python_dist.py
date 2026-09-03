@@ -85,7 +85,9 @@ def _verify_wheel(wheel: Path) -> None:
                 raise SystemExit(f"wheel is missing {suffix}")
         required_modules = {
             "math_anchor/certificate_checker.py",
+            "math_anchor/obligations.py",
             "math_anchor/operations/certificate.py",
+            "math_anchor/operations/geometry.py",
             "math_anchor/research_contract.py",
         }
         if not required_modules <= set(names):
@@ -132,9 +134,18 @@ def _wheel_smoke(wheel: Path) -> None:
         smoke = (
             "from math_anchor.runtime import execute_direct\n"
             "from math_anchor.certificate_checker import verify_polynomial_identity_certificate\n"
+            "from math_anchor.obligations import check_obligation_set\n"
             "result = execute_direct('certificate.polynomial_identity', "
             "{'left': '(x+1)^2', 'right': 'x^2+2*x+1', 'variables': ['x']})\n"
             "assert verify_polynomial_identity_certificate(result['certificate'])['valid']\n"
+            "geometry = execute_direct('geometry.almost_complex.local_check', "
+            "{'coordinates': ['x', 'y'], 'structure': [['0', '-1'], ['1', '0']]})\n"
+            "assert geometry['square']['satisfied'] and geometry['nijenhuis']['vanished']\n"
+            "feedback, receipt = check_obligation_set({"
+            "'schemaVersion': 'math-anchor.obligation-set.v0.1', "
+            "'obligations': [{'id': 'o1', 'kind': 'polynomial_identity', "
+            "'claim': {'left': '(x+1)^2', 'right': 'x^2+2*x+1', 'variables': ['x']}}]})\n"
+            "assert feedback['status'] == 'checked' and receipt['summary']['checked'] == 1\n"
         )
         environment = {**dict(os.environ), "PYTHONPATH": str(smoke_target)}
         completed = subprocess.run(

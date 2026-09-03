@@ -226,7 +226,7 @@ def test_coding_agent_suite_has_independent_oracles_and_balanced_opportunities()
     by_id = {task["id"]: task for task in tasks}
     assert len(tasks) == 30
     assert len(by_id) == 30
-    assert suite["targetRef"] == {"id": "math-anchor", "version": "0.5.0"}
+    assert suite["targetRef"] == {"id": "math-anchor", "version": "0.6.0"}
     assert {opportunity: sum(task["opportunity"] == opportunity for task in tasks) for opportunity in ("required", "optional", "irrelevant")} == {
         "required": 24,
         "optional": 3,
@@ -311,7 +311,7 @@ def test_experiments_fix_one_agent_harness_driver_and_target() -> None:
         )
         task_count = len(_load(suite_name)["tasks"])
         assert experiment["suiteRef"] == {"id": suite_id, "version": "0.1.0"}
-        assert experiment["targetRef"] == {"id": "math-anchor", "version": "0.5.0"}
+        assert experiment["targetRef"] == {"id": "math-anchor", "version": "0.6.0"}
         assert experiment["purpose"] == purpose
         assert experiment["repeats"] == repeats
         assert experiment["agent"] == {"provider": "openai", "model": "gpt-5.6-luna"}
@@ -344,7 +344,7 @@ def test_policy_assisted_experiments_use_one_provider_neutral_policy_in_both_con
 
 def test_research_smoke_pairs_terra_and_luna_with_the_same_direct_mcp_task() -> None:
     suite = _load("research-putnam-1976-a2.v0.1.json")
-    assert suite["targetRef"] == {"id": "math-anchor", "version": "0.5.0"}
+    assert suite["targetRef"] == {"id": "math-anchor", "version": "0.6.0"}
     assert len(suite["tasks"]) == 1
     coefficients = _putnam_1976_a2_n18_coefficients()
     assert coefficients == [2, 63, 90, 3]
@@ -363,7 +363,7 @@ def test_research_smoke_pairs_terra_and_luna_with_the_same_direct_mcp_task() -> 
             "provider": "openai",
             "model": f"gpt-5.6-{model}",
         }
-        assert experiment["targetRef"] == {"id": "math-anchor", "version": "0.5.0"}
+        assert experiment["targetRef"] == {"id": "math-anchor", "version": "0.6.0"}
         assert experiment["harness"] == {"id": "codex-cli", "version": "0.152.0"}
         assert experiment["driver"]["version"] == "0.5.0"
         arguments = experiment["driver"]["args"]
@@ -377,7 +377,7 @@ def test_research_smoke_pairs_terra_and_luna_with_the_same_direct_mcp_task() -> 
 def test_public_math_smoke_uses_independent_oracles_and_two_named_agents() -> None:
     suite = _load("research-public-math-smoke.v0.1.json")
     by_id = {task["id"]: task for task in suite["tasks"]}
-    assert suite["targetRef"] == {"id": "math-anchor", "version": "0.5.0"}
+    assert suite["targetRef"] == {"id": "math-anchor", "version": "0.6.0"}
     assert len(by_id) == 4
 
     assert by_id["putnam-2023-b1.m37-n64"]["evaluator"]["expected"] == str(
@@ -459,7 +459,7 @@ def test_installed_plugin_smoke_uses_one_isolated_target_plugin_without_policy_i
 def test_result_use_workflow_smoke_has_independent_oracles_and_bound_routes() -> None:
     suite = _load("result-use-workflow-smoke.v0.1.json")
     by_id = {task["id"]: task for task in suite["tasks"]}
-    assert suite["targetRef"] == {"id": "math-anchor", "version": "0.5.0"}
+    assert suite["targetRef"] == {"id": "math-anchor", "version": "0.6.0"}
     assert len(by_id) == 3
     assert all(task["opportunity"] == "required" for task in suite["tasks"])
     assert all(task["routePolicy"]["kind"] == "known-target-route-v1" for task in suite["tasks"])
@@ -559,7 +559,7 @@ def test_installed_result_use_workflow_experiment_is_bounded_and_structured() ->
         "codex-luna-installed-plugin-result-use-workflow-smoke.v0.1.json"
     )
     assert experiment["suiteRef"] == {"id": suite["id"], "version": suite["version"]}
-    assert experiment["targetRef"] == {"id": "math-anchor", "version": "0.5.0"}
+    assert experiment["targetRef"] == {"id": "math-anchor", "version": "0.6.0"}
     assert experiment["agent"] == {"provider": "openai", "model": "gpt-5.6-luna"}
     assert experiment["harness"] == {"id": "codex-cli", "version": "0.152.0"}
     assert experiment["purpose"] == "development-smoke"
@@ -579,7 +579,7 @@ def test_explicit_result_use_workflow_uses_one_provider_neutral_policy() -> None
     suite = _load("result-use-workflow-smoke.v0.1.json")
     experiment = _load("codex-luna-explicit-result-use-workflow-smoke.v0.1.json")
     assert experiment["suiteRef"] == {"id": suite["id"], "version": suite["version"]}
-    assert experiment["targetRef"] == {"id": "math-anchor", "version": "0.5.0"}
+    assert experiment["targetRef"] == {"id": "math-anchor", "version": "0.6.0"}
     assert experiment["agent"] == {"provider": "openai", "model": "gpt-5.6-luna"}
     assert experiment["harness"] == {"id": "codex-cli", "version": "0.152.0"}
     assert len(suite["tasks"]) * len(experiment["conditions"]) == 6
@@ -605,7 +605,7 @@ def test_explicit_result_use_workflow_uses_one_provider_neutral_policy() -> None
 def test_explicit_result_chain_is_one_bounded_two_call_procedure() -> None:
     suite = _load("result-chain-explicit.v0.1.json")
     experiment = _load("codex-luna-explicit-result-chain-smoke.v0.1.json")
-    assert suite["targetRef"] == {"id": "math-anchor", "version": "0.5.0"}
+    assert suite["targetRef"] == {"id": "math-anchor", "version": "0.6.0"}
     assert len(suite["tasks"]) == 1
     task = suite["tasks"][0]
     assert task["opportunity"] == "required"

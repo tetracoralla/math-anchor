@@ -8,7 +8,7 @@ from math_anchor.runtime import execute_direct
 
 
 def test_catalog_contains_the_explicit_standard_operation_set() -> None:
-    assert len(OPERATIONS) == 45
+    assert len(OPERATIONS) == 46
     assert {
         "expression.equivalent",
         "solution.verify",
@@ -33,6 +33,7 @@ def test_catalog_contains_the_explicit_standard_operation_set() -> None:
         "linear_algebra.exact",
         "linear_algebra.numeric",
         "measurement.propagate",
+        "geometry.almost_complex.local_check",
     } <= set(OPERATIONS)
     assert search_operations("因式分解")["operations"][0]["id"] == "algebra.transform"
     assert search_operations("质因数分解")["operations"][0]["id"] == "integer.factorization"

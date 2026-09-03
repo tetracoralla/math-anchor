@@ -3,7 +3,7 @@
   "id": "math-anchor.result-chain-explicit",
   "version": "0.1.0",
   "title": "Math Anchor explicit dependent-result chain smoke",
-  "targetRef": {"id": "math-anchor", "version": "0.5.0"},
+  "targetRef": {"id": "math-anchor", "version": "0.6.0"},
   "tasks": [
     {
       "id": "putnam-2023-b6.n12-determinant-modulo-explicit",

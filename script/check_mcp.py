@@ -97,7 +97,7 @@ async def main(
             assert "fixed-width overflow" in run_tool.description
             assert "Do not use for trivial low-risk arithmetic" in run_tool.description
             assert "{operation, arguments}; never flatten" in run_tool.description
-            assert "Known direct shapes need no describe call" in run_tool.description
+            assert "Known direct shapes" in run_tool.description
             describe_tool = next(tool for tool in listed.tools if tool.name == "math.describe")
             assert "nest one under math.run.arguments" in describe_tool.description
             assert "Do not call this for known" in describe_tool.description
@@ -120,7 +120,7 @@ async def main(
             assert listed_bytes < 10_000
             assert run_tool.inputSchema["additionalProperties"] is False
             assert run_tool.inputSchema["properties"]["arguments"]["type"] == "object"
-            assert set(describe_tool.inputSchema["properties"]["operation"]["enum"]) == set(OPERATIONS)
+            assert describe_tool.inputSchema["properties"]["operation"]["maxLength"] == 128
             assert run_output_schema_bytes < 2_000
             assert run_tool.outputSchema["required"] == ["status"]
             assert {
@@ -412,6 +412,57 @@ async def main(
             )
             assert inexact_certificate.isError is True
             assert inexact_certificate.structuredContent["error"]["code"] == "E_DOMAIN"
+
+            searched_geometry = await session.call_tool(
+                "math.search",
+                {"query": "tensor differential form manifold Nijenhuis"},
+            )
+            assert searched_geometry.structuredContent["matchStatus"] == "matched"
+            assert searched_geometry.structuredContent["operations"][0]["id"] == (
+                "geometry.almost_complex.local_check"
+            )
+            unsupported_geometry = await session.call_tool(
+                "math.search",
+                {"query": "cohomology characteristic class"},
+            )
+            assert unsupported_geometry.structuredContent["matchStatus"] == (
+                "no_registered_operation"
+            )
+            assert unsupported_geometry.structuredContent["operations"] == []
+            described_geometry = await session.call_tool(
+                "math.describe",
+                {"operation": "geometry.almost_complex.local_check"},
+            )
+            assert described_geometry.structuredContent["operation"]["inputSchema"]["required"] == [
+                "coordinates",
+                "structure",
+            ]
+            local_geometry = await session.call_tool(
+                "math.run",
+                {
+                    "operation": "geometry.almost_complex.local_check",
+                    "arguments": {
+                        "coordinates": ["x", "y"],
+                        "structure": [["0", "-1"], ["1", "0"]],
+                    },
+                },
+            )
+            assert local_geometry.isError is False
+            assert local_geometry.structuredContent["square"]["satisfied"] is True
+            assert local_geometry.structuredContent["nijenhuis"]["vanished"] is True
+            assert local_geometry.structuredContent["certificate"] is None
+            invalid_local_geometry = await session.call_tool(
+                "math.run",
+                {
+                    "operation": "geometry.almost_complex.local_check",
+                    "arguments": {
+                        "coordinates": ["x", "y"],
+                        "structure": [["sin(x)", "-1"], ["1", "0"]],
+                    },
+                },
+            )
+            assert invalid_local_geometry.isError is True
+            assert invalid_local_geometry.structuredContent["error"]["code"] == "E_DOMAIN"
 
             searched_dimension = await session.call_tool(
                 "math.search", {"query": "检查物理公式的量纲一致性"}
@@ -1006,7 +1057,7 @@ async def main(
 
     print(
         "MCP runtime check passed through plugin transport: one-call typed run, multilingual discovery, "
-        "description, runtime-owned assurance metadata, equivalence and solution verification, independently checkable polynomial certificates, stable unit discovery, calendar-safe conversions, unit expressions, symbolic dimensional analysis and Pi groups, financial math, stability-aware "
+        "description, explicit unsupported-domain search, runtime-owned assurance metadata, equivalence and solution verification, independently checkable polynomial certificates, bounded local almost-complex and Nijenhuis checks, stable unit discovery, calendar-safe conversions, unit expressions, symbolic dimensional analysis and Pi groups, financial math, stability-aware "
         "linear solving, vector calculus, exact eigenspaces and decompositions, exact vector algebra, diagnostic SVD, numerical integration, extended probability distributions, comparative inference, covariance uncertainty propagation, registered special functions, standard algebra, exact/high-precision results, "
         "schema rejection, MCP tool-error signaling, domain errors, precision provenance, large integer output, ordered partial batch, cancellation recovery, "
         "and unsafe-input rejection. "

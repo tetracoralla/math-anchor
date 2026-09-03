@@ -9,6 +9,19 @@ and Apple notarization record exist.
 
 ### Added
 
+- Added the provider-native `math-anchor.obligation-set.v0.1` Python/CLI
+  contract without adding a fifth MCP tool. It supports bounded obligation
+  DAGs, shared caller-assumption digests, `checked`/`falsified`/`unknown`/
+  `unsupported` outcomes, exact assurance and scope, deterministic replayable
+  receipts, default failures-only feedback, and a silent-success checkpoint
+  mode. The initial conformance corpus covers an injected algebra sign error,
+  strict-definedness mismatch, dimensional mismatch, unsupported domain, and
+  dependency blocking.
+- Added `geometry.almost_complex.local_check`, a bounded rational-polynomial
+  verifier for `J^2 = -I` and coordinate-basis Nijenhuis components in one
+  supplied even-dimensional chart. It returns an exact first counterexample
+  and names the global obligations it does not check. The registry now contains
+  46 operations while the public MCP boundary remains four tools.
 - Added assurance contract version `1.0`, operation-path and selected-backend
   provenance, plus an optional Lean 4.33.1/Mathlib 4.33.1 bridge that translates
   a true rational-polynomial certificate into a generated theorem and records
@@ -28,8 +41,9 @@ and Apple notarization record exist.
   and the Laplacian. Expanded `matrix.reduce` with exact eigenspaces and
   diagonalizability plus row-pivoted LU and positive-definite Hermitian
   Cholesky decompositions, including explicit factor relations and negative
-  shape/domain regressions. The registry now contains 45 operations and the MCP
-  boundary remains four tools.
+  shape/domain regressions. This work brought the registry to 45 operations;
+  the later local-geometry verifier brings the current total to 46 while the
+  MCP boundary remains four tools.
 - Added safe-expression registrations for Airy Ai/Bi, Bessel Y, beta, and
   polygamma alongside the existing Bessel J, gamma, error, Lambert W, and zeta
   functions; calls still pass the explicit AST/function whitelist.
@@ -75,6 +89,30 @@ and Apple notarization record exist.
 
 ### Fixed
 
+- Assigned the expanded obligation runtime the distinct `0.6.0` product
+  identity so Plugin caches and replay receipts cannot confuse it with the
+  previously installed 45-operation `0.5.0` runtime.
+- Made receipt publication atomic and no-clobber: a failed write removes its
+  private staging file and never strands invalid JSON at the requested path.
+- Tightened catalog support classification so registered concepts must cover
+  the substantive English or Chinese query, while retaining explicit Chinese
+  task aliases.
+
+### Performance
+
+- Precomputed the immutable operation search index, lazy-loaded command-only
+  CLI modules, removed the single-obligation thread-pool hop, and reduced the
+  always-loaded Skill plus four-tool catalog without weakening runtime schema
+  validation.
+- Removed the duplicate macOS Python Framework copy only after proving it is
+  byte-identical to the materialized standalone loader and contains no
+  unexpected payload, and excluded unreferenced NumPy random/FFT feature
+  families from the self-contained carrier.
+
+- Made multi-concept catalog search require two substantive term matches or a
+  registered phrase, and added `matchStatus: no_registered_operation` for zero
+  matches. This prevents one generic lexical collision from being presented as
+  support for an unrelated mathematical domain.
 - Kept fully specified fixed-width machine arithmetic on the one-call path by
   loading the machine-semantics reference only when a representation,
   bit/IEEE, rounding, division, or missing-convention policy is actually needed.

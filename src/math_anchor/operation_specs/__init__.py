@@ -16,6 +16,7 @@ from .measurement import SPECS_BY_ID as _MEASUREMENT
 from .units import SPECS_BY_ID as _UNITS
 from .dimension import SPECS_BY_ID as _DIMENSION
 from .finance import SPECS_BY_ID as _FINANCE
+from .geometry import SPECS_BY_ID as _GEOMETRY
 
 _GROUPS = (
     _EXPRESSION,
@@ -34,6 +35,7 @@ _GROUPS = (
     _UNITS,
     _DIMENSION,
     _FINANCE,
+    _GEOMETRY,
 )
 _BY_ID = {operation_id: spec for group in _GROUPS for operation_id, spec in group.items()}
 _ORDER = (
@@ -82,6 +84,7 @@ _ORDER = (
     'dimension.infer',
     'dimension.pi_groups',
     'finance.calculate',
+    'geometry.almost_complex.local_check',
 )
 
 ALL_SPECS = tuple(_BY_ID[operation_id] for operation_id in _ORDER)

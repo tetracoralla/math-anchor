@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
+import subprocess
+import tempfile
 
 from runtime_manifest import verify_manifest
 
@@ -27,6 +29,52 @@ def validate_runtime_artifact(*, root: Path, executable: Path, version: str) -> 
         )
     except SystemExit as error:
         fail(f"runtime artifact is invalid: {error}")
+
+
+def validate_obligation_runtime(executable: Path) -> None:
+    request = {
+        "schemaVersion": "math-anchor.obligation-set.v0.1",
+        "obligations": [
+            {
+                "id": "packaged-identity",
+                "kind": "polynomial_identity",
+                "claim": {
+                    "left": "(x + 1)^2",
+                    "right": "x^2 + 2*x + 1",
+                    "variables": ["x"],
+                },
+            }
+        ],
+    }
+    with tempfile.TemporaryDirectory(prefix="math-anchor-obligation-check-") as temporary:
+        receipt = Path(temporary) / "receipt.json"
+        completed = subprocess.run(
+            [
+                str(executable),
+                "check-obligations",
+                "-",
+                "--receipt-output",
+                str(receipt),
+                "--quiet-success",
+            ],
+            input=json.dumps(request),
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=30,
+        )
+        if completed.returncode != 0 or completed.stdout:
+            fail(
+                "packaged obligation runtime did not complete silently: "
+                f"exit={completed.returncode} stderr={completed.stderr[-240:]}"
+            )
+        if not receipt.is_file():
+            fail("packaged obligation runtime did not write a receipt")
+        value = json.loads(receipt.read_text(encoding="utf-8"))
+        if value.get("schemaVersion") != "math-anchor.obligation-receipt.v0.1":
+            fail("packaged obligation runtime wrote an incompatible receipt")
+        if value.get("summary", {}).get("checked") != 1:
+            fail("packaged obligation runtime did not check the smoke obligation")
 
 
 def main() -> None:
@@ -68,6 +116,7 @@ def main() -> None:
         executable=executable,
         version=str(manifest["version"]),
     )
+    validate_obligation_runtime(executable)
 
     skills_root = PLUGIN / manifest["skills"]
     skill_files = sorted(skills_root.glob("*/SKILL.md"))

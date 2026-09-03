@@ -121,7 +121,7 @@ establish that the Agent obeyed the Skill.
 
 ## Claim interpretation
 
-Math Anchor 0.5 supports explicit structured invocation and deterministic
+Math Anchor 0.6 supports explicit structured invocation and deterministic
 execution. Source or binary release therefore does not require a fresh Agent
 to select the Plugin from natural language. Promotion of a natural-language
 selection, automatic-adoption, or Agent-quality claim requires current
@@ -144,7 +144,50 @@ it does not by itself block the explicit-invocation product contract. Token or
 latency overhead is reported rather than hidden; an Agent-mediated microtask is
 not expected to beat an already structured zero-model direct-host call.
 
+## Obligation and shadow-verifier evaluation
+
+The strategic evidence-runtime path requires a new matched comparison; the
+historical MCP adoption suites do not establish it. The next controlled suite
+must keep the mathematical task, Agent, reasoning effort, harness, total
+budget, and final grading fixed while comparing:
+
+1. no mathematical provider;
+2. the current model-visible MCP compatibility surface;
+3. an explicitly submitted `math-anchor.obligation-set.v0.1` request;
+4. a Host-triggered shadow checkpoint whose successful receipt stays outside
+   the model context and whose failures-only feedback returns only when action
+   is required.
+
+Report context and work cost as separate named measurements:
+
+- schema or standing carrier bytes/tokens;
+- routing/selection tokens and tool turns;
+- obligation request bytes/tokens;
+- returned feedback bytes/tokens;
+- repair tokens, retries, and additional tool turns after a failure;
+- final task accuracy, accepted seeded errors, latency, and runtime resources.
+
+The obligation request compiler and trigger policy are independent test
+subjects. A correct pre-authored obligation measures provider execution, not
+natural-language extraction. A Host-triggered run must record which current
+host event caused the checkpoint; temporal adjacency or a later correct answer
+does not establish automatic extraction or result adoption. The full local
+receipt is review input, not authority for the wider theorem.
+
+Before any larger model-backed run, the deterministic corpus in
+`evals/obligations/core.v0.1.json` must pass and a small matched smoke must
+exercise at least one checked, falsified, unsupported, and dependency-blocked
+case. A promotion claim requires at least 80% detection of supported seeded
+errors, a material reduction in accepted mathematical errors against the
+matched no-provider condition, and main-context growth near or below 10%.
+Silence on successful checkpoints is measured as zero returned content, not as
+proof that the Agent used or benefited from the result.
+
 ## Current isolated and direct-host findings
+
+The checked-in suites and experiments now target `0.6.0`. Existing
+model-backed observations below remain explicitly historical `0.5.0` results;
+they are not silently promoted to the new runtime identity.
 
 The first exact eight-call isolated installed-Plugin smoke on 2026-08-24 is an
 invalid comparison, not adoption evidence. Two runs exceeded the 100,000-token
@@ -171,7 +214,7 @@ the user's global `~/.agents/skills` catalogue. Current installed runs isolate
 both home roots and fail preflight unless the target Skill is present and
 ambient Skills are absent.
 
-The final August 26 installed smoke with Codex CLI `0.150.0-alpha.8`, Luna at
+The August 26 installed smoke with Codex CLI `0.150.0-alpha.8`, Luna at
 low reasoning, both home roots isolated, and the direct common-operation
 templates still did not satisfy promotion. The large exact combination used
 one successful `math.run` call and the simple and irrelevant controls made no
@@ -181,7 +224,7 @@ The comparison is therefore invalid and installed cold natural routing remains
 automatic adoption or Agent-quality improvement, but does not invalidate or
 block release of the separately measured deterministic explicit route.
 
-The current 0.5.0 installed smoke on September 1 used Codex CLI
+The historical 0.5.0 installed smoke on September 1 used Codex CLI
 `0.151.0-alpha.7.2`, Luna at low reasoning, the exact installer-reported Plugin
 root, and the narrowed isolated carrier. It was comparison-valid: all eight
 runs completed, both conditions solved 4/4 tasks, baseline made no target call,
@@ -192,10 +235,10 @@ required fixed-width task to Math Anchor, so required-opportunity recall was
 (+4,052.5 mean), and paired mean latency delta was +915.75 ms; no USD cost was
 reported and none is inferred. This is a valid routing/cost finding with
 `no-utility-claim`, not promotion evidence. The 180-run estimate was not
-started. The current report is
+started. That dated report is
 `build/agent-evals/math-anchor.codex-luna.installed-plugin-routing-smoke-0-5-20260831T171154Z.json`.
 
-Two September 2 current-source routing smokes with Codex CLI 0.152.0, Luna at
+Two September 2 routing smokes with Codex CLI 0.152.0, Luna at
 declared low reasoning, exact operation-and-argument route policies, and the
 isolated 0.5.0 Plugin reproduced the same boundary: every answer was correct,
 baseline target use was zero, the combination task used one conforming
@@ -207,7 +250,7 @@ field, so they are historical diagnostics rather than the final evaluator
 format. They reinforce that Skill text is routing guidance, not a host-enforced
 boundary; the larger installed utility run remains stopped.
 
-The zero-model cold direct-host smoke is a separate observation. The current
+The zero-model cold direct-host smoke is a separate observation. The historical
 0.5.0 report passed 13/13 workloads with 283 ms median and 328.15 ms mean cold
 latency. It invokes 13
 structured `math.run` workloads once each, with no Agent, harness, prompt,
