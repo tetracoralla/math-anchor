@@ -183,8 +183,11 @@ async def math_batch(
 def math_search(
     query: Annotated[str, Field(max_length=MAX_SEARCH_QUERY_LENGTH)] = "",
     category: Annotated[str | None, Field(max_length=MAX_CATEGORY_LENGTH)] = None,
-) -> dict[str, Any]:
-    return _caught(search_operations, query, category)
+) -> CallToolResult:
+    return _tool_result(
+        _caught(search_operations, query, category),
+        operation_label="math.search",
+    )
 
 
 @mcp.tool(
@@ -203,8 +206,11 @@ def math_describe(
         str,
         Field(min_length=1, max_length=MAX_OPERATION_ID_LENGTH),
     ],
-) -> dict[str, Any]:
-    return _caught(describe_operation, operation)
+) -> CallToolResult:
+    return _tool_result(
+        _caught(describe_operation, operation),
+        operation_label="math.describe",
+    )
 
 
 async def _run_cancellable(callable_: Any, *arguments: Any, **keywords: Any) -> dict[str, Any]:
@@ -262,13 +268,20 @@ async def _run_cancellable(callable_: Any, *arguments: Any, **keywords: Any) -> 
         raise
 
 
-def _tool_result(result: dict[str, Any]) -> CallToolResult:
+def _tool_result(
+    result: dict[str, Any],
+    *,
+    operation_label: str | None = None,
+) -> CallToolResult:
     failed = result.get("status") == "error"
     if failed:
         error = result.get("error", {})
         summary = f"{error.get('code', 'E_RUNTIME')}: {error.get('message', 'Calculation failed')}"
     else:
-        summary = f"{result.get('status', 'ok')}: {result.get('operation', 'math.batch')}"
+        summary = (
+            f"{result.get('status', 'ok')}: "
+            f"{operation_label or result.get('operation', 'math.batch')}"
+        )
     return CallToolResult(
         content=[TextContent(type="text", text=summary)],
         structuredContent=result,
@@ -300,6 +313,12 @@ def _install_generated_tool_contracts() -> None:
     run_tool.__dict__["output_schema"] = RUN_TOOL_OUTPUT_SCHEMA
     batch_tool.parameters = batch_tool_parameters()
     batch_tool.__dict__["output_schema"] = BATCH_RESULT_SCHEMA
+    # CallToolResult keeps protocol-level isError aligned with every tool's
+    # structured status. Discovery payloads intentionally retain their compact,
+    # open result shape rather than advertising the MCP envelope itself.
+    discovery_output_schema = {"type": "object", "additionalProperties": True}
+    search_tool.__dict__["output_schema"] = discovery_output_schema
+    describe_tool.__dict__["output_schema"] = discovery_output_schema
     for tool in (search_tool, describe_tool, run_tool, batch_tool):
         # FastMCP's generated pydantic models otherwise ignore unexpected
         # top-level keys even when the advertised JSON Schema is closed.

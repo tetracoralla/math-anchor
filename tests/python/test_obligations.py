@@ -248,6 +248,69 @@ def test_independent_certificate_rejection_cannot_be_promoted_to_checked(
     assert entry["detail"]["reason"] == "certificate_rejected"
 
 
+@pytest.mark.parametrize(
+    "error_code",
+    ["E_AST_BLOCK", "E_DOMAIN", "E_INPUT", "E_NAME", "E_SYNTAX", "E_UNIT"],
+)
+def test_caller_correctable_provider_rejection_is_unsupported(
+    monkeypatch: pytest.MonkeyPatch,
+    error_code: str,
+) -> None:
+    def reject(*_args: object, **_kwargs: object) -> dict[str, object]:
+        return {
+            "status": "error",
+            "error": {
+                "code": error_code,
+                "message": "injected caller-correctable rejection",
+                "retryable": False,
+            },
+        }
+
+    monkeypatch.setattr("math_anchor.obligations.run_operation", reject)
+    _feedback, receipt = check_obligation_set(
+        _request(_polynomial("identity", "x^2 + 2*x*y + y^2"))
+    )
+
+    entry = receipt["obligations"][0]
+    assert entry["status"] == "unsupported"
+    assert entry["detail"]["reason"] == "provider_rejected_claim"
+    assert entry["detail"]["error"]["code"] == error_code
+
+
+def test_real_invalid_polynomial_syntax_is_unsupported() -> None:
+    invalid = _polynomial("invalid", "x+")
+    _feedback, receipt = check_obligation_set(_request(invalid))
+
+    entry = receipt["obligations"][0]
+    assert entry["status"] == "unsupported"
+    assert entry["detail"]["reason"] == "provider_rejected_claim"
+    assert entry["detail"]["error"]["code"] == "E_SYNTAX"
+
+
+def test_known_provider_operation_mismatch_is_inconclusive(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def reject(*_args: object, **_kwargs: object) -> dict[str, object]:
+        return {
+            "status": "error",
+            "error": {
+                "code": "E_OPERATION",
+                "message": "injected provider registry drift",
+                "retryable": False,
+            },
+        }
+
+    monkeypatch.setattr("math_anchor.obligations.run_operation", reject)
+    _feedback, receipt = check_obligation_set(
+        _request(_polynomial("identity", "x^2 + 2*x*y + y^2"))
+    )
+
+    entry = receipt["obligations"][0]
+    assert entry["status"] == "unknown"
+    assert entry["detail"]["reason"] == "provider_inconclusive"
+    assert entry["detail"]["error"]["code"] == "E_OPERATION"
+
+
 def test_replay_matches_and_detects_runtime_only_drift() -> None:
     request = _request(_polynomial("identity", "x^2 + 2*x*y + y^2"))
     _feedback, receipt = check_obligation_set(request)

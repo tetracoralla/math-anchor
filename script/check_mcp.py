@@ -374,7 +374,15 @@ async def main(
             assert searched_chinese.structuredContent["operations"][0]["id"] == "calculus.derivative"
 
             described = await session.call_tool("math.describe", {"operation": "calculus.integrate"})
+            assert described.isError is False
             assert described.structuredContent["operation"]["inputSchema"]["required"] == ["expression", "variable"]
+
+            unknown_description = await session.call_tool(
+                "math.describe", {"operation": "not.a.registered.operation"}
+            )
+            assert unknown_description.isError is True
+            assert unknown_description.structuredContent["status"] == "error"
+            assert unknown_description.structuredContent["error"]["code"] == "E_OPERATION"
 
             described_certificate = await session.call_tool(
                 "math.describe", {"operation": "certificate.polynomial_identity"}

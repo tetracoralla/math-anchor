@@ -50,7 +50,14 @@ _KNOWN_PROVIDERS = {
     "dimension_consistency": "dimension.check",
     "local_almost_complex_integrability": "geometry.almost_complex.local_check",
 }
-_UNSUPPORTED_PROVIDER_ERRORS = {"E_AST_BLOCK", "E_DOMAIN", "E_OPERATION"}
+_UNSUPPORTED_PROVIDER_ERRORS = {
+    "E_AST_BLOCK",
+    "E_DOMAIN",
+    "E_INPUT",
+    "E_NAME",
+    "E_SYNTAX",
+    "E_UNIT",
+}
 
 
 def _closed_object(

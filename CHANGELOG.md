@@ -89,6 +89,12 @@ and Apple notarization record exist.
 
 ### Fixed
 
+- Aligned protocol-level MCP `isError` with structured failures for discovery
+  tools as well as calculation tools, so an unknown operation or invalid search
+  category cannot be mistaken for a successful tool call.
+- Kept caller-correctable obligation input rejections `unsupported`, while a
+  missing operation for an already-bound Provider is now `unknown` instead of
+  hiding registry, package, or runtime drift as an unsupported claim.
 - Assigned the expanded obligation runtime the distinct `0.6.0` product
   identity so Plugin caches and replay receipts cannot confuse it with the
   previously installed 45-operation `0.5.0` runtime.
