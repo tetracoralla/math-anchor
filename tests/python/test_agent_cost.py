@@ -69,6 +69,10 @@ def test_tool_discovery_survives_current_codex_host_compaction() -> None:
     assert not ({"oneOf", "anyOf", "allOf", "$defs"} & set(run_tool.parameters))
     assert set(run_tool.parameters["properties"]["operation"]["enum"]) == set(OPERATIONS)
     assert run_tool.parameters["properties"]["arguments"]["type"] == "object"
+    argument_description = run_tool.parameters["properties"]["arguments"]["description"]
+    assert "inputMode is exactly value or bits" in argument_description
+    assert "overflowBehavior is exactly checked, wrapping, or saturating" in argument_description
+    assert "decimal or wrap" in argument_description
     assert output_bytes < 2_000
     # Codex currently applies lossy model-facing compaction above roughly 5 KB
     # per input schema. Stay below it so math.run never degrades to an opaque

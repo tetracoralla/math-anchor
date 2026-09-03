@@ -120,6 +120,9 @@ async def main(
             assert listed_bytes < 10_000
             assert run_tool.inputSchema["additionalProperties"] is False
             assert run_tool.inputSchema["properties"]["arguments"]["type"] == "object"
+            argument_description = run_tool.inputSchema["properties"]["arguments"]["description"]
+            assert "inputMode is exactly value or bits" in argument_description
+            assert "overflowBehavior is exactly checked, wrapping, or saturating" in argument_description
             assert describe_tool.inputSchema["properties"]["operation"]["maxLength"] == 128
             assert run_output_schema_bytes < 2_000
             assert run_tool.outputSchema["required"] == ["status"]
