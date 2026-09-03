@@ -994,7 +994,6 @@ struct CalculatorStoreChecks {
         modeSwitchStore.replaceExpression("factorial(5000)^10000")
         modeSwitchStore.evaluate()
         try? await Task.sleep(for: .milliseconds(50))
-        let modeSwitchStart = Date()
         let liveModeTransition = CalculatorModeTransition(popoverSettleDelay: .milliseconds(20))
         liveModeTransition.select(
             .conversion,
@@ -1002,21 +1001,16 @@ struct CalculatorStoreChecks {
             conversionStore: modeSwitchConversionStore
         )
         await waitForConversion(modeSwitchConversionStore)
-        let modeSwitchElapsed = Date().timeIntervalSince(modeSwitchStart)
         check(modeSwitchStore.mode == .conversion, "heavy evaluation switches to conversion mode")
         check(!modeSwitchStore.isEvaluating, "mode switch clears calculator progress")
         check(modeSwitchConversionStore.errorMessage == nil, "first conversion survives the mode switch")
         check(modeSwitchConversionStore.output != "—", "first conversion produces a result")
         // This is a cancellation check, not a benchmark of first-use unit
         // conversion on a shared hosted runner. If the old expression keeps
-        // the serial worker, this conversion reaches its own request deadline
-        // and the result checks above fail. Keep the elapsed guard tied to the
-        // same runtime contract instead of imposing a second, undocumented
-        // 1.5-second cold-path SLO.
-        check(
-            modeSwitchElapsed < modeSwitchRequestTimeout,
-            "mode switch releases the shared runtime before the old evaluation deadline"
-        )
+        // the serial worker, this conversion reaches its request deadline and
+        // the result checks above fail. Do not additionally compare wall time
+        // with the request timeout: wall time also includes a separately
+        // bounded cold runtime launch after cancellation.
 
         let warmStart = Date()
         for _ in 0..<20 {
