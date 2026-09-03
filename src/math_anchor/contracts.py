@@ -222,8 +222,9 @@ def run_tool_parameters(operation_schemas: list[tuple[str, dict[str, Any]]]) -> 
                 "type": "object",
                 "description": (
                     "Operation-specific object. Unknown fields are rejected by the selected registry contract before execution. "
-                    "For integer.machine_arithmetic, inputMode is exactly value or bits and overflowBehavior is exactly "
-                    "checked, wrapping, or saturating; do not invent synonyms such as decimal or wrap."
+                    "For integer.machine_arithmetic, left and right are exact integer text strings (for example \"65535\", not 65535), "
+                    "inputMode is exactly value or bits, and overflowBehavior is exactly checked, wrapping, or saturating; "
+                    "do not invent synonyms such as decimal or wrap."
                 ),
             },
             **deepcopy(_LIMIT_PROPERTIES),

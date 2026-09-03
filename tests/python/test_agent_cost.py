@@ -70,6 +70,8 @@ def test_tool_discovery_survives_current_codex_host_compaction() -> None:
     assert set(run_tool.parameters["properties"]["operation"]["enum"]) == set(OPERATIONS)
     assert run_tool.parameters["properties"]["arguments"]["type"] == "object"
     argument_description = run_tool.parameters["properties"]["arguments"]["description"]
+    assert "left and right are exact integer text strings" in argument_description
+    assert '"65535", not 65535' in argument_description
     assert "inputMode is exactly value or bits" in argument_description
     assert "overflowBehavior is exactly checked, wrapping, or saturating" in argument_description
     assert "decimal or wrap" in argument_description
