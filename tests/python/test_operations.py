@@ -13,11 +13,90 @@ from math_anchor.runtime import execute_direct
 
 def test_catalog_discovery_is_compact_and_descriptions_are_precise() -> None:
     searched = search_operations("numerically solve nonlinear equation")
+    assert searched["matchStatus"] == "matched"
     assert searched["operations"][0]["id"] in {"numeric.root", "algebra.solve"}
     assert all(set(item) == {"id", "category", "summary"} for item in searched["operations"])
 
     described = describe_operation("calculus.integrate")
     assert described["operation"]["inputSchema"]["required"] == ["expression", "variable"]
+
+
+def test_catalog_rejects_single_term_collisions_for_unsupported_domains() -> None:
+    for query in (
+        "cohomology characteristic class",
+        "compute Dolbeault cohomology of this complex manifold",
+        "compute characteristic classes of a complex manifold",
+        "integrate a differential form over a complex manifold",
+        "solve the PDE for a complex manifold",
+        "integrate the Nijenhuis tensor",
+        "计算复流形的层上同调",
+        "计算复流形的 Dolbeault 上同调",
+        "求解复流形上的偏微分方程",
+        "积分复流形上的微分形式",
+        "计算复流形的陈类",
+        "验证六维球面存在可积复结构",
+    ):
+        unsupported = search_operations(query)
+        assert unsupported["matchStatus"] == "no_registered_operation", query
+        assert unsupported["operations"] == []
+        assert unsupported["count"] == 0
+
+    generic = search_operations("the")
+    assert generic["matchStatus"] == "no_registered_operation"
+    assert generic["operations"] == []
+
+
+def test_catalog_routes_local_almost_complex_queries_without_overclaiming_global_support() -> None:
+    searched = search_operations("tensor differential form manifold Nijenhuis")
+
+    assert searched["matchStatus"] == "matched"
+    assert searched["operations"][0]["id"] == "geometry.almost_complex.local_check"
+
+
+def test_catalog_routes_a_registered_single_alias_when_the_complete_query_matches() -> None:
+    searched = search_operations("factor expression")
+
+    assert searched["matchStatus"] == "matched"
+    assert searched["operations"][0]["id"] == "algebra.transform"
+
+
+@pytest.mark.parametrize(
+    ("query", "operation"),
+    [
+        ("expression equivalence", "expression.equivalent"),
+        ("equivalent expressions", "expression.equivalent"),
+        ("convert 72 watts to kilowatts", "units.convert"),
+        ("solve cubic equation", "algebra.solve"),
+        ("compound interest future value", "finance.calculate"),
+        ("binomial coefficient 52 choose 5", "combinatorics.count"),
+        ("standard deviation of data", "statistics.describe"),
+        ("compute determinant of matrix", "matrix.determinant"),
+    ],
+)
+def test_catalog_routes_supported_natural_concepts(
+    query: str,
+    operation: str,
+) -> None:
+    searched = search_operations(query)
+
+    assert searched["matchStatus"] == "matched"
+    assert searched["operations"][0]["id"] == operation
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "obligation",
+        "receipt",
+        "check polynomial obligation",
+        "replay mathematical receipt",
+    ],
+)
+def test_catalog_stops_at_provider_native_obligation_terms(query: str) -> None:
+    searched = search_operations(query)
+
+    assert searched["matchStatus"] == "no_registered_operation"
+    assert searched["operations"] == []
 
 
 @pytest.mark.parametrize(
@@ -254,6 +333,24 @@ def test_symbolic_solve_classifies_infinite_none_and_general_sets() -> None:
     )
     assert contradiction["classification"] == "none"
     assert contradiction["solutionSet"] == "EmptySet"
+
+    contradictory_system = execute_direct(
+        "algebra.solve",
+        {"equations": ["x=1", "x=2"], "variables": ["x"], "domain": "real"},
+    )
+    assert contradictory_system["classification"] == "none"
+    assert contradictory_system["complete"] is True
+    assert contradictory_system["solutions"] == []
+
+    redundant_system = execute_direct(
+        "algebra.solve",
+        {"equations": ["x=1", "2*x=2"], "variables": ["x"], "domain": "real"},
+    )
+    assert redundant_system["classification"] == "finite"
+    assert redundant_system["complete"] is True
+    assert redundant_system["solutions"] == [
+        {"x": {"exact": "1", "approx": "1.000000000000000"}}
+    ]
 
 
 def test_exact_statistics_are_not_limited_by_binary64_range() -> None:

@@ -24,6 +24,7 @@ from .runtime_control import (
 from .runtime_telemetry import RUNTIME_TELEMETRY
 from .sandbox_errors import _error
 from .transport_budget import (
+    BATCH_ITEM_FIELDS,
     MAX_BATCH_REQUEST_BYTES,
     MAX_BATCH_REQUEST_NODES,
     MAX_REQUEST_BYTES,
@@ -36,6 +37,7 @@ from .worker_pool import (
     DEFAULT_TIMEOUT_MS,
     MAX_REQUESTS_PER_WORKER,
     MAX_REUSABLE_WORKERS,
+    UNIT_REGISTRY_OPERATIONS,
     WORKER_PREWARM_BUDGET_SECONDS,
     WORKER_RECYCLE_RSS_MB,
     _WORKER_POOL,
@@ -60,14 +62,6 @@ from .worker_process import (
 )
 
 
-_BATCH_ITEM_FIELDS = {
-    "operation",
-    "arguments",
-    "timeoutMs",
-    "memoryMb",
-    "resultMode",
-    "maxOutputBytes",
-}
 _ADMISSION = AdmissionController()
 _CIRCUIT = CircuitBreaker()
 
@@ -176,8 +170,8 @@ def _run_operation_impl(
             max_output_bytes=max_output_bytes,
         )
     memory_bytes = memory_mb * 1024 * 1024
-    allowed, retry_after_ms = _CIRCUIT.allow()
-    if not allowed:
+    circuit_permit, retry_after_ms = _CIRCUIT.allow()
+    if circuit_permit is None:
         return _error(
             "E_UNAVAILABLE",
             "calculation workers are temporarily unavailable after repeated provider failures",
@@ -195,7 +189,7 @@ def _run_operation_impl(
         # The half-open probe reserved by allow() was never consumed by an
         # execution; returning it keeps one admission-phase failure from
         # stranding the breaker in a state that refuses every later call.
-        _CIRCUIT.abandon_probe()
+        _CIRCUIT.abandon_probe(circuit_permit)
         if admission_error == "overloaded":
             return _error(
                 "E_OVERLOADED",
@@ -216,6 +210,7 @@ def _run_operation_impl(
     try:
         result = _execute_admitted_operation(
             request_line,
+            requires_unit_registries=operation in UNIT_REGISTRY_OPERATIONS,
             memory_bytes=memory_bytes,
             deadline=deadline,
             timeout_ms=timeout_ms,
@@ -228,7 +223,7 @@ def _run_operation_impl(
         # _execute_admitted_operation converts its own failures, so this is
         # a parent-side supervision bug; it is provider fault evidence and
         # the probe must still be accounted before the exception escapes.
-        _CIRCUIT.record(outcome="infrastructure_failure")
+        _CIRCUIT.record(outcome="infrastructure_failure", permit=circuit_permit)
         raise
     finally:
         _ADMISSION.release(lease)
@@ -240,7 +235,7 @@ def _run_operation_impl(
         )
     else:
         outcome = "success"
-    if _CIRCUIT.record(outcome=outcome):
+    if _CIRCUIT.record(outcome=outcome, permit=circuit_permit):
         RUNTIME_TELEMETRY.increment("circuit.opened")
     return result
 
@@ -248,6 +243,7 @@ def _run_operation_impl(
 def _execute_admitted_operation(
     request_line: str,
     *,
+    requires_unit_registries: bool,
     memory_bytes: int,
     deadline: float,
     timeout_ms: int,
@@ -261,6 +257,7 @@ def _execute_admitted_operation(
         deadline=deadline,
         timeout_ms=timeout_ms,
         cancel_event=cancel_event,
+        prefer_unit_registries=requires_unit_registries,
     )
     if worker is None:
         return startup_error or _error(
@@ -288,6 +285,8 @@ def _execute_admitted_operation(
             memory_mb=memory_mb,
             cancel_event=cancel_event,
         )
+        if reusable and requires_unit_registries and result.get("status") == "ok":
+            worker.unit_registry_loaded = True
     except Exception as execution_error:
         result = _error(
             "E_RUNTIME",
@@ -463,7 +462,7 @@ def _run_batch_item(
             "index": index,
             **_error("E_INPUT", "each item requires an operation string and arguments object"),
         }
-    unexpected_fields = set(item) - _BATCH_ITEM_FIELDS
+    unexpected_fields = set(item) - BATCH_ITEM_FIELDS
     if unexpected_fields:
         return {
             "index": index,

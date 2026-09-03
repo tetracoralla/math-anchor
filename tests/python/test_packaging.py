@@ -68,6 +68,53 @@ def test_public_identity_uses_math_anchor_across_distribution_surfaces() -> None
     assert manifest["interface"]["displayName"] == "Math Anchor"
     assert set(transport["mcpServers"]) == {"math-anchor"}
 
+    agent_tool = json.loads((ROOT / "agent-tool.json").read_text())
+    host_plugin = json.loads(
+        (ROOT / "integrations" / "agent-host" / "plugin.json").read_text()
+    )
+    assert agent_tool["version"] == project["project"]["version"]
+    assert host_plugin["version"] == project["project"]["version"]
+    assert agent_tool["package"]["artifact"].endswith(
+        f"-{project['project']['version']}.tar.gz"
+    )
+
+
+def test_agent_host_component_exposes_a_version_locked_obligation_launcher() -> None:
+    integration = json.loads(
+        (ROOT / "integrations" / "agent-host" / "tool.integration.json").read_text()
+    )
+    plugin = json.loads(
+        (ROOT / "integrations" / "agent-host" / "plugin.json").read_text()
+    )
+    discovery = integration["discovery"]
+
+    assert integration["schemaVersion"] == "openadam.agent-host-tool-integration.v0.3"
+    assert integration["runtime"]["args"] == ["mcp"]
+    assert integration["runtime"]["expectedTools"] == [
+        "math.search",
+        "math.describe",
+        "math.run",
+        "math.batch",
+    ]
+    assert discovery["kind"] == "skill-cli"
+    assert discovery["skill"] == {
+        "id": "calculate",
+        "root": "marketplace/plugins/math-anchor-obligation-runtime/skills/calculate",
+        "identityFiles": ["SKILL.md"],
+        "launcher": "scripts/math-anchor",
+    }
+    assert discovery["runtime"] == {
+        "executor": "component",
+        "command": integration["runtime"]["command"],
+        "args": [],
+        "versionArguments": ["--version"],
+    }
+    assert "Host-generated, version-locked launcher" in plugin["interface"][
+        "longDescription"
+    ]
+    skill = (PLUGIN / "skills" / "calculate" / "SKILL.md").read_text()
+    assert "Never substitute an ambient command or source checkout" in skill
+
 
 def test_plugin_transport_stays_inside_the_plugin_bundle() -> None:
     config = json.loads((PLUGIN / ".mcp.json").read_text())
@@ -101,7 +148,7 @@ def test_local_codex_marketplace_exposes_the_packaged_plugin() -> None:
 def test_calculation_skill_keeps_cost_and_trust_boundaries() -> None:
     skill_path = PLUGIN / "skills" / "calculate" / "SKILL.md"
     skill = skill_path.read_text()
-    assert len(skill.encode("utf-8")) <= 6_000
+    assert len(skill.encode("utf-8")) <= 5_200
     assert "Do not load it for trivial, low-risk arithmetic" in skill
     assert "MUST load and use it for fixed-width" in skill
     assert "A successful tool response proves that the declared operation ran" in skill
@@ -156,6 +203,26 @@ def test_runtime_packaging_accepts_both_supported_python_loader_layouts() -> Non
     assert "-name 'libpython*.dylib'" in script
     assert '[[ "$python_loader_count" -eq 0 ]]' in script
     assert 'find "$PLUGIN_RUNTIME_BUNDLE" -type l' in script
+    assert 'cmp -s "$PYTHON_RUNTIME_LOADER" "$PYTHON_FRAMEWORK_BINARY"' in script
+    assert 'rm -rf "$PYTHON_FRAMEWORK"' in script
+
+
+def test_runtime_packaging_excludes_only_unused_numpy_feature_families() -> None:
+    script = (ROOT / "script" / "package_runtime.sh").read_text()
+    assert "--exclude-module numpy.fft" in script
+    assert "--exclude-module numpy.random" in script
+
+    source = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in sorted((ROOT / "src" / "math_anchor").rglob("*.py"))
+    )
+    for forbidden_reference in (
+        "numpy.fft",
+        "numpy.random",
+        "np.fft",
+        "np.random",
+    ):
+        assert forbidden_reference not in source
 
 
 def test_runtime_manifest_rejects_installer_unsafe_symbolic_links(tmp_path: Path) -> None:
@@ -543,6 +610,81 @@ def test_build_and_run_refuses_dist_symlink_before_replacing_the_app_bundle(
     assert built.returncode != 0
     assert "symbolic-link component" in built.stderr
     assert sentinel.read_text(encoding="utf-8") == "outside repository"
+
+
+@pytest.mark.skipif(
+    platform.system() != "Darwin",
+    reason="the scoped process helper controls the native macOS .app carrier",
+)
+def test_app_process_stop_is_scoped_to_the_expected_executable(tmp_path: Path) -> None:
+    expected_binary = tmp_path / "dist" / "Math Anchor.app" / "Contents" / "MacOS" / "MathAnchor"
+    unrelated_binary = tmp_path / "Applications" / "Math Anchor.app" / "Contents" / "MacOS" / "MathAnchor"
+    expected_binary.parent.mkdir(parents=True)
+    unrelated_binary.parent.mkdir(parents=True)
+    source = tmp_path / "sleep.c"
+    source.write_text(
+        "#include <unistd.h>\nint main(void) { sleep(30); return 0; }\n",
+        encoding="utf-8",
+    )
+    for binary in (expected_binary, unrelated_binary):
+        compiled = subprocess.run(
+            ["/usr/bin/clang", str(source), "-o", str(binary)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert compiled.returncode == 0, compiled.stderr
+
+    expected = subprocess.Popen([str(expected_binary), "30"])
+    unrelated = subprocess.Popen([str(unrelated_binary), "30"])
+    try:
+        stopped = subprocess.run(
+            [
+                str(ROOT / "script" / "app_processes.sh"),
+                "stop",
+                "MathAnchor",
+                str(expected_binary),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert stopped.returncode == 0, stopped.stderr
+        expected.wait(timeout=5)
+        assert unrelated.poll() is None
+        checked = subprocess.run(
+            [
+                str(ROOT / "script" / "app_processes.sh"),
+                "check",
+                "MathAnchor",
+                str(unrelated_binary),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert checked.returncode == 0, checked.stderr
+    finally:
+        for process in (expected, unrelated):
+            if process.poll() is None:
+                process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=5)
+
+
+def test_app_process_stop_rejects_broad_or_mismatched_targets() -> None:
+    process_control = ROOT / "script" / "app_processes.sh"
+    for target in ("/", "/Applications/Another.app/Contents/MacOS/Another"):
+        stopped = subprocess.run(
+            [str(process_control), "stop", "MathAnchor", target],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert stopped.returncode == 2
 
 
 @pytest.mark.parametrize("linked_output", [".build", ".swiftpm"])
@@ -940,6 +1082,10 @@ def test_release_scripts_require_versioned_signed_notarized_artifacts() -> None:
     assert "CFBundleVersion" in local_build
     assert 'APP_DISPLAY_NAME="Math Anchor"' in local_build
     assert 'APP_EXECUTABLE="MathAnchor"' in local_build
+    assert 'PRODUCTION_BUNDLE_ID="com.openadam.mathanchor"' in local_build
+    assert 'DEVELOPMENT_BUNDLE_ID="com.openadam.mathanchor.development"' in local_build
+    assert 'if [[ "$BUILD_CONFIGURATION" == "debug" ]]' in local_build
+    assert 'MATH_ANCHOR_BUILD_CONFIGURATION=release' in release
     assert "--options runtime" in release
     assert "notarytool submit" in release
     assert 'NOTARY_KEYCHAIN="${MATH_ANCHOR_NOTARY_KEYCHAIN:-}"' in release
@@ -949,6 +1095,52 @@ def test_release_scripts_require_versioned_signed_notarized_artifacts() -> None:
     assert "check_release_source.sh" in release
     assert 'MATH_ANCHOR_APP_VERSION="$VERSION"' in release
     assert 'MATH_ANCHOR_BUILD_NUMBER="$BUILD_NUMBER"' in release
+
+
+def test_local_app_verification_is_bundle_scoped_and_probes_its_runtime() -> None:
+    script = (ROOT / "script" / "build_and_run.sh").read_text(encoding="utf-8")
+    assert '"$PROCESS_CONTROL" stop "$APP_EXECUTABLE" "$APP_BINARY"' in script
+    assert '"$PROCESS_CONTROL" check "$APP_EXECUTABLE" "$APP_BINARY"' in script
+    assert '"$PATH_VALIDATION_PYTHON" "$APP_RUNTIME_CHECK" --runtime "$APP_RUNTIME"' in script
+    assert 'pgrep -x "$APP_EXECUTABLE"' not in script
+
+
+@pytest.mark.parametrize("linked_component", ["runtime", "parent"])
+def test_app_bundle_runtime_probe_rejects_symbolic_link_components_without_execution(
+    tmp_path: Path, linked_component: str
+) -> None:
+    real_directory = tmp_path / "real"
+    real_directory.mkdir()
+    marker = tmp_path / "runtime-was-executed"
+    runtime = real_directory / "MathAnchorRuntime"
+    runtime.write_text(
+        f'#!/bin/sh\ntouch "{marker}"\nexit 0\n',
+        encoding="utf-8",
+    )
+    runtime.chmod(0o755)
+
+    if linked_component == "runtime":
+        candidate = tmp_path / "linked-runtime"
+        candidate.symlink_to(runtime)
+    else:
+        linked_parent = tmp_path / "linked-parent"
+        linked_parent.symlink_to(real_directory, target_is_directory=True)
+        candidate = linked_parent / runtime.name
+
+    checked = subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "script" / "check_app_bundle_runtime.py"),
+            "--runtime",
+            str(candidate),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert checked.returncode != 0
+    assert "symbolic-link component" in checked.stderr
+    assert not marker.exists()
 
 
 def test_public_repository_has_contribution_and_report_routes() -> None:
@@ -1008,6 +1200,7 @@ def test_packaged_runtime_has_matching_manifest_notices_and_sbom() -> None:
     ]
     assert loaders
     assert all(not loader.is_symlink() for loader in loaders)
+    assert not (bundle / "_internal" / "Python.framework").exists()
     assert not any(path.is_symlink() for path in bundle.rglob("*"))
     assert project_license_path.read_bytes() == (ROOT / "LICENSE").read_bytes()
     assert project_notice_path.read_bytes() == (ROOT / "NOTICE").read_bytes()

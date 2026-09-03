@@ -1,84 +1,140 @@
-# Math Anchor research-runtime roadmap
+# Math Anchor evidence-runtime roadmap
 
 ## Product direction
 
-Math Anchor is a small mathematical execution and evidence runtime for Agents.
-It should replace repeated model calculation with bounded, reproducible calls,
-explicit numerical limits, independently checkable certificates where useful,
-and inputs suitable for an external proof kernel.
+Math Anchor anchors finite mathematical claims to executable, replayable, and
+scope-limited checks. Its Agent product is a small mathematical obligation and
+receipt runtime that a Host or harness can embed outside the model's main
+context. It is not primarily a larger operation catalogue, a mathematical
+reasoning model, a theorem planner, a universal CAS, or a replacement for a
+formal proof kernel.
 
-It is not a mathematical reasoning model, theorem planner, universal CAS, or a
-replacement for Lean. The human calculator and Agent interface continue to use
-one calculation core while keeping Agent discovery and assurance metadata out
-of the human UI.
+The strategic division is:
 
-## Current product slice
+- the Host owns trigger policy, provider discovery and routing, artifact
+  storage, permissions, lifecycle, caching, retries, and presentation to the
+  Agent;
+- Math Anchor owns the bounded obligation shapes it understands, deterministic
+  provider execution, assurance and claim scope, replay digests, conformance
+  cases, and explicit unsupported boundaries;
+- a domain pack may compile domain material into core obligations and disclose
+  what it did not translate, but it must not turn one research route into the
+  core product model.
 
-- Version 0.5 exposes 45 registered operations through exactly four public MCP
-  tools: `math.search`, `math.describe`, `math.run`, and `math.batch`.
-- Results keep exact and approximate values distinct and include a bounded
-  runtime-owned assurance record with claim scope, assumptions, backend
-  provenance, and certificate or kernel-check status.
-- `certificate.polynomial_identity` produces one bounded rational-polynomial
-  certificate. A separate standard-library checker recomputes its statement and
-  coefficients without calling the producer.
-- The optional production Lean bridge and independent reference consumer use
-  pinned Lean 4.33.1 and exact Mathlib revision
-  `0df444a360eaa60ab8c11dca51a86af692955474`. They are verification lanes, not
-  additional public tools or proof of a user's wider informal claim.
-- The Python headless runtime, Plugin runtime, and macOS app are separate
-  carriers built from the same core. Carrier parity must be re-established
-  after every source change.
+The macOS calculator remains a compact human utility over the same calculation
+core. Obligation graphs, receipts, provider metadata, and Agent routing remain
+out of its UI.
 
-## Claim boundary
+## Current productized slice
 
-`deterministic` means reproducible bounded computation, not proof.
-`diagnostic` adds quality information but is not a rigorous enclosure.
-`certified` requires a bounded artifact accepted by an independent checker.
-`kernel_checked` may appear only after an external formal kernel accepts the
-bound artifact. A digest authenticates bytes; it does not establish
-mathematical truth.
+Current development source provides a versioned local contract at
+`math-anchor.obligation-set.v0.1` through the Python library and the
+`check-obligations` CLI command. This route deliberately does not add a fifth
+MCP tool.
 
-Direct structured invocation is the supported Agent contract. Natural-language
-tool selection, automatic adoption, quality gain, and research utility are
-separate empirical claims. The current public-task evaluation observed some
-successful tool adoption but no correctness gain and substantial context cost;
-see `docs/agent-evaluation.md`. No broad adoption or utility claim is warranted.
+The first slice provides:
 
-## Validation ladder
+- a bounded set of up to 32 obligations and 16 shared assumption sets;
+- hash binding of caller-declared assumptions without pretending to interpret
+  or prove those assumptions;
+- dependency-ordered execution where an unchecked dependency prevents the
+  downstream provider from running; dependencies do not substitute result data
+  into another claim;
+- the terminal states `checked`, `falsified`, `unknown`, and `unsupported`;
+- the assurance vocabulary `formal_kernel_checked`, `exact_symbolic`,
+  `rigorous_interval`, `numerical`, and `heuristic`, with `null` used when no
+  provider established a result;
+- exact claim, assumption, provider-result, outcome, and receipt digests;
+- a full deterministic receipt for replay plus a default `failures_only`
+  feedback projection;
+- `--quiet-success`, which lets a checkpoint write the full receipt locally and
+  emit no main-context output when every obligation is checked;
+- replay classification that distinguishes an exact match, runtime-only drift,
+  and mathematical outcome drift.
 
-Run the narrow affected checks during development, then close a release with:
+The registered v0.1 obligation providers are rational polynomial identity,
+expression equivalence under an explicit domain and definedness policy,
+symbolic dimensional consistency, and the bounded local almost-complex check.
+The current 46-operation registry remains available behind the four established
+MCP tools as a compatibility provider surface; operation count is no longer the
+strategic progress metric.
 
-1. `./script/check_all.sh` for Python and Swift regressions, source safety,
-   packaged MCP behavior, load/recovery, Plugin validation, and release hygiene.
-2. `./script/check_headless.sh` for wheel/source-archive construction and a
-   fresh-target headless smoke.
-3. `./script/check_lean_bridge.sh` for the complete pinned kernel route, plus
-   `script/lean_reference_check.py` for the independent consumer boundary.
-4. `codex plugin marketplace add .` and `./script/install_plugin.sh` for an
-   installed-copy byte comparison, four-tool transport check, and fresh-host
-   Skill-path observation.
-5. A real launch and task flow for the macOS carrier when it is intended to be
-   refreshed. A successful build alone does not establish visual or business
-   acceptance.
+`geometry.almost_complex.local_check` is retained as a narrow provider. It
+checks rational-polynomial `J^2 = -I` and coordinate-basis Nijenhuis components
+in one supplied chart. It is not an atlas verifier and does not establish a
+global complex structure, including on the six-sphere. A future S6 audit pack
+may compile selected finite obligations into the core contract, but it is a
+case study rather than the product kernel.
 
-Linux/container status remains conditional on the owning CI run or an actual
-local daemon; source inspection cannot promote that runtime lane to PASS.
+## Claim and receipt boundary
 
-## Next product-strengthening sequence
+A receipt records what current code executed and binds its exact request,
+provider result, runtime versions, status, assurance level, scope, and stated
+limitations. It is not durable authority for the wider theorem and does not
+validate natural-language-to-formula translation, coverage completeness,
+external theorem use, or the truth of caller-declared assumptions.
 
-1. Integrate the explicit route into one real external mathematics or physics
-   Agent workflow and measure task-level error prevention, retries, latency,
-   context cost, and whether the returned value is actually used.
-2. Improve operation routing and compact context before expanding model-backed
-   repeats. A correct treatment with no target call is not adoption; a target
-   call with no quality gain is not utility.
-3. Add another certificate family only when the external workflow repeatedly
-   needs it. Keep each family bounded, independently recomputable, and
-   separately kernel-checked.
-4. Keep the four-tool boundary and registry-first capability model unless
-   current installed-host measurements demonstrate a concrete reason to change
-   it.
-5. Treat signed/notarized macOS distribution, hosted marketplace listing, and
-   owner visual/business acceptance as separate release decisions from public
-   source and local Plugin installation.
+`exact_symbolic` means the registered provider established the stated finite
+claim over its declared symbolic domain. A separately checked polynomial
+certificate still does not become `formal_kernel_checked`; that level may be
+used only after the bound statement is accepted by a named formal kernel.
+`rigorous_interval` is reserved for a genuine enclosure contract, not a
+diagnostic error estimate. `numerical` and `heuristic` remain weaker outcomes
+and cannot be promoted because they happen to look exact.
+
+Unknown obligation kinds return `unsupported` without interpreting the claim
+object. Provider timeouts, resource failures, certificate rejection, and
+inconclusive symbolic work return `unknown`. A dependency on anything other
+than `checked` is also `unknown` and records the blocking obligation ids.
+
+## Current validation ladder
+
+Use the narrow obligation tests and conformance corpus during iteration, then
+close source changes with:
+
+1. `.venv/bin/python script/check_obligations.py` for the current injected
+   sign error, strict-definedness trap, unit mismatch, unsupported-domain, and
+   dependency-blocking cases;
+2. `./script/check_all.sh` for Python and Swift regressions, source safety,
+   packaged MCP behavior, load/recovery, Plugin validation, and release
+   hygiene;
+3. `./script/check_headless.sh` for wheel and source-archive construction plus
+   a fresh-target obligation-runtime smoke;
+4. `./script/check_lean_bridge.sh` only for the separately pinned polynomial
+   kernel route;
+5. `./script/build_and_run.sh --verify` when the macOS carrier is refreshed.
+
+Development checks can veto broken implementation. Runtime Agent flow, runtime
+human flow, distribution, and business/experience acceptance remain separate
+lanes.
+
+## Next construction boundaries
+
+The next Agent-owned construction work is ordered by dependency, not by adding
+mathematical domains:
+
+1. measure the current no-tool, model-visible MCP, explicit obligation, and
+   harness-triggered paths with schema, routing, request, result, and repair
+   cost reported separately;
+2. integrate the local CLI as a real Host or harness checkpoint with receipt
+   artifacts kept outside the model context and only actionable failures fed
+   back;
+3. add typed result-to-result bindings only from repeated workflows that need
+   them; dependency order alone must not be described as data propagation;
+4. add a provider or certificate family only when at least three real repeated
+   workflows share one bounded meaning and the conformance corpus can falsify
+   it;
+5. after the kernel and checkpoint route are stable, build a thin research
+   audit pack from selected source material and publish a coverage table that
+   keeps external theorem steps explicitly unchecked.
+
+Promotion to a high-frequency or research-utility claim requires current
+comparative results, not a green provider suite. The working stop conditions
+remain: detect at least 80% of supported seeded errors, materially reduce
+accepted mathematical errors against the matched no-tool route, keep main
+context growth near or below 10%, keep successful checks silent or compact,
+obtain one external harness integration, and observe two non-author users
+repeating a real workflow. External integration, adoption, and owner value
+acceptance are not current source facts. If a bounded campaign produces only
+more operations without those signals, the correct state is maintenance rather
+than further domain expansion.

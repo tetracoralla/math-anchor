@@ -1,0 +1,49 @@
+{
+  "schemaVersion": "openadam.agent-tool-eval.experiment.v0.1",
+  "id": "math-anchor.codex-luna.explicit-result-chain-smoke-0-6",
+  "title": "Math Anchor 0.6 explicit dependent-result chain smoke in Codex Luna",
+  "purpose": "development-smoke",
+  "suiteRef": {"id": "math-anchor.result-chain-explicit", "version": "0.1.0"},
+  "targetRef": {"id": "math-anchor", "version": "0.6.0"},
+  "agent": {"provider": "openai", "model": "gpt-5.6-luna"},
+  "harness": {"id": "codex-cli", "version": "0.152.0"},
+  "repeats": 1,
+  "seed": "math-anchor-explicit-result-chain-2026-09-02",
+  "budget": {
+    "perRunTimeoutMs": 180000,
+    "maxStdoutBytes": 131072,
+    "maxStderrBytes": 65536,
+    "maxReportBytes": 4194304,
+    "maxTotalTokens": 100000,
+    "maxOutputTokens": 5000,
+    "maxToolCalls": 2
+  },
+  "capture": {
+    "answer": "digest",
+    "toolArguments": "digest",
+    "toolResults": "digest"
+  },
+  "driver": {
+    "id": "codex-cli-driver",
+    "version": "0.5.0",
+    "command": "node",
+    "args": [
+      "src/adapters/codex-driver.mjs",
+      "--model", "gpt-5.6-luna",
+      "--config", "model_reasoning_effort=\"low\"",
+      "--target-mcp-server-id", "math-anchor",
+      "--target-tool-prefix", "math.",
+      "--target-tool-prefix", "math-anchor.",
+      "--target-server-command", "${MATH_ANCHOR_MCP_COMMAND}",
+      "--target-server-cwd", "${MATH_ANCHOR_MCP_CWD}",
+      "--target-server-arg", "mcp",
+      "--answer-carrier", "json-string-object"
+    ],
+    "cwd": "."
+  },
+  "oracleIsolation": {"mode": "deny-read-roots"},
+  "conditions": {
+    "baseline": {"capabilityAvailable": false, "declaredDifference": "target-capability-availability"},
+    "treatment": {"capabilityAvailable": true, "declaredDifference": "target-capability-availability"}
+  }
+}

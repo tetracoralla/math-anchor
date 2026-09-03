@@ -33,7 +33,7 @@ SPECS = (
             {"left": "sin(x)^2 + cos(x)^2", "right": "1", "variables": ["x"], "domain": "real"},
         ),
         handler=verification.expression_equivalent,
-        keywords=("semantic equivalence", "same expression", "identity", "等价性验证", "恒等式", "表达式等价"),
+        keywords=("semantic equivalence", "expression equivalence", "equivalent expressions", "same expression", "identity", "等价性验证", "恒等式", "表达式等价"),
         assurance_scope="declared_domain_and_definedness_policy",
         backends=("sympy",),
     ),

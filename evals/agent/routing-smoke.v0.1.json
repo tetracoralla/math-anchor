@@ -5,7 +5,7 @@
   "title": "Math Anchor natural routing smoke",
   "targetRef": {
     "id": "math-anchor",
-    "version": "0.5.0"
+    "version": "0.6.0"
   },
   "tasks": [
     {
@@ -13,6 +13,43 @@
       "prompt": "A generated binary format stores a counter as an unsigned 8-bit integer with wrapping arithmetic. The current value is 250 and the decoder adds 20. Return only the resulting decimal stored value.",
       "opportunity": "required",
       "tags": ["coding", "integer", "overflow"],
+      "routePolicy": {
+        "kind": "known-target-route-v1",
+        "routes": [
+          {
+            "id": "machine-wrapping-add-string-operands",
+            "steps": [{
+              "operationId": "math-anchor.math.run",
+              "argumentMatches": [
+                {"pointer": "/operation", "expected": "integer.machine_arithmetic"},
+                {"pointer": "/arguments/action", "expected": "add"},
+                {"pointer": "/arguments/left", "expected": "250"},
+                {"pointer": "/arguments/right", "expected": "20"},
+                {"pointer": "/arguments/bitWidth", "expected": 8},
+                {"pointer": "/arguments/signedness", "expected": "unsigned"},
+                {"pointer": "/arguments/inputMode", "expected": "value"},
+                {"pointer": "/arguments/overflowBehavior", "expected": "wrapping"}
+              ]
+            }]
+          },
+          {
+            "id": "machine-wrapping-add-number-operands",
+            "steps": [{
+              "operationId": "math-anchor.math.run",
+              "argumentMatches": [
+                {"pointer": "/operation", "expected": "integer.machine_arithmetic"},
+                {"pointer": "/arguments/action", "expected": "add"},
+                {"pointer": "/arguments/left", "expected": 250},
+                {"pointer": "/arguments/right", "expected": 20},
+                {"pointer": "/arguments/bitWidth", "expected": 8},
+                {"pointer": "/arguments/signedness", "expected": "unsigned"},
+                {"pointer": "/arguments/inputMode", "expected": "value"},
+                {"pointer": "/arguments/overflowBehavior", "expected": "wrapping"}
+              ]
+            }]
+          }
+        ]
+      },
       "evaluator": {"kind": "numeric-tolerance", "actualPointer": "", "expected": 14, "absoluteTolerance": 0, "relativeTolerance": 0}
     },
     {
@@ -20,6 +57,21 @@
       "prompt": "Compute the exact binomial coefficient 100 choose 50. Return the integer as a string with no separators.",
       "opportunity": "required",
       "tags": ["coding", "integer", "combinatorics"],
+      "routePolicy": {
+        "kind": "known-target-route-v1",
+        "routes": [{
+          "id": "binomial-direct-run",
+          "steps": [{
+            "operationId": "math-anchor.math.run",
+            "argumentMatches": [
+              {"pointer": "/operation", "expected": "combinatorics.count"},
+              {"pointer": "/arguments/action", "expected": "binomial"},
+              {"pointer": "/arguments/n", "expected": 100},
+              {"pointer": "/arguments/k", "expected": 50}
+            ]
+          }]
+        }]
+      },
       "evaluator": {"kind": "string-equality", "actualPointer": "", "expected": "100891344545564193334812497256", "trim": true, "caseSensitive": true}
     },
     {

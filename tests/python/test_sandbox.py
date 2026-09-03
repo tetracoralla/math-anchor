@@ -6,37 +6,12 @@ import sys
 import threading
 import time
 
-import psutil
-
 import math_anchor.sandbox as sandbox
 from math_anchor import sandbox_testing
 from math_anchor import worker
+from math_anchor.catalog import OPERATIONS
 from math_anchor.errors import CalculatorError
 from math_anchor.sandbox import run_batch, run_operation
-
-
-def _wait_for_idle_worker_warm(process_id: int, timeout: float = 8.0) -> None:
-    """Observe the delayed registry warm and its completion without guessing its duration."""
-    process = psutil.Process(process_id)
-    deadline = time.monotonic() + timeout
-    earliest_warm = time.monotonic() + worker.UNIT_REGISTRY_WARM_IDLE_SECONDS * 0.8
-    previous_cpu = sum(process.cpu_times()[:2])
-    observed_warm = False
-    quiet_since: float | None = None
-    while time.monotonic() < deadline:
-        time.sleep(0.05)
-        now = time.monotonic()
-        current_cpu = sum(process.cpu_times()[:2])
-        delta = current_cpu - previous_cpu
-        previous_cpu = current_cpu
-        if now >= earliest_warm and delta > 0.005:
-            observed_warm = True
-            quiet_since = None
-        elif observed_warm:
-            quiet_since = quiet_since or now
-            if now - quiet_since >= 0.3:
-                return
-    raise AssertionError("persistent worker unit-registry warm did not complete")
 
 
 def test_isolated_execution_and_structured_error() -> None:
@@ -515,50 +490,51 @@ def test_reusable_worker_keeps_one_output_reader_across_calls() -> None:
         sandbox._WORKER_POOL.shutdown()
 
 
-def test_persistent_worker_serves_the_first_units_call_within_a_short_budget() -> None:
-    # Negative regression: both Pint registries build lazily (~150 ms each),
-    # so the first units.convert spent its own deadline parsing the unit
-    # definition file. Persistent workers now build them on a background
-    # thread right after readiness.
+def test_unit_registry_loads_on_demand_and_remains_ready_for_reuse() -> None:
+    # Negative regression: an expression-only session must not pay Pint's
+    # registry memory cost while idle. The first unit operation loads a
+    # registry in its leased worker, which then remains marked for preferred
+    # reuse by later unit operations.
     sandbox._WORKER_POOL.shutdown()
     try:
-        worker_process, startup_error = sandbox._start_worker(
-            sandbox.DEFAULT_MEMORY_MB * 1024 * 1024,
-            deadline=time.monotonic() + 5,
-            timeout_ms=5_000,
-            cancel_event=None,
+        scalar = run_operation(
+            "expression.evaluate",
+            {"expression": "6*7"},
+            timeout_ms=2_000,
         )
-        assert worker_process is not None, startup_error
-        try:
-            _wait_for_idle_worker_warm(worker_process.process.pid)
-            result, reusable, output_policy_applied = sandbox._execute_worker(
-                worker_process,
-                json.dumps(
-                    {
-                        "operation": "units.convert",
-                        "arguments": {"value": 1, "fromUnit": "m", "toUnit": "cm"},
-                        # 100 ms is the minimum accepted caller budget, not a
-                        # host-load SLA. Keep this success regression short
-                        # while leaving scheduling margin after warmup.
-                        "timeoutMs": 500,
-                        "memoryMb": sandbox.DEFAULT_MEMORY_MB,
-                    },
-                    separators=(",", ":"),
-                )
-                + "\n",
-                deadline=time.monotonic() + 2,
-                timeout_ms=500,
-                memory_mb=sandbox.DEFAULT_MEMORY_MB,
-                cancel_event=None,
-            )
-            assert reusable is True
-            assert output_policy_applied is True
-            assert result["status"] == "ok"
-            assert result["exact"] == "100"
-        finally:
-            worker_process.terminate()
+        assert scalar["exact"] == "42"
+        cold_worker = sandbox._WORKER_POOL.available[-1]
+        assert cold_worker.unit_registry_loaded is False
+
+        result = run_operation(
+            "units.convert",
+            {"value": 1, "fromUnit": "m", "toUnit": "cm"},
+            timeout_ms=2_000,
+        )
+        assert result["status"] == "ok"
+        assert result["exact"] == "100"
+        ready_worker = sandbox._WORKER_POOL.available[-1]
+        assert ready_worker.process.pid == cold_worker.process.pid
+        assert ready_worker.unit_registry_loaded is True
+
+        reused = run_operation(
+            "units.convert",
+            {"value": 2, "fromUnit": "m", "toUnit": "cm"},
+            timeout_ms=500,
+        )
+        assert reused["exact"] == "200"
+        assert sandbox._WORKER_POOL.available[-1].process.pid == ready_worker.process.pid
     finally:
         sandbox._WORKER_POOL.shutdown()
+
+
+def test_unit_registry_routing_matches_operation_backend_contract() -> None:
+    declared = frozenset(
+        operation
+        for operation, spec in OPERATIONS.items()
+        if "pint" in spec.backends
+    )
+    assert sandbox.UNIT_REGISTRY_OPERATIONS == declared
 
 
 def test_cancellation_terminates_the_active_worker_and_the_pool_recovers() -> None:

@@ -1,0 +1,51 @@
+{
+  "schemaVersion": "openadam.agent-host-tool-integration.v0.3",
+  "displayName": "Math Anchor",
+  "summary": "Scoped mathematical checks with a compact four-tool MCP compatibility runtime.",
+  "codex": {
+    "marketplaceRoot": "marketplace",
+    "marketplace": "openadam-math-anchor",
+    "pluginRoot": "marketplace/plugins/math-anchor-obligation-runtime",
+    "plugin": "math-anchor-obligation-runtime",
+    "identityFiles": [
+      ".codex-plugin/plugin.json",
+      ".mcp.json",
+      "skills/calculate/SKILL.md"
+    ]
+  },
+  "runtime": {
+    "transport": "mcp-stdio",
+    "executor": "component",
+    "command": "marketplace/plugins/math-anchor-obligation-runtime/runtime/math-anchor-runtime/math-anchor-runtime",
+    "args": ["mcp"],
+    "cwd": "marketplace/plugins/math-anchor-obligation-runtime",
+    "workspaceEnvironment": [],
+    "expectedTools": [
+      "math.search",
+      "math.describe",
+      "math.run",
+      "math.batch"
+    ],
+    "timeoutMs": 30000
+  },
+  "discovery": {
+    "kind": "skill-cli",
+    "skill": {
+      "id": "calculate",
+      "root": "marketplace/plugins/math-anchor-obligation-runtime/skills/calculate",
+      "identityFiles": [
+        "SKILL.md"
+      ],
+      "launcher": "scripts/math-anchor"
+    },
+    "runtime": {
+      "executor": "component",
+      "command": "marketplace/plugins/math-anchor-obligation-runtime/runtime/math-anchor-runtime/math-anchor-runtime",
+      "args": [],
+      "versionArguments": ["--version"]
+    }
+  },
+  "ownership": {
+    "uninstall": "agent-host-created-only"
+  }
+}

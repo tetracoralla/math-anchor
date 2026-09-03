@@ -1,16 +1,34 @@
 # Math Anchor
 
+**Math Anchor anchors finite mathematical claims to executable, replayable,
+scope-limited checks.**
+
 Math Anchor is one product with two quiet entry points:
 
 - a native macOS calculator for people, with familiar basic/scientific input, lightweight offline physical-unit conversion, ECB reference currency conversion with visible source and freshness, a read-only calculator display, optional exact-value copy, and local history;
-- a safe scientific runtime for Agents, with one-call execution for known operations through a Codex-host-safe `math.run` envelope and exact per-operation contracts available on demand.
+- an embeddable mathematical obligation and scientific runtime for Agents and harnesses, with failures-only feedback for claim checks plus one-call execution for known operations through a Codex-host-safe `math.run` envelope.
 
-Both surfaces use the same Python calculation core. The Agent catalog currently provides 45 typed operations spanning exact and high-precision arithmetic, explicit decimal rounding and integer-division conventions, fixed-width machine arithmetic, programmer representations and bit operations, IEEE-754 inspection, symbolic and vector calculus, verification and independently checkable polynomial-identity certificates, numerical methods, exact eigenspaces and matrix decompositions, diagnostic numerical linear algebra, number theory, combinatorics, finance, probability and statistical inference, covariance-based measurement-uncertainty propagation, stable unit discovery and conversion, unit-bearing expressions, and symbolic dimensional analysis. The safe expression grammar includes registered Airy, Bessel, beta/gamma, error, Lambert W, polygamma, and zeta functions without admitting arbitrary code. The project reuses SymPy, NumPy, mpmath, and Pint for mathematics; its own work is the safe parser, capability catalog, structured result contract, isolation boundary, human app, and Agent-facing interface.
+Both surfaces use the same Python calculation core. The Agent-facing strategic layer is the versioned obligation/receipt contract: it hash-binds shared assumptions, runs a bounded dependency graph, distinguishes `checked`, `falsified`, `unknown`, and `unsupported`, records assurance and exact claim scope, and can remain completely silent when every check succeeds. The existing catalog remains a compatibility and provider surface with 46 typed operations spanning exact and high-precision arithmetic, explicit machine and rounding semantics, symbolic verification, certificates, local geometric checks, numerical methods, linear algebra, statistics, finance, units, and dimensions. Operation count is not the product's progress metric. The project reuses SymPy, NumPy, mpmath, and Pint for mathematics; its own work is the safe parser, bounded contracts, isolation boundary, receipt semantics, human app, and Agent-facing integration.
 
 Currency conversion is an online, human-app feature calculated from the European Central Bank's daily euro reference rates. The interface shows the source, publication time, and current or expired state; cached rates remain explicitly marked when a refresh cannot complete. These rates are informational and are not transaction quotes. Currency conversion remains an app-internal request and does not add another public MCP tool or Agent operation.
 
 ## Unreleased source capabilities
 
+- Added the provider-native `math-anchor.obligation-set.v0.1` library/CLI
+  contract for bounded obligation DAGs, shared assumption digests, explicit
+  assurance and scope, full replayable receipts, default `failures_only`
+  feedback, and silent-success harness checkpoints. It composes existing
+  providers without adding a fifth MCP tool.
+- `geometry.almost_complex.local_check` accepts an explicit even-dimensional
+  coordinate order and rational-polynomial component matrix, checks
+  `J^2 = -I` and the independent coordinate-basis Nijenhuis components, and
+  returns one exact counterexample component when either condition fails. Its
+  result explicitly leaves chart coverage, overlap compatibility, global
+  extension, and global existence unchecked.
+- Multi-concept `math.search` queries no longer advertise an operation from one
+  generic word collision. Zero-match responses return
+  `matchStatus: no_registered_operation` so callers can stop instead of
+  treating a lexical near-match as domain support.
 - Fixed-width integer representation and bitwise operations expose binary,
   octal, decimal, hexadecimal, character, overflow, wrap, and discarded-bit
   semantics explicitly.
@@ -92,8 +110,37 @@ Developer ID signature, and Apple notarization record.
 ```
 
 The Codex app also exposes the same command as the repository's **Run** action.
+Local debug builds use a separate application identity and calculation history,
+so starting one does not terminate or reuse the history of an installed release.
+Use `./script/build_and_run.sh --verify` to additionally probe the runtime
+embedded in the local app before confirming that exact bundle launched.
 
 ## Use the local runtime
+
+For a local Agent Host or harness, check a bounded obligation set and keep the
+full receipt outside the model context:
+
+```bash
+.venv/bin/math-anchor check-obligations request.json \
+  --receipt-output build/obligation-receipt.json \
+  --quiet-success
+```
+
+An Agent Host installation exposes the same commands through the
+Host-generated `scripts/math-anchor` launcher inside the installed `calculate`
+Skill. That launcher is version-locked to the component's packaged runtime; do
+not replace it with an ambient command or a source-checkout path.
+
+Exit status is `0` when every obligation is checked, `1` when the compact
+feedback requires attention, and `2` for an invalid request or runtime error.
+The command refuses to overwrite an existing receipt. Inspect the exact request
+schema with `.venv/bin/math-anchor obligation-schema request`, and replay a
+prior run with `.venv/bin/math-anchor replay-obligations request.json
+build/obligation-receipt.json`. See
+[docs/obligation-runtime.md](docs/obligation-runtime.md) for the supported
+obligation kinds and the boundary between a local check and a wider proof.
+
+The compatibility operation CLI remains available for direct structured calls:
 
 ```bash
 .venv/bin/math-anchor search calculus
@@ -146,8 +193,8 @@ Start the MCP server with:
 
 ## Agent tool model
 
-Math Anchor keeps a stable four-tool MCP boundary while the operation registry
-grows:
+Math Anchor keeps a stable four-tool MCP compatibility boundary while the
+operation registry supplies bounded providers:
 
 | Tool | Use |
 | --- | --- |
@@ -161,12 +208,15 @@ expressions pass explicit AST allowlists rather than Python evaluation, and
 expensive Agent work runs behind cumulative time, memory, cancellation, and
 output limits.
 
-High-frequency structured callers should keep one MCP session open and call the
-same four tools directly; they do not need a model turn per calculation. See
+High-frequency claim checking should use the local obligation library/CLI from
+the Host or harness, keep the full receipt as an artifact, and feed only
+actionable failures back into the model context. High-frequency compatibility
+callers can still keep one MCP session open and call the same four tools
+directly; neither route needs a model turn per calculation. See
 [docs/agent-runtime.md](docs/agent-runtime.md) for admission, retries, load
-evidence, and direct-host usage.
+measurements, and direct-host usage.
 
-Math Anchor 0.5 supports this explicit structured route. Cold selection from a
+Math Anchor 0.6 supports this explicit structured route. Cold selection from a
 fresh natural-language Agent session is host/model-dependent integration
 behavior, not a guaranteed zero-configuration feature or a source-release
 condition.

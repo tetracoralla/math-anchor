@@ -35,7 +35,7 @@ SPECS = (
         ),
         handler=expression.evaluate,
         backends=("sympy",),
-        keywords=("calculate", "arithmetic", "scientific", "trigonometry", "logarithm", "Airy", "Bessel", "beta", "gamma", "polygamma", "special functions", "计算", "算术", "科学计算", "特殊函数"),
+        keywords=("calculate", "arithmetic", "scientific", "trigonometry", "logarithm", "Airy", "Airy special function", "Bessel", "beta", "gamma", "polygamma", "special functions", "计算", "算术", "科学计算", "特殊函数"),
     ),
     OperationSpec(
         id="expression.simplify",

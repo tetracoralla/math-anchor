@@ -199,8 +199,8 @@ def _result_validator(result: dict[str, Any]) -> Draft202012Validator:
 def run_tool_parameters(operation_schemas: list[tuple[str, dict[str, Any]]]) -> dict[str, Any]:
     """Return the always-listed, Codex-host-safe execution envelope.
 
-    Current Codex hosts compact input schemas larger than roughly 5 KB. A full
-    45-branch tagged union crosses that boundary and loses its argument surface
+    Current Codex hosts compact input schemas larger than roughly 5 KB. The
+    complete per-operation tagged union crosses that boundary and loses its argument surface
     before the model sees it. Keep the stable operation IDs and execution
     limits fully typed here; ``math.describe`` publishes the exact closed
     argument schema for one selected operation, and runtime validation still
@@ -220,7 +220,12 @@ def run_tool_parameters(operation_schemas: list[tuple[str, dict[str, Any]]]) -> 
             },
             "arguments": {
                 "type": "object",
-                "description": "Operation-specific object. Unknown fields are rejected by the selected registry contract before execution.",
+                "description": (
+                    "Operation-specific object. Unknown fields are rejected by the selected registry contract before execution. "
+                    "For integer.machine_arithmetic, left and right are exact integer text strings (for example \"65535\", not 65535), "
+                    "inputMode is exactly value or bits, and overflowBehavior is exactly checked, wrapping, or saturating; "
+                    "do not invent synonyms such as decimal or wrap."
+                ),
             },
             **deepcopy(_LIMIT_PROPERTIES),
         },
@@ -230,14 +235,14 @@ def run_tool_parameters(operation_schemas: list[tuple[str, dict[str, Any]]]) -> 
 
 def describe_tool_parameters(operation_schemas: list[tuple[str, dict[str, Any]]]) -> dict[str, Any]:
     return {
-        "title": "math_describeArguments",
         "type": "object",
         "additionalProperties": False,
         "properties": {
             "operation": {
                 "type": "string",
-                "enum": [operation for operation, _ in operation_schemas],
-                "description": "Selected operation whose exact closed input schema and examples are needed.",
+                "minLength": 1,
+                "maxLength": 128,
+                "description": "Operation ID returned by math.search or listed by math.run.",
             }
         },
         "required": ["operation"],

@@ -3,7 +3,7 @@
   "id": "math-anchor.research-public-math-adoption",
   "version": "0.1.0",
   "title": "Public mathematics tasks with observed tool adoption",
-  "targetRef": {"id": "math-anchor", "version": "0.5.0"},
+  "targetRef": {"id": "math-anchor", "version": "0.6.0"},
   "tasks": [
     {
       "id": "putnam-2023-b6.n12",

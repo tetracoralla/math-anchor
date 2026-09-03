@@ -385,6 +385,26 @@ struct CalculatorStoreChecks {
         entryStore.append("3")
         entryStore.copyResult()
         check(clipboard.value == "2*3", "mid-entry copy stays plain ASCII")
+        entryStore.clear()
+        entryStore.append("pi")
+        entryStore.append("2")
+        check(entryStore.expression == "pi*2", "a digit after a constant inserts multiplication")
+        check(entryStore.display == "π×2", "constant multiplication stays calculator-readable")
+        entryStore.clear()
+        entryStore.append("pi")
+        entryStore.append(".")
+        check(entryStore.expression == "pi*0.", "a decimal after a constant starts a numeric operand")
+        entryStore.clear()
+        entryStore.append("(")
+        entryStore.append("2")
+        entryStore.append(")")
+        entryStore.append(".")
+        check(entryStore.expression == "(2)*0.", "a decimal after a closed group starts a numeric operand")
+        entryStore.clear()
+        entryStore.append("5")
+        entryStore.percent()
+        entryStore.append("2")
+        check(entryStore.expression == "5%*2", "a digit after percent inserts multiplication")
 
         let memoryStore = CalculatorStore(
             runtime: SuccessfulRuntime(result: EvaluationResult(exact: "2", approximate: "2.000000000000000")),
@@ -974,7 +994,6 @@ struct CalculatorStoreChecks {
         modeSwitchStore.replaceExpression("factorial(5000)^10000")
         modeSwitchStore.evaluate()
         try? await Task.sleep(for: .milliseconds(50))
-        let modeSwitchStart = Date()
         let liveModeTransition = CalculatorModeTransition(popoverSettleDelay: .milliseconds(20))
         liveModeTransition.select(
             .conversion,
@@ -982,21 +1001,16 @@ struct CalculatorStoreChecks {
             conversionStore: modeSwitchConversionStore
         )
         await waitForConversion(modeSwitchConversionStore)
-        let modeSwitchElapsed = Date().timeIntervalSince(modeSwitchStart)
         check(modeSwitchStore.mode == .conversion, "heavy evaluation switches to conversion mode")
         check(!modeSwitchStore.isEvaluating, "mode switch clears calculator progress")
         check(modeSwitchConversionStore.errorMessage == nil, "first conversion survives the mode switch")
         check(modeSwitchConversionStore.output != "—", "first conversion produces a result")
         // This is a cancellation check, not a benchmark of first-use unit
         // conversion on a shared hosted runner. If the old expression keeps
-        // the serial worker, this conversion reaches its own request deadline
-        // and the result checks above fail. Keep the elapsed guard tied to the
-        // same runtime contract instead of imposing a second, undocumented
-        // 1.5-second cold-path SLO.
-        check(
-            modeSwitchElapsed < modeSwitchRequestTimeout,
-            "mode switch releases the shared runtime before the old evaluation deadline"
-        )
+        // the serial worker, this conversion reaches its request deadline and
+        // the result checks above fail. Do not additionally compare wall time
+        // with the request timeout: wall time also includes a separately
+        // bounded cold runtime launch after cancellation.
 
         let warmStart = Date()
         for _ in 0..<20 {

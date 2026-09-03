@@ -30,8 +30,8 @@ def _request(operation: str, arguments: dict) -> dict:
         },
         "purpose": "development-smoke",
         "repeat": 1,
-        "target": {"id": "math-anchor", "version": "0.5.0"},
-        "providerRef": {"id": "math-anchor-local-runtime", "version": "0.5.0"},
+        "target": {"id": "math-anchor", "version": "0.6.0"},
+        "providerRef": {"id": "math-anchor-local-runtime", "version": "0.6.0"},
         "driverRef": {"id": "math-anchor-direct-driver", "version": "0.1.0"},
         "budget": {"timeoutMs": 10000},
         "isolation": {"mode": "deny-read-roots", "deniedReadRoots": ["/private/tmp/oracle"]},
@@ -56,7 +56,7 @@ def test_direct_host_assets_are_separate_structured_zero_model_inputs() -> None:
     suite = _load("coding-agent-profile.v0.1.json")
     plan = _load("math-anchor-cold-smoke.v0.1.json")
     assert suite["executionMode"] == plan["executionMode"] == "direct-host"
-    assert suite["targetRef"] == plan["targetRef"] == {"id": "math-anchor", "version": "0.5.0"}
+    assert suite["targetRef"] == plan["targetRef"] == {"id": "math-anchor", "version": "0.6.0"}
     assert plan["purpose"] == "development-smoke"
     assert plan["repeats"] == 1
     assert plan["driver"]["root"] == "/MATH_ANCHOR_ROOT"
@@ -91,8 +91,8 @@ def test_direct_driver_returns_a_typed_math_anchor_result_with_runtime_identity(
     assert response["answer"]["result"]["decimal"] == "14"
     assert response["runtime"] == {
         "driver": {"id": "math-anchor-direct-driver", "version": "0.1.0"},
-        "provider": {"id": "math-anchor-local-runtime", "version": "0.5.0"},
-        "target": {"id": "math-anchor", "version": "0.5.0"},
+        "provider": {"id": "math-anchor-local-runtime", "version": "0.6.0"},
+        "target": {"id": "math-anchor", "version": "0.6.0"},
     }
 
 

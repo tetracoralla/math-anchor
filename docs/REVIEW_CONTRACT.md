@@ -30,6 +30,13 @@ benchmark number.
 - `mcp_server.py` owns the public Agent carrier. `cli.py`, `app_runtime.py`, and
   `bundled_runtime.py` are adapters and must not invent different operation or
   result semantics.
+- `obligations.py` owns the provider-native obligation-set, feedback, receipt,
+  and replay contracts. It may compose registry operations, but it cannot add a
+  fifth MCP tool, interpret caller assumption prose, or promote a local result
+  into whole-proof coverage. `cli.py` and `bundled_runtime.py` expose this same
+  contract to local harnesses. The private Agent Host integration projects a
+  version-locked packaged-runtime launcher into the installed Skill; it must
+  not resolve an ambient command or development checkout.
 - `Sources/MathAnchorCore/` owns the testable Swift models, services, stores,
   and pure formatting/state helpers. `Sources/MathAnchor/` is the SwiftUI/AppKit
   carrier, and `Tests/MathAnchorCoreTests/` exercises the package core without
@@ -81,8 +88,9 @@ benchmark number.
    queued, starting, executing, or returning must eventually release ingress,
    admission, worker, temporary diagnostics, and memory accounting. Dead or
    oversized workers are evicted. Repeated infrastructure faults open the
-   circuit and return `E_UNAVAILABLE`; a half-open probe and later healthy call
-   restore service without a process restart.
+   circuit and return `E_UNAVAILABLE`; only the current half-open probe may
+   restore service. A request admitted before opening cannot close the circuit
+   or release that probe when its result arrives later.
 8. **Output and discovery costs are explicit.** Every always-listed input
    schema remains below the 4,800-byte current-Codex compatibility regression,
    the root `math.run` schema must retain typed operation and arguments fields
@@ -102,6 +110,17 @@ benchmark number.
     conversions, errors, and app restart are human-runtime concerns and need
     real app evidence. A correct MCP test is not visual or interaction
     acceptance.
+11. **Obligation receipts stay scoped and replayable.** The versioned local
+    obligation contract accepts only bounded JSON and an acyclic dependency
+    graph. Caller assumption text is hash-bound and marked unevaluated. Unknown
+    kinds return `unsupported` without lexical substitution; inconclusive or
+    infrastructure results return `unknown`; a failed dependency prevents its
+    dependent provider from running. `checked` and `falsified` require the
+    exact provider-specific mapping, and polynomial certificate output must
+    pass the independent checker before promotion. Receipt, outcome, detail,
+    claim, assumption, and provider-result digests must be deterministic and
+    validated on replay. Default feedback omits checked details, while the
+    full receipt remains available outside model context.
 
 ## Mandatory adversarial review matrix
 
@@ -111,6 +130,11 @@ the normal suite:
 - registry entry -> generated `math.run` schema -> `math.describe` -> runtime
   validation -> plugin example; reject unknown and extra fields at every live
   ingress;
+- obligation request schema -> exact provider claim schema -> dependency order
+  -> terminal status/scope -> full receipt -> failures-only projection ->
+  replay; cover duplicate ids, missing references, cycles, unsupported kinds,
+  caller-assumption binding, blocked dependencies, a corrupted certificate,
+  runtime drift, and receipt-content corruption;
 - exact versus approximate lanes, large integers, rounding/tie conventions,
   matrices, units and dimensions, domain boundaries, and independent-library
   differential checks where an oracle exists;
@@ -121,10 +145,13 @@ the normal suite:
   would exceed the whole-batch response budget;
 - queue saturation, the 33rd queued request, four active leases, the fourth
   concurrent batch, requested-memory exhaustion, cancellation storms, worker
-  crash/recycle, circuit open/half-open/recovery, and a healthy call after each;
+  crash/recycle, circuit open/half-open/recovery, a stale success that completes
+  after opening, and a healthy call after each;
 - packaged runtime startup without a source checkout or development-only
-  environment, plus an explicit structured call through the current installed
-  Plugin;
+  environment, a Host-projected launcher whose `--version` and obligation
+  command resolve to those packaged bytes, a silent successful
+  `check-obligations` call that writes a full receipt, plus an explicit
+  structured call through the current installed Plugin;
 - only when making a natural-language selection or Agent-value claim, a cold
   task that reaches the intended public tool, the current `evals/agent/`
   routing smoke before any larger paired run, and then a reviewed three-repeat
@@ -154,10 +181,29 @@ protocol probe, a bounded load/recovery run, plugin packaging, and release
 hygiene. For focused iteration, use the owning narrow test first, then return to
 the complete command before closeout.
 
+The focused obligation conformance route is:
+
+```sh
+.venv/bin/python script/check_obligations.py
+```
+
+It checks the versioned corpus in `evals/obligations/core.v0.1.json`. Its green
+result establishes only those seeded finite cases and the failures-only
+projection; it is not a research-utility or whole-proof verdict. Encoded-byte
+cost components can be observed with
+`.venv/bin/python script/measure_obligation_cost.py`; null routing and repair
+token fields are intentionally unavailable rather than zero.
+
 `script/swift_test.sh` is the repository-owned SwiftPM test entry point. It
 still runs `swift test`, while supplying the Swift Testing framework search and
 runtime paths needed by Command Line Tools installations that do not discover
 the bundled framework automatically.
+
+`script/build_and_run.sh --verify` is the local app-bundle lane. It probes the
+embedded runtime through expression, unit, and unsafe-input requests, launches
+the development-identity app, and confirms that exact bundle executable. It
+must not terminate, mistake, or share calculation history with an installed
+release that has the same process name.
 
 The bounded representative load harness is:
 

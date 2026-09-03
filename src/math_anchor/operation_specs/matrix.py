@@ -22,7 +22,7 @@ SPECS = (
         examples=({"matrix": [[1, 2], [3, 4]]},),
         handler=matrix.determinant,
         backends=("sympy",),
-        keywords=("linear algebra", "det", "行列式", "矩阵"),
+        keywords=("matrix determinant", "linear algebra", "det", "行列式", "矩阵"),
     ),
     OperationSpec(
         id="matrix.inverse",

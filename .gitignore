@@ -3,6 +3,7 @@ build/
 .swiftpm/
 .venv/
 .pytest_cache/
+.verify/
 __pycache__/
 *.pyc
 *.egg-info/

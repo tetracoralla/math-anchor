@@ -1,34 +1,34 @@
 ---
 name: calculate
-description: "Use Math Anchor for reliability-sensitive mathematics. MUST load and use it for fixed-width wrapping/saturating arithmetic, bit operations and fields, IEEE-754 representation, and large exact combinatorial counts; never answer those from mental arithmetic. Also use it for exact or high-precision evaluation, explicit rounding/division conventions, verification, calculus, linear algebra, finance, probability, statistics, measurement uncertainty, units, and dimensional analysis. For a known operation call math.run directly with {operation, arguments}. Skip only genuinely trivial low-risk arithmetic."
+description: "Use Math Anchor for reliability-sensitive mathematics. MUST load and use it for fixed-width arithmetic, bit/IEEE-754 facts, and large exact combinatorial counts. Also use it for exact or high-precision work, explicit conventions, verification, calculus, linear algebra, finance, probability, statistics, uncertainty, units, and dimensions. Call a known operation with math.run; skip only trivial low-risk arithmetic."
 ---
 
 # Calculate
-
-Translate the request into explicit mathematics and use Math Anchor when
-deterministic execution materially improves reliability.
 
 ## Decide and route
 
 - Do not load it for trivial, low-risk arithmetic the model can immediately
   verify.
-- Always use it for fixed-width wrapping/saturating arithmetic, bit fields, or
-  IEEE-754 facts; do not classify them as trivial arithmetic because the
-  visible numbers are small.
-- Also use it for exact/high-precision output, symbolic work, matrices, units,
-  statistics, probability, finance, verification, repeated calculations,
-  standard scientific algorithms, or consequential results.
+- Treat fixed-width wrapping/saturating arithmetic as mandatory; do not classify them as trivial arithmetic.
+- Always use it for fixed-width or IEEE-754 facts, exact/high-precision or
+  symbolic work, matrices, units, statistics, probability, finance,
+  verification, repeated calculations, or consequential results.
 - Ask for a missing assumption when it changes the problem; a call must not
   hide ambiguity.
 - The four tools are registered. Never call `list_mcp_resources`, inspect
-  source, or use a shell to find them. Call known operations with `math.run`. Otherwise use
-  `math.search`, then `math.describe` once only if the selected schema is still
-  needed.
+  source, or use a shell to find them. Use `math.run` for a known operation;
+  otherwise search, then describe only if needed.
+- For an obligation DAG, failures-only checkpoint, or receipt replay, do not
+  search the MCP catalog. When this installed Skill contains the Host-generated
+  `scripts/math-anchor` launcher, invoke it relative to this Skill directory
+  with `check-obligations` or `replay-obligations`; retain receipts outside
+  model context. Never substitute an ambient command or source checkout. If
+  the launcher is absent, report that this carrier has no obligation checkpoint.
 - Every run uses the outer envelope `{operation, arguments}`. Put all
   operation-specific fields inside `arguments`; never flatten them beside
   `operation`.
 
-Three common routes are fully known. Call `math.run` directly; never search or
+Call these fully known routes directly; never search or
 describe these shapes first:
 
 - Fixed-width arithmetic: `{"operation":"integer.machine_arithmetic","arguments":{"action":"add","left":"255","right":"2","bitWidth":8,"signedness":"unsigned","inputMode":"value","overflowBehavior":"wrapping"}}`
@@ -40,25 +40,21 @@ describe these shapes first:
 - Use one `math.run`, `math.batch` for 2–32 independent ordered calculations,
   or `function.sample` for one expression at many points. Batch is not a
   dependency graph.
-- For bulky output, request only the needed `resultMode` (`exact` or `approx`)
-  and raise `maxOutputBytes` only when useful.
+- For bulky output, select `resultMode` and raise `maxOutputBytes` only when useful.
 - Control digits with `arguments.precision`; `precision` is not a top-level `math.run` field.
   It counts significant digits. Exact fields stay exact. For decimal places,
   include integer digits plus at least two guard digits in the first call and
   round once for presentation.
-- Supply variables, bounds, units, conventions, brackets, data, and tolerances
-  explicitly. Never invent an answer-changing assumption.
+- Supply answer-changing variables, bounds, units, conventions, and tolerances.
 
-Load a reference only when the request needs policy not already explicit in the
-known route above. When action, operands, bit width, signedness, input mode, and
-overflow behavior are all stated, call `integer.machine_arithmetic` directly
-without loading another file.
+Load a reference only when needed. A fully specified
+`integer.machine_arithmetic` call needs no reference.
 
 - [machine-semantics.md](references/machine-semantics.md) for representation or
   bit operations, IEEE-754, rounding, integer division, or a missing machine
   convention.
-- [scientific-math.md](references/scientific-math.md) for symbolic work,
-  calculus, numerical methods, matrices, linear algebra, and verification.
+- [scientific-math.md](references/scientific-math.md) for symbolic, calculus,
+  numerical, matrix, geometry, and verification work.
 - [statistics-units-dimensions.md](references/statistics-units-dimensions.md)
   for probability, statistics, uncertainty, quantities, dimensions, and
   finance. Use `dimension.check` for symbolic formula consistency and
@@ -69,15 +65,14 @@ without loading another file.
 
 ## Present and check
 
-- Prefer `exact` for symbolic answers; include `approx` only when useful and
-  never call it exact. Preserve interpretation-changing precision, units,
-  assumptions, warnings, uncertainty, residuals, bounds, stability, branches,
-  and omission risk.
+- Prefer `exact`; include `approx` only when useful and never call it exact.
+  Preserve interpretation-changing precision, units, assumptions, warnings,
+  uncertainty, residuals, bounds, stability, branches, and omission risk.
 - Preserve `assuranceContractVersion`, `assurance`, `scope`, `provenance`,
   `certificate`, and `checkedBy`. `certified` exposes a bounded artifact;
   `checkedBy: null` means no checker/kernel accepted it. Lean is a separate
   CLI lane, not another MCP tool.
-- Briefly explain useful mathematical setup, not engine/protocol internals.
+- Explain useful mathematical setup, not engine or protocol internals.
 - Stop after the first successful call for an ordinary calculation. Repeating
   identical input is not independent validation.
 - A successful tool response proves that the declared operation ran; it does

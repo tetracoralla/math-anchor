@@ -61,7 +61,7 @@ SPECS = (
             {"expression": "sin(x)", "variable": "x", "bracket": ["-10", "10"], "findAll": True, "resolution": 256},
         ),
         handler=calculus.numeric_root,
-        keywords=("numerically solve", "nonlinear", "high precision", "zero", "all roots", "数值求根", "数值解", "零点", "所有根"),
+        keywords=("numerically solve", "nonlinear", "nonlinear equation", "high precision", "zero", "all roots", "数值求根", "数值解", "零点", "所有根"),
         assurance="diagnostic",
         assurance_scope="bracketed_roots_under_declared_resolution",
         backends=("mpmath", "sympy"),

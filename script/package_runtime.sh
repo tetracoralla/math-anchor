@@ -66,6 +66,8 @@ PROJECT_VERSION="$(
 PYTHON_FRAMEWORK_VERSION="$(
   "$VENV_PYTHON" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")'
 )"
+PYTHON_FRAMEWORK_BINARY="$PYTHON_FRAMEWORK/Versions/$PYTHON_FRAMEWORK_VERSION/Python"
+PYTHON_FRAMEWORK_INFO="$PYTHON_FRAMEWORK/Versions/$PYTHON_FRAMEWORK_VERSION/Resources/Info.plist"
 
 needs_build=0
 if [[ ! -x "$PLUGIN_RUNTIME" ]]; then
@@ -114,6 +116,8 @@ mkdir -p "$DIST_DIR" "$WORK_DIR" "$SPEC_DIR" "$PYINSTALLER_CONFIG_DIR"
   --exclude-module pygments \
   --exclude-module pytest \
   --exclude-module pytest_cov \
+  --exclude-module numpy.fft \
+  --exclude-module numpy.random \
   --exclude-module scipy \
   --exclude-module setuptools \
   --exclude-module sympy.testing \
@@ -179,6 +183,30 @@ remaining_symlink="$(find "$PLUGIN_RUNTIME_BUNDLE" -type l -print -quit)"
 if [[ -n "$remaining_symlink" ]]; then
   echo "Packaged runtime contains a symbolic link that Codex installation would omit: $remaining_symlink" >&2
   exit 1
+fi
+
+# Homebrew's framework build leaves both the materialized loader above and an
+# identical framework binary. The standalone bootloader uses _internal/Python;
+# retain only that installation-stable copy after proving the framework has no
+# additional executable or data payload. This saves about 4.7 MB per installed
+# arm64 runtime without changing the interpreter bytes.
+if [[ -d "$PYTHON_FRAMEWORK" ]]; then
+  if [[ ! -f "$PYTHON_FRAMEWORK_BINARY" ]] || \
+      ! cmp -s "$PYTHON_RUNTIME_LOADER" "$PYTHON_FRAMEWORK_BINARY"; then
+    echo "Python framework is not an exact duplicate of the materialized runtime loader." >&2
+    exit 1
+  fi
+  unexpected_framework_file="$(
+    find "$PYTHON_FRAMEWORK" -type f \
+      ! -path "$PYTHON_FRAMEWORK_BINARY" \
+      ! -path "$PYTHON_FRAMEWORK_INFO" \
+      -print -quit
+  )"
+  if [[ -n "$unexpected_framework_file" ]]; then
+    echo "Python framework contains an unexpected file: $unexpected_framework_file" >&2
+    exit 1
+  fi
+  rm -rf "$PYTHON_FRAMEWORK"
 fi
 
 cp "$PROJECT_LICENSE" "$BUNDLED_LICENSE"

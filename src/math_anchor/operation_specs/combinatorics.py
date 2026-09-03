@@ -43,7 +43,7 @@ SPECS = (
         ),
         handler=combinatorics.count,
         backends=("python",),
-        keywords=("combination", "permutation", "multinomial", "choose", "组合数", "排列数", "多项式系数"),
+        keywords=("combination", "binomial coefficient", "permutation", "multinomial", "choose", "组合数", "排列数", "多项式系数"),
     ),
 )
 

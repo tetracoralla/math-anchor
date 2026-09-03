@@ -15,6 +15,7 @@ configure_swift_environment "$ROOT_DIR"
 
 MATH_ANCHOR_VERIFY_PACKAGED_RUNTIME=1 "$ROOT_DIR/.venv/bin/python" -m pytest
 "$ROOT_DIR/.venv/bin/python" "$ROOT_DIR/script/check_source_safety.py"
+"$ROOT_DIR/.venv/bin/python" "$ROOT_DIR/script/check_obligations.py"
 "$ROOT_DIR/script/swift_test.sh"
 "$ROOT_DIR/script/check_swift_store.sh"
 swift build --package-path "$ROOT_DIR"

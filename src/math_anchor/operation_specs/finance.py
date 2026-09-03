@@ -88,7 +88,7 @@ SPECS = (
             {"action": "irr", "cashFlows": ["-1000", "400", "400", "400"], "lowerRate": "0", "upperRate": "1"},
         ),
         handler=finance.calculate,
-        keywords=("compound interest", "APR", "effective annual rate", "loan payment", "NPV", "IRR", "cash flow", "复利", "年化率", "贷款", "净现值", "内部收益率", "现金流"),
+        keywords=("compound interest", "future value", "APR", "effective annual rate", "loan payment", "NPV", "IRR", "cash flow", "复利", "年化率", "贷款", "净现值", "内部收益率", "现金流"),
         assurance="diagnostic",
         assurance_scope="declared_rate_cashflow_timing_and_rounding_conventions",
         backends=("python",),

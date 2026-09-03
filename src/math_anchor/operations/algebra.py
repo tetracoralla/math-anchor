@@ -76,7 +76,7 @@ def solve(arguments: dict[str, Any]) -> dict[str, Any]:
     target_domain = sp.S.Reals if domain == "real" else sp.S.Complexes
     solutions: list[dict[sp.Symbol, sp.Expr]] = []
     warnings: list[str] = []
-    if len(ordered_symbols) == 1:
+    if len(ordered_symbols) == 1 and len(equations) == 1:
         symbol = ordered_symbols[0]
         expression = _equation_expression(equations[0])
         try:

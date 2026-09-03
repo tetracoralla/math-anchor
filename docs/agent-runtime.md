@@ -1,5 +1,17 @@
 # Agent runtime usage and resilience
 
+For a larger Agent workflow, the preferred strategic path is one bounded
+`math-anchor.obligation-set.v0.1` checkpoint. A Host or harness invokes
+`check-obligations`, stores the full receipt outside the model context, and
+returns only failures, unknowns, or unsupported obligations. `--quiet-success`
+emits no stdout when the entire set is checked. The local CLI is also exposed
+by the packaged standalone runtime; it does not require a source checkout.
+An Agent Host installation projects a version-locked launcher into the
+`calculate` Skill, so Agent use reaches those packaged bytes without resolving
+an ambient command or a development repository.
+See `obligation-runtime.md` for the exact request, receipt, replay, and claim
+boundaries.
+
 Math Anchor's four MCP tools are a direct deterministic provider boundary.
 They do not require a language-model turn once a structured caller knows the
 operation and arguments. A high-frequency coding tool should start
@@ -7,18 +19,18 @@ operation and arguments. A high-frequency coding tool should start
 `math.batch` calls over that session. Starting the CLI once per calculation is
 correct but repeatedly pays process and import startup.
 
-The supported 0.5 boundary is explicit invocation. Cold natural-language
+The supported 0.6 boundary is explicit invocation. Cold natural-language
 selection by a fresh Agent remains useful integration research, but it depends
 on the host, model, installed catalogue, and context budget. It is not a
 release gate and must not be presented as guaranteed automatic adoption.
 
 The practical low-cost topology is therefore: use an Agent only to translate
-an ambiguous natural-language request into a closed `{operation, arguments}`
-invocation, then let the host reuse that invocation shape for direct calls. Do
-not start a fresh Coding Agent turn for every item in a loop, file, test case,
-or dataset. When the Agent already has several independent calculations, send
-them together through `math.batch`; when a program already has structured
-inputs, skip the model entirely.
+ambiguous natural language into a closed obligation or operation, then let the
+Host execute the typed request outside the model loop. Do not start a fresh
+Coding Agent turn for every item in a loop, file, test case, or dataset. Use an
+obligation set for claim-checking workflows, `math.batch` for independent
+compatibility operations, and no model at all when a program already has
+structured inputs.
 
 ## Choose the cheapest request shape
 
@@ -52,7 +64,9 @@ Before admission, one run is limited to an 8 MiB JSON transport graph,
 500,000 nodes. The MCP stdio carrier allows 17 MiB including JSON-RPC overhead,
 so the SDK never parses an unbounded line before those runtime limits apply.
 The app and child-worker JSON-lines carriers use the same bounded-read rule and
-recover alignment after rejecting an oversized line.
+recover alignment after rejecting an oversized line. Transport numbers must be
+finite JSON values; `NaN` and infinities are rejected before worker admission
+instead of being emitted as non-standard JSON.
 
 Each lease owns one isolated persistent child. Serial use prewarms one child;
 observed parallel demand raises the retained warm target. Workers are replaced
@@ -65,7 +79,8 @@ Operation handlers and heavy engines load on demand. A fresh pure-Python
 machine-integer or combinatorics worker therefore does not pay for SymPy,
 NumPy, Pint, or mpmath. Once a worker uses an engine it retains it for later
 calls until normal recycle; this keeps the common path small without creating
-a second cache or weakening isolation.
+a second cache or weakening isolation. Unit-backed calls preferentially reuse
+a worker that has already constructed a Pint registry.
 
 ## Error policy
 
@@ -81,8 +96,10 @@ Every structured error contains:
 Correct input/domain/unit errors. Split or reduce timeout, memory, and output
 errors. A full ingress queue returns retryable `E_OVERLOADED`; three consecutive
 provider failures open a short circuit that returns retryable `E_UNAVAILABLE`
-until one half-open probe is allowed. Retry these transient errors at most once
-after the supplied delay. Cancellation is terminal for that request.
+until one half-open probe is allowed. Only that probe may restore service; a
+request admitted before the circuit opened cannot close it later. Retry these
+transient errors at most once after the supplied delay. Cancellation is
+terminal for that request.
 
 ## Current-source validation
 

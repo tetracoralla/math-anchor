@@ -18,8 +18,16 @@ DEFAULT_TIMEOUT_MS = 10_000
 DEFAULT_MEMORY_MB = 1024
 MAX_REUSABLE_WORKERS = 4
 WORKER_PREWARM_BUDGET_SECONDS = 10.0
-MAX_REQUESTS_PER_WORKER = 1_000
+MAX_REQUESTS_PER_WORKER = 5_000
 WORKER_RECYCLE_RSS_MB = 768
+# Route Pint-backed calls toward workers that have already paid at least one
+# lazy registry construction cost. A contract test pins this to operation specs.
+UNIT_REGISTRY_OPERATIONS = frozenset(
+    {
+        "units.convert", "quantity.evaluate", "dimension.check",
+        "dimension.infer", "dimension.pi_groups",
+    }
+)
 
 
 class _WorkerPool:
@@ -45,6 +53,7 @@ class _WorkerPool:
         deadline: float,
         timeout_ms: int,
         cancel_event: threading.Event | None = None,
+        prefer_unit_registries: bool = False,
     ) -> tuple[_ReusableWorker | None, dict[str, Any] | None]:
         while True:
             # Evicted workers terminate outside the pool lock: terminate()
@@ -58,7 +67,9 @@ class _WorkerPool:
                     if cancel_event is not None and cancel_event.is_set():
                         return None, _error("E_CANCELLED", "operation was cancelled")
                     while self.available:
-                        worker = self.available.pop()
+                        worker = self._pop_available_worker(
+                            prefer_unit_registries=prefer_unit_registries,
+                        )
                         resident = _resident_memory_bytes(worker.process.pid)
                         if worker.is_running and (resident is None or resident <= memory_bytes):
                             selected = worker
@@ -124,6 +135,17 @@ class _WorkerPool:
             return None, error
         worker.pool_generation = generation
         return worker, None
+
+    def _pop_available_worker(
+        self,
+        *,
+        prefer_unit_registries: bool,
+    ) -> _ReusableWorker:
+        if prefer_unit_registries:
+            for index in range(len(self.available) - 1, -1, -1):
+                if self.available[index].unit_registry_loaded:
+                    return self.available.pop(index)
+        return self.available.pop()
 
     def _should_replenish(self, generation: int | None) -> bool:
         with self.condition:

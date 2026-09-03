@@ -1,0 +1,150 @@
+{
+  "schemaVersion": "math-anchor.obligation-conformance-suite.v0.1",
+  "request": {
+    "schemaVersion": "math-anchor.obligation-set.v0.1",
+    "assumptionSets": [
+      {
+        "id": "rational-polynomials",
+        "assumptions": [
+          "x and y are commuting indeterminates over the rationals"
+        ]
+      }
+    ],
+    "obligations": [
+      {
+        "id": "polynomial-identity",
+        "kind": "polynomial_identity",
+        "claim": {
+          "left": "(x + y)^2",
+          "right": "x^2 + 2*x*y + y^2",
+          "variables": ["x", "y"]
+        },
+        "assumptionSet": "rational-polynomials"
+      },
+      {
+        "id": "injected-sign-error",
+        "kind": "polynomial_identity",
+        "claim": {
+          "left": "(x + y)^2",
+          "right": "x^2 - 2*x*y + y^2",
+          "variables": ["x", "y"]
+        },
+        "assumptionSet": "rational-polynomials"
+      },
+      {
+        "id": "strict-definedness",
+        "kind": "expression_equivalence",
+        "claim": {
+          "left": "(x^2 - 1)/(x - 1)",
+          "right": "x + 1",
+          "variables": ["x"],
+          "domain": "real",
+          "definednessPolicy": "strict"
+        }
+      },
+      {
+        "id": "dimension-consistent",
+        "kind": "dimension_consistency",
+        "claim": {
+          "left": "force",
+          "right": "mass * acceleration",
+          "symbols": {
+            "force": "newton",
+            "mass": "kilogram",
+            "acceleration": "meter / second^2"
+          }
+        }
+      },
+      {
+        "id": "dimension-error",
+        "kind": "dimension_consistency",
+        "claim": {
+          "left": "distance",
+          "right": "speed + time",
+          "symbols": {
+            "distance": "meter",
+            "speed": "meter / second",
+            "time": "second"
+          }
+        }
+      },
+      {
+        "id": "local-almost-complex",
+        "kind": "local_almost_complex_integrability",
+        "claim": {
+          "coordinates": ["x", "y"],
+          "structure": [["0", "-1"], ["1", "0"]]
+        }
+      },
+      {
+        "id": "unsupported-global-step",
+        "kind": "sheaf_cohomology_vanishing",
+        "claim": {
+          "statement": "H^1(X, O_X) = 0"
+        }
+      },
+      {
+        "id": "dependency-blocked-step",
+        "kind": "polynomial_identity",
+        "claim": {
+          "left": "x",
+          "right": "x",
+          "variables": ["x"]
+        },
+        "dependsOn": ["unsupported-global-step"]
+      }
+    ],
+    "assurancePolicy": "strongest_available",
+    "responseMode": "full"
+  },
+  "expected": [
+    {
+      "id": "polynomial-identity",
+      "status": "checked",
+      "assuranceLevel": "exact_symbolic",
+      "scope": "polynomial_identity_over_rationals"
+    },
+    {
+      "id": "injected-sign-error",
+      "status": "falsified",
+      "assuranceLevel": "exact_symbolic",
+      "scope": "polynomial_identity_over_rationals"
+    },
+    {
+      "id": "strict-definedness",
+      "status": "falsified",
+      "assuranceLevel": "exact_symbolic",
+      "scope": "declared_domain_and_definedness_policy"
+    },
+    {
+      "id": "dimension-consistent",
+      "status": "checked",
+      "assuranceLevel": "exact_symbolic",
+      "scope": "dimensional_consistency_only"
+    },
+    {
+      "id": "dimension-error",
+      "status": "falsified",
+      "assuranceLevel": "exact_symbolic",
+      "scope": "dimensional_consistency_only"
+    },
+    {
+      "id": "local-almost-complex",
+      "status": "checked",
+      "assuranceLevel": "exact_symbolic",
+      "scope": "local_coordinate_rational_polynomial_almost_complex_check"
+    },
+    {
+      "id": "unsupported-global-step",
+      "status": "unsupported",
+      "assuranceLevel": null,
+      "scope": "unregistered_obligation_kind"
+    },
+    {
+      "id": "dependency-blocked-step",
+      "status": "unknown",
+      "assuranceLevel": null,
+      "scope": "dependency_gated_obligation"
+    }
+  ]
+}

@@ -85,6 +85,93 @@ def _fraction_rank(matrix: list[list[Fraction]]) -> int:
     return rank
 
 
+Polynomial = dict[tuple[int, int], int]
+
+
+def _polynomial_add(left: Polynomial, right: Polynomial) -> Polynomial:
+    result = dict(left)
+    for monomial, coefficient in right.items():
+        result[monomial] = result.get(monomial, 0) + coefficient
+        if result[monomial] == 0:
+            del result[monomial]
+    return result
+
+
+def _polynomial_multiply(left: Polynomial, right: Polynomial) -> Polynomial:
+    result: Polynomial = {}
+    for (left_x, left_y), left_coefficient in left.items():
+        for (right_x, right_y), right_coefficient in right.items():
+            monomial = (left_x + right_x, left_y + right_y)
+            result[monomial] = (
+                result.get(monomial, 0) + left_coefficient * right_coefficient
+            )
+    return {monomial: coefficient for monomial, coefficient in result.items() if coefficient}
+
+
+def _polynomial_power(value: Polynomial, exponent: int) -> Polynomial:
+    result: Polynomial = {(0, 0): 1}
+    factor = value
+    remaining = exponent
+    while remaining:
+        if remaining & 1:
+            result = _polynomial_multiply(result, factor)
+        factor = _polynomial_multiply(factor, factor)
+        remaining >>= 1
+    return result
+
+
+def _solve_polynomial_basis(target: Polynomial, basis: list[Polynomial]) -> list[int]:
+    monomials = sorted(set(target).union(*(set(value) for value in basis)))
+    rows = [
+        [Fraction(value.get(monomial, 0)) for value in basis]
+        + [Fraction(target.get(monomial, 0))]
+        for monomial in monomials
+    ]
+    pivot_row = 0
+    for column in range(len(basis)):
+        pivot = next(
+            (row for row in range(pivot_row, len(rows)) if rows[row][column]),
+            None,
+        )
+        if pivot is None:
+            raise AssertionError("Putnam basis is not independent")
+        rows[pivot_row], rows[pivot] = rows[pivot], rows[pivot_row]
+        divisor = rows[pivot_row][column]
+        rows[pivot_row] = [entry / divisor for entry in rows[pivot_row]]
+        for row in range(len(rows)):
+            if row == pivot_row or not rows[row][column]:
+                continue
+            factor = rows[row][column]
+            rows[row] = [
+                entry - factor * pivot_entry
+                for entry, pivot_entry in zip(rows[row], rows[pivot_row], strict=True)
+            ]
+        pivot_row += 1
+    assert all(any(row[:-1]) or row[-1] == 0 for row in rows)
+    coefficients = [rows[index][-1] for index in range(len(basis))]
+    assert all(coefficient.denominator == 1 for coefficient in coefficients)
+    return [int(coefficient) for coefficient in coefficients]
+
+
+def _putnam_1976_a2_n18_coefficients() -> list[int]:
+    x: Polynomial = {(1, 0): 1}
+    y: Polynomial = {(0, 1): 1}
+    x_plus_y = _polynomial_add(x, y)
+    target = _polynomial_add(
+        _polynomial_add(_polynomial_power(x, 18), _polynomial_power(y, 18)),
+        _polynomial_power(x_plus_y, 18),
+    )
+    p = _polynomial_add({(2, 1): 1}, {(1, 2): 1})
+    q = _polynomial_add(_polynomial_add({(2, 0): 1}, {(1, 1): 1}), {(0, 2): 1})
+    basis = [
+        _polynomial_power(q, 9),
+        _polynomial_multiply(_polynomial_power(p, 2), _polynomial_power(q, 6)),
+        _polynomial_multiply(_polynomial_power(p, 4), _polynomial_power(q, 3)),
+        _polynomial_power(p, 6),
+    ]
+    return _solve_polynomial_basis(target, basis)
+
+
 def _cubic_root() -> float:
     value = 1.5
     for _ in range(20):
@@ -139,7 +226,7 @@ def test_coding_agent_suite_has_independent_oracles_and_balanced_opportunities()
     by_id = {task["id"]: task for task in tasks}
     assert len(tasks) == 30
     assert len(by_id) == 30
-    assert suite["targetRef"] == {"id": "math-anchor", "version": "0.5.0"}
+    assert suite["targetRef"] == {"id": "math-anchor", "version": "0.6.0"}
     assert {opportunity: sum(task["opportunity"] == opportunity for task in tasks) for opportunity in ("required", "optional", "irrelevant")} == {
         "required": 24,
         "optional": 3,
@@ -173,7 +260,38 @@ def test_routing_smoke_is_an_exact_subset_of_the_utility_suite() -> None:
         "irrelevant",
     }
     for task in smoke["tasks"]:
-        assert task == full[task["id"]]
+        route_policy = task.get("routePolicy")
+        assert {key: value for key, value in task.items() if key != "routePolicy"} == full[task["id"]]
+        if task["opportunity"] == "required":
+            assert route_policy is not None
+        else:
+            assert route_policy is None
+
+
+def test_routing_smoke_requires_exact_inner_math_operations() -> None:
+    by_id = {task["id"]: task for task in _load("routing-smoke.v0.1.json")["tasks"]}
+    machine_routes = by_id["machine.u8-wrapping-add"]["routePolicy"]["routes"]
+    assert len(machine_routes) == 2
+    for route in machine_routes:
+        step = route["steps"][0]
+        assert step["operationId"] == "math-anchor.math.run"
+        matches = {match["pointer"]: match["expected"] for match in step["argumentMatches"]}
+        assert matches["/operation"] == "integer.machine_arithmetic"
+        assert matches["/arguments/action"] == "add"
+        assert matches["/arguments/bitWidth"] == 8
+        assert matches["/arguments/overflowBehavior"] == "wrapping"
+    binomial_step = by_id["integer.binomial-100-50"]["routePolicy"]["routes"][0]["steps"][0]
+    binomial_matches = {
+        match["pointer"]: match["expected"]
+        for match in binomial_step["argumentMatches"]
+    }
+    assert binomial_step["operationId"] == "math-anchor.math.run"
+    assert binomial_matches == {
+        "/operation": "combinatorics.count",
+        "/arguments/action": "binomial",
+        "/arguments/n": 100,
+        "/arguments/k": 50,
+    }
 
 
 def test_experiments_fix_one_agent_harness_driver_and_target() -> None:
@@ -193,7 +311,7 @@ def test_experiments_fix_one_agent_harness_driver_and_target() -> None:
         )
         task_count = len(_load(suite_name)["tasks"])
         assert experiment["suiteRef"] == {"id": suite_id, "version": "0.1.0"}
-        assert experiment["targetRef"] == {"id": "math-anchor", "version": "0.5.0"}
+        assert experiment["targetRef"] == {"id": "math-anchor", "version": "0.6.0"}
         assert experiment["purpose"] == purpose
         assert experiment["repeats"] == repeats
         assert experiment["agent"] == {"provider": "openai", "model": "gpt-5.6-luna"}
@@ -226,9 +344,13 @@ def test_policy_assisted_experiments_use_one_provider_neutral_policy_in_both_con
 
 def test_research_smoke_pairs_terra_and_luna_with_the_same_direct_mcp_task() -> None:
     suite = _load("research-putnam-1976-a2.v0.1.json")
-    assert suite["targetRef"] == {"id": "math-anchor", "version": "0.5.0"}
+    assert suite["targetRef"] == {"id": "math-anchor", "version": "0.6.0"}
     assert len(suite["tasks"]) == 1
-    assert suite["tasks"][0]["evaluator"]["expected"] == "2,63,90,3"
+    coefficients = _putnam_1976_a2_n18_coefficients()
+    assert coefficients == [2, 63, 90, 3]
+    assert suite["tasks"][0]["evaluator"]["expected"] == ",".join(
+        str(coefficient) for coefficient in coefficients
+    )
     assert suite["tasks"][0]["opportunity"] == "required"
 
     for model in ("terra", "luna"):
@@ -241,7 +363,7 @@ def test_research_smoke_pairs_terra_and_luna_with_the_same_direct_mcp_task() -> 
             "provider": "openai",
             "model": f"gpt-5.6-{model}",
         }
-        assert experiment["targetRef"] == {"id": "math-anchor", "version": "0.5.0"}
+        assert experiment["targetRef"] == {"id": "math-anchor", "version": "0.6.0"}
         assert experiment["harness"] == {"id": "codex-cli", "version": "0.152.0"}
         assert experiment["driver"]["version"] == "0.5.0"
         arguments = experiment["driver"]["args"]
@@ -255,7 +377,7 @@ def test_research_smoke_pairs_terra_and_luna_with_the_same_direct_mcp_task() -> 
 def test_public_math_smoke_uses_independent_oracles_and_two_named_agents() -> None:
     suite = _load("research-public-math-smoke.v0.1.json")
     by_id = {task["id"]: task for task in suite["tasks"]}
-    assert suite["targetRef"] == {"id": "math-anchor", "version": "0.5.0"}
+    assert suite["targetRef"] == {"id": "math-anchor", "version": "0.6.0"}
     assert len(by_id) == 4
 
     assert by_id["putnam-2023-b1.m37-n64"]["evaluator"]["expected"] == str(
@@ -327,8 +449,182 @@ def test_installed_plugin_smoke_uses_one_isolated_target_plugin_without_policy_i
     assert arguments[home_index] == "${MATH_ANCHOR_ISOLATED_CODEX_HOME}"
     assert "--target-plugin-id" in arguments
     assert "math-anchor@openadam" in arguments
+    assert arguments.count("--target-context-file") == 2
+    assert "${MATH_ANCHOR_TARGET_SKILL_FILE}" in arguments
+    assert "${MATH_ANCHOR_TARGET_SKILL_AGENT_FILE}" in arguments
     assert "--shared-instructions-file" not in arguments
     assert experiment["budget"]["maxToolCalls"] == 4
+
+
+def test_result_use_workflow_smoke_has_independent_oracles_and_bound_routes() -> None:
+    suite = _load("result-use-workflow-smoke.v0.1.json")
+    by_id = {task["id"]: task for task in suite["tasks"]}
+    assert suite["targetRef"] == {"id": "math-anchor", "version": "0.6.0"}
+    assert len(by_id) == 3
+    assert all(task["opportunity"] == "required" for task in suite["tasks"])
+    assert all(task["routePolicy"]["kind"] == "known-target-route-v1" for task in suite["tasks"])
+    assert all(task["resultUse"]["kind"] == "json-linkage-v1" for task in suite["tasks"])
+
+    matrix = [
+        [
+            sum(
+                1
+                for a in range(12 // row + 1)
+                for b in range(12 // column + 1)
+                if a * row + b * column == 12
+            )
+            for column in range(1, 13)
+        ]
+        for row in range(1, 13)
+    ]
+    determinant_task = by_id["putnam-2023-b6.n12-determinant-modulo"]
+    determinant = _determinant_bareiss(matrix)
+    assert determinant == -12
+    assert determinant_task["evaluator"]["expected"] == {
+        "determinant": str(determinant),
+        "residue": str(determinant % 7),
+    }
+    determinant_steps = determinant_task["routePolicy"]["routes"][0]["steps"]
+    assert [step["operationId"] for step in determinant_steps] == [
+        "math-anchor.math.run",
+        "math-anchor.math.run",
+    ]
+    first_matches = {
+        match["pointer"]: match["expected"]
+        for match in determinant_steps[0]["argumentMatches"]
+    }
+    second_matches = {
+        match["pointer"]: match["expected"]
+        for match in determinant_steps[1]["argumentMatches"]
+    }
+    assert first_matches == {"/operation": "matrix.determinant", "/arguments/matrix": matrix}
+    assert second_matches == {
+        "/operation": "integer.modular",
+        "/arguments/action": "remainder",
+        "/arguments/modulus": 7,
+    }
+    assert determinant_task["resultUse"]["links"][0] == {
+        "from": {"targetCall": 0, "pointer": "/structured_content/exact"},
+        "to": {
+            "kind": "target-call-arguments",
+            "targetCall": 1,
+            "pointer": "/arguments/value",
+        },
+    }
+
+    coefficients = _putnam_1976_a2_n18_coefficients()
+    assert coefficients == [2, 63, 90, 3]
+    valid_right = (
+        f"{coefficients[0]}*(x^2 + x*y + y^2)^9 + "
+        f"{coefficients[1]}*(x^2*y + x*y^2)^2*(x^2 + x*y + y^2)^6 + "
+        f"{coefficients[2]}*(x^2*y + x*y^2)^4*(x^2 + x*y + y^2)^3 + "
+        f"{coefficients[3]}*(x^2*y + x*y^2)^6"
+    )
+    valid = by_id["putnam-1976-a2.n18-valid-certificate-promotion"]
+    invalid = by_id["putnam-1976-a2.n18-invalid-certificate-rejection"]
+    invalid_right = valid_right.replace(
+        f" + {coefficients[3]}*(x^2*y + x*y^2)^6",
+        f" + {coefficients[3] + 1}*(x^2*y + x*y^2)^6",
+    )
+    for task, identity, disposition, right in (
+        (valid, True, "publish", valid_right),
+        (invalid, False, "reject", invalid_right),
+    ):
+        matches = {
+            match["pointer"]: match["expected"]
+            for match in task["routePolicy"]["routes"][0]["steps"][0]["argumentMatches"]
+        }
+        assert matches["/operation"] == "certificate.polynomial_identity"
+        assert matches["/arguments/right"] == right
+        assert matches["/arguments/variables"] == ["x", "y"]
+        assert task["evaluator"]["expected"] == {
+            "identity": identity,
+            "disposition": disposition,
+        }
+        assert {link["to"]["pointer"] for link in task["resultUse"]["links"]} == {
+            "/identity",
+            "/certificateDigest",
+        }
+
+    for task in suite["tasks"]:
+        prompt = task["prompt"].lower()
+        assert "math anchor" not in prompt
+        assert "math.run" not in prompt
+        assert "certificate.polynomial_identity" not in prompt
+
+
+def test_installed_result_use_workflow_experiment_is_bounded_and_structured() -> None:
+    suite = _load("result-use-workflow-smoke.v0.1.json")
+    experiment = _load(
+        "codex-luna-installed-plugin-result-use-workflow-smoke.v0.1.json"
+    )
+    assert experiment["suiteRef"] == {"id": suite["id"], "version": suite["version"]}
+    assert experiment["targetRef"] == {"id": "math-anchor", "version": "0.6.0"}
+    assert experiment["agent"] == {"provider": "openai", "model": "gpt-5.6-luna"}
+    assert experiment["harness"] == {"id": "codex-cli", "version": "0.152.0"}
+    assert experiment["purpose"] == "development-smoke"
+    assert experiment["repeats"] == 1
+    assert len(suite["tasks"]) * len(experiment["conditions"]) == 6
+    assert experiment["budget"]["maxToolCalls"] == 4
+    arguments = experiment["driver"]["args"]
+    assert arguments[arguments.index("--isolated-plugin-home") + 1] == (
+        "${MATH_ANCHOR_ISOLATED_CODEX_HOME}"
+    )
+    assert arguments[arguments.index("--answer-carrier") + 1] == "json-string-object"
+    assert arguments.count("--target-context-file") == 2
+    assert "--shared-instructions-file" not in arguments
+
+
+def test_explicit_result_use_workflow_uses_one_provider_neutral_policy() -> None:
+    suite = _load("result-use-workflow-smoke.v0.1.json")
+    experiment = _load("codex-luna-explicit-result-use-workflow-smoke.v0.1.json")
+    assert experiment["suiteRef"] == {"id": suite["id"], "version": suite["version"]}
+    assert experiment["targetRef"] == {"id": "math-anchor", "version": "0.6.0"}
+    assert experiment["agent"] == {"provider": "openai", "model": "gpt-5.6-luna"}
+    assert experiment["harness"] == {"id": "codex-cli", "version": "0.152.0"}
+    assert len(suite["tasks"]) * len(experiment["conditions"]) == 6
+    arguments = experiment["driver"]["args"]
+    assert "--target-plugin-id" not in arguments
+    assert "${MATH_ANCHOR_MCP_COMMAND}" in arguments
+    assert "${MATH_ANCHOR_MCP_CWD}" in arguments
+    assert arguments[arguments.index("--shared-instructions-file") + 1] == (
+        "${MATH_ANCHOR_RESULT_USE_POLICY}"
+    )
+    assert arguments[arguments.index("--answer-carrier") + 1] == "json-string-object"
+
+    policy = (EVAL_DIR / "explicit-result-use-policy.md").read_text(encoding="utf-8")
+    lowered = policy.lower()
+    assert "math anchor" not in lowered
+    assert "math.run" not in lowered
+    assert "certificate.polynomial_identity" not in lowered
+    assert "-12" not in policy
+    assert "pass the exact returned value directly" in policy
+    assert "Set `disposition` to `publish` only when" in policy
+
+
+def test_explicit_result_chain_is_one_bounded_two_call_procedure() -> None:
+    suite = _load("result-chain-explicit.v0.1.json")
+    experiment = _load("codex-luna-explicit-result-chain-smoke.v0.1.json")
+    assert suite["targetRef"] == {"id": "math-anchor", "version": "0.6.0"}
+    assert len(suite["tasks"]) == 1
+    task = suite["tasks"][0]
+    assert task["opportunity"] == "required"
+    assert "explicit Math Anchor integration procedure" in task["prompt"]
+    assert "matrix.determinant" in task["prompt"]
+    assert "integer.modular" in task["prompt"]
+    assert [
+        step["operationId"]
+        for step in task["routePolicy"]["routes"][0]["steps"]
+    ] == ["math-anchor.math.run", "math-anchor.math.run"]
+    assert task["evaluator"]["expected"] == {"determinant": "-12", "residue": "2"}
+    assert len(task["resultUse"]["links"]) == 3
+    assert experiment["suiteRef"] == {"id": suite["id"], "version": suite["version"]}
+    assert experiment["agent"] == {"provider": "openai", "model": "gpt-5.6-luna"}
+    assert experiment["budget"]["maxToolCalls"] == 2
+    assert len(experiment["conditions"]) * experiment["repeats"] == 2
+    arguments = experiment["driver"]["args"]
+    assert "${MATH_ANCHOR_MCP_COMMAND}" in arguments
+    assert arguments[arguments.index("--answer-carrier") + 1] == "json-string-object"
 
 
 def test_model_run_preflight_rejects_stale_codex_harness(monkeypatch) -> None:
@@ -459,6 +755,31 @@ def test_report_output_cannot_escape_the_gitignored_eval_directory(tmp_path: Pat
 
     with pytest.raises(SystemExit, match="must stay under"):
         agent_eval._report_output(str(tmp_path / "outside.json"), "experiment")
+
+
+def test_evaluator_requires_the_current_hardened_source(tmp_path: Path) -> None:
+    stale = tmp_path / "agent-tool-evals"
+    (stale / "src").mkdir(parents=True)
+    (stale / "src" / "cli.mjs").write_text("", encoding="utf-8")
+    (stale / "package.json").write_text(
+        json.dumps({"name": "@openadam/agent-tool-evals"}),
+        encoding="utf-8",
+    )
+    with pytest.raises(SystemExit, match="current hardened agent-tool-evals"):
+        agent_eval._validate_evaluator(stale)
+
+
+def test_evaluation_target_must_match_the_current_runtime() -> None:
+    suite = _load("routing-smoke.v0.1.json")
+    experiment = _load("codex-luna-installed-plugin-routing-smoke.v0.1.json")
+    agent_eval._validate_product_identity(suite, experiment)
+
+    stale_suite = json.loads(json.dumps(suite))
+    stale_experiment = json.loads(json.dumps(experiment))
+    stale_suite["targetRef"]["version"] = "0.4.0"
+    stale_experiment["targetRef"]["version"] = "0.4.0"
+    with pytest.raises(SystemExit, match="must match the current Math Anchor runtime"):
+        agent_eval._validate_product_identity(stale_suite, stale_experiment)
 
 
 def test_installed_skill_routes_machine_semantics_to_one_nested_run_call() -> None:

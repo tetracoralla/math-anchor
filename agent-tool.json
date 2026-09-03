@@ -1,0 +1,118 @@
+{
+  "schemaVersion": "openadam.agent-tool-project.v0.1",
+  "id": "math-anchor",
+  "version": "0.6.0",
+  "name": "Math Anchor",
+  "summary": "Embeddable mathematical obligations and deterministic calculations with scoped receipts and a compact four-tool MCP compatibility carrier.",
+  "documents": {
+    "productModel": "docs/product-model.md",
+    "reviewContract": "docs/REVIEW_CONTRACT.md"
+  },
+  "checks": [
+    {
+      "id": "development-regression",
+      "lane": "development-regression",
+      "command": {
+        "executable": "/bin/bash",
+        "args": ["script/check_all.sh"],
+        "timeoutMs": 900000
+      }
+    },
+    {
+      "id": "obligation-conformance",
+      "lane": "contract-conformance",
+      "command": {
+        "executable": "/bin/bash",
+        "args": ["script/check_obligation_contract.sh"],
+        "timeoutMs": 300000
+      }
+    },
+    {
+      "id": "headless-package",
+      "lane": "package",
+      "command": {
+        "executable": "/bin/bash",
+        "args": ["script/check_headless.sh"],
+        "timeoutMs": 900000
+      }
+    },
+    {
+      "id": "obligation-cost-observation",
+      "lane": "performance",
+      "command": {
+        "executable": "/bin/bash",
+        "args": ["script/measure_obligation_cost.sh"],
+        "timeoutMs": 300000
+      }
+    }
+  ],
+  "carriers": [
+    {
+      "kind": "library",
+      "path": "src/math_anchor/obligations.py"
+    },
+    {
+      "kind": "cli",
+      "path": "src/math_anchor/cli.py"
+    },
+    {
+      "kind": "mcp",
+      "path": "plugins/math-anchor/.mcp.json"
+    },
+    {
+      "kind": "skill",
+      "path": "plugins/math-anchor/skills/calculate/SKILL.md"
+    },
+    {
+      "kind": "codex-plugin",
+      "path": "plugins/math-anchor/.codex-plugin/plugin.json"
+    },
+    {
+      "kind": "human-app",
+      "path": "Sources/MathAnchor/App/MathAnchorApp.swift"
+    }
+  ],
+  "package": {
+    "componentId": "math-anchor-obligation-runtime",
+    "command": {
+      "executable": "/bin/bash",
+      "args": ["script/package_agent_component.sh"],
+      "timeoutMs": 900000
+    },
+    "artifact": "build/openadam/math-anchor-obligation-runtime-0.6.0.tar.gz",
+    "integration": "integrations/agent-host/tool.integration.json",
+    "probes": [
+      {
+        "id": "exact-expression",
+        "tool": "math.run",
+        "arguments": {
+          "operation": "expression.evaluate",
+          "arguments": {
+            "expression": "6 * 7"
+          }
+        },
+        "expectation": "success",
+        "effects": "read-only"
+      },
+      {
+        "id": "undefined-expression",
+        "tool": "math.run",
+        "arguments": {
+          "operation": "expression.evaluate",
+          "arguments": {
+            "expression": "1 / 0"
+          }
+        },
+        "expectation": "tool-error",
+        "effects": "read-only"
+      }
+    ],
+    "legal": {
+      "spdx": "Apache-2.0",
+      "license": "marketplace/plugins/math-anchor-obligation-runtime/runtime/math-anchor-runtime/LICENSE",
+      "notice": "marketplace/plugins/math-anchor-obligation-runtime/runtime/math-anchor-runtime/NOTICE",
+      "thirdPartyNotices": "marketplace/plugins/math-anchor-obligation-runtime/runtime/math-anchor-runtime/THIRD_PARTY_NOTICES.txt",
+      "sbom": "marketplace/plugins/math-anchor-obligation-runtime/runtime/math-anchor-runtime/sbom.spdx.json"
+    }
+  }
+}

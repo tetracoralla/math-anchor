@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+import json
 import threading
 import time
 
@@ -22,6 +24,13 @@ def _acquire(
         cancel_event=None,
         poll_seconds=0.005,
     )
+
+
+def _permit(breaker: CircuitBreaker):
+    permit, retry_after = breaker.allow()
+    assert permit is not None
+    assert retry_after is None
+    return permit
 
 
 def test_admission_is_bounded_and_memory_weighted() -> None:
@@ -93,17 +102,23 @@ def test_circuit_breaker_opens_and_allows_one_half_open_probe(monkeypatch) -> No
     clock = [100.0]
     monkeypatch.setattr("math_anchor.runtime_control.time.monotonic", lambda: clock[0])
     breaker = CircuitBreaker(failure_threshold=2, open_seconds=1.0)
-    assert breaker.allow() == (True, None)
-    assert breaker.record(outcome="infrastructure_failure") is False
-    assert breaker.record(outcome="infrastructure_failure") is True
-    allowed, retry_after = breaker.allow()
-    assert allowed is False
+    assert breaker.record(
+        outcome="infrastructure_failure",
+        permit=_permit(breaker),
+    ) is False
+    assert breaker.record(
+        outcome="infrastructure_failure",
+        permit=_permit(breaker),
+    ) is True
+    permit, retry_after = breaker.allow()
+    assert permit is None
     assert retry_after == 1000
     clock[0] += 1.1
-    assert breaker.allow() == (True, None)
-    assert breaker.allow()[0] is False
-    breaker.record(outcome="success")
-    assert breaker.allow() == (True, None)
+    probe = _permit(breaker)
+    assert probe.probe_id is not None
+    assert breaker.allow()[0] is None
+    breaker.record(outcome="success", permit=probe)
+    assert _permit(breaker).probe_id is None
 
 
 def test_unused_half_open_probe_is_returned_and_regrantable(monkeypatch) -> None:
@@ -112,13 +127,14 @@ def test_unused_half_open_probe_is_returned_and_regrantable(monkeypatch) -> None
     breaker = CircuitBreaker(failure_threshold=1, open_seconds=1.0)
     assert breaker.record(outcome="infrastructure_failure") is True
     clock[0] += 1.1
-    assert breaker.allow() == (True, None)
+    first_probe = _permit(breaker)
+    assert first_probe.probe_id is not None
     # The call that reserved the probe failed before execution; without
     # returning the reservation every later call is refused forever.
-    breaker.abandon_probe()
+    breaker.abandon_probe(first_probe)
     assert breaker.snapshot()["halfOpenProbe"] is False
-    assert breaker.allow() == (True, None)
-    breaker.record(outcome="success")
+    second_probe = _permit(breaker)
+    breaker.record(outcome="success", permit=second_probe)
     assert breaker.snapshot()["state"] == "closed"
 
 
@@ -126,33 +142,102 @@ def test_open_circuit_is_closed_only_by_a_successful_call(monkeypatch) -> None:
     clock = [100.0]
     monkeypatch.setattr("math_anchor.runtime_control.time.monotonic", lambda: clock[0])
     breaker = CircuitBreaker(failure_threshold=2, open_seconds=1.0)
-    breaker.record(outcome="infrastructure_failure")
-    assert breaker.record(outcome="infrastructure_failure") is True
+    stale_error = _permit(breaker)
+    breaker.record(outcome="infrastructure_failure", permit=_permit(breaker))
+    assert breaker.record(
+        outcome="infrastructure_failure",
+        permit=_permit(breaker),
+    ) is True
     # An in-flight caller-side error (timeout, cancellation, memory) that
     # completes while the circuit is open must not close it.
-    breaker.record(outcome="error")
+    breaker.record(outcome="error", permit=stale_error)
     assert breaker.snapshot()["state"] == "open"
     clock[0] += 1.1
-    assert breaker.allow() == (True, None)
-    assert breaker.record(outcome="success") is False
+    probe = _permit(breaker)
+    assert breaker.record(outcome="success", permit=probe) is False
     assert breaker.snapshot()["state"] == "closed"
 
 
 def test_inconclusive_outcomes_neither_close_nor_reset_the_streak() -> None:
     breaker = CircuitBreaker(failure_threshold=3, open_seconds=1.0)
-    breaker.record(outcome="infrastructure_failure")
-    breaker.record(outcome="error")
-    breaker.record(outcome="infrastructure_failure")
-    assert breaker.record(outcome="infrastructure_failure") is True
+    breaker.record(outcome="infrastructure_failure", permit=_permit(breaker))
+    breaker.record(outcome="error", permit=_permit(breaker))
+    breaker.record(outcome="infrastructure_failure", permit=_permit(breaker))
+    assert breaker.record(
+        outcome="infrastructure_failure",
+        permit=_permit(breaker),
+    ) is True
     assert breaker.snapshot()["state"] == "open"
     breaker.reset()
-    breaker.record(outcome="infrastructure_failure")
-    breaker.record(outcome="error")
+    breaker.record(outcome="infrastructure_failure", permit=_permit(breaker))
+    breaker.record(outcome="error", permit=_permit(breaker))
     # Only success proves the provider recovered and resets the streak.
-    breaker.record(outcome="success")
-    breaker.record(outcome="infrastructure_failure")
-    assert breaker.record(outcome="infrastructure_failure") is False
+    breaker.record(outcome="success", permit=_permit(breaker))
+    breaker.record(outcome="infrastructure_failure", permit=_permit(breaker))
+    assert breaker.record(
+        outcome="infrastructure_failure",
+        permit=_permit(breaker),
+    ) is False
     assert breaker.snapshot()["state"] == "closed"
+
+
+def test_stale_success_cannot_close_an_open_circuit(monkeypatch) -> None:
+    clock = [100.0]
+    monkeypatch.setattr("math_anchor.runtime_control.time.monotonic", lambda: clock[0])
+    breaker = CircuitBreaker(failure_threshold=2, open_seconds=1.0)
+    stale_success = _permit(breaker)
+    first_failure = _permit(breaker)
+    second_failure = _permit(breaker)
+
+    breaker.record(outcome="infrastructure_failure", permit=first_failure)
+    breaker.record(outcome="infrastructure_failure", permit=second_failure)
+    assert breaker.snapshot()["state"] == "open"
+
+    breaker.record(outcome="success", permit=stale_success)
+    assert breaker.snapshot()["state"] == "open"
+    assert breaker.allow()[0] is None
+
+
+def test_stale_completion_cannot_release_the_current_half_open_probe(
+    monkeypatch,
+) -> None:
+    clock = [100.0]
+    monkeypatch.setattr("math_anchor.runtime_control.time.monotonic", lambda: clock[0])
+    breaker = CircuitBreaker(failure_threshold=1, open_seconds=1.0)
+    stale = _permit(breaker)
+    breaker.record(outcome="infrastructure_failure", permit=_permit(breaker))
+    clock[0] += 1.1
+    current_probe = _permit(breaker)
+
+    breaker.record(outcome="error", permit=stale)
+    assert breaker.snapshot()["halfOpenProbe"] is True
+    assert breaker.allow()[0] is None
+
+    breaker.record(outcome="success", permit=current_probe)
+    assert breaker.snapshot()["state"] == "closed"
+
+
+def test_pre_open_completion_cannot_pollute_the_recovered_generation(
+    monkeypatch,
+) -> None:
+    clock = [100.0]
+    monkeypatch.setattr("math_anchor.runtime_control.time.monotonic", lambda: clock[0])
+    breaker = CircuitBreaker(failure_threshold=2, open_seconds=1.0)
+    stale = _permit(breaker)
+    breaker.record(outcome="infrastructure_failure", permit=_permit(breaker))
+    breaker.record(outcome="infrastructure_failure", permit=_permit(breaker))
+    clock[0] += 1.1
+    breaker.record(outcome="success", permit=_permit(breaker))
+    assert breaker.snapshot()["state"] == "closed"
+
+    current_failure = _permit(breaker)
+    breaker.record(outcome="infrastructure_failure", permit=current_failure)
+    breaker.record(outcome="success", permit=stale)
+    assert breaker.snapshot()["consecutiveFailures"] == 1
+
+    breaker.record(outcome="infrastructure_failure", permit=stale)
+    assert breaker.snapshot()["state"] == "closed"
+    assert breaker.snapshot()["consecutiveFailures"] == 1
 
 
 def test_admission_failure_releases_the_reserved_half_open_probe(monkeypatch) -> None:
@@ -287,6 +372,68 @@ def test_repeated_provider_failures_trip_fast_unavailable(monkeypatch) -> None:
     assert unavailable["error"]["code"] == "E_UNAVAILABLE"
     assert unavailable["error"]["retryable"] is True
     assert unavailable["error"]["retryAfterMs"] > 0
+
+
+def test_concurrent_stale_success_cannot_bypass_half_open_recovery(monkeypatch) -> None:
+    isolated = CircuitBreaker(failure_threshold=3, open_seconds=10)
+    monkeypatch.setattr(sandbox, "_CIRCUIT", isolated)
+    ready = threading.Barrier(4)
+    release_success = threading.Event()
+
+    def fake_execute(request_line: str, **_limits):
+        label = json.loads(request_line)["arguments"]["label"]
+        if label == "slow-success" or label.startswith("failure-"):
+            ready.wait(timeout=2)
+        if label == "slow-success":
+            release_success.wait(timeout=2)
+            return {"status": "ok", "operation": "test.echo", "label": label}
+        if label.startswith("failure-"):
+            return sandbox._error("E_RUNTIME", "simulated provider fault")
+        return {"status": "ok", "operation": "test.echo", "label": label}
+
+    monkeypatch.setattr(sandbox, "_execute_admitted_operation", fake_execute)
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        slow = executor.submit(
+            sandbox.run_operation,
+            "test.echo",
+            {"label": "slow-success"},
+            timeout_ms=5_000,
+            memory_mb=256,
+        )
+        failures = [
+            executor.submit(
+                sandbox.run_operation,
+                "test.echo",
+                {"label": f"failure-{index}"},
+                timeout_ms=5_000,
+                memory_mb=256,
+            )
+            for index in range(3)
+        ]
+        assert {
+            future.result(timeout=2)["error"]["code"]
+            for future in failures
+        } == {"E_RUNTIME"}
+        assert isolated.snapshot()["state"] == "open"
+        refused = sandbox.run_operation(
+            "test.echo",
+            {"label": "while-open"},
+            timeout_ms=5_000,
+            memory_mb=256,
+        )
+        assert refused["error"]["code"] == "E_UNAVAILABLE"
+
+        release_success.set()
+        assert slow.result(timeout=2)["status"] == "ok"
+
+    assert isolated.snapshot()["state"] == "open"
+    still_refused = sandbox.run_operation(
+        "test.echo",
+        {"label": "still-open"},
+        timeout_ms=5_000,
+        memory_mb=256,
+    )
+    assert still_refused["error"]["code"] == "E_UNAVAILABLE"
 
 
 def test_runtime_telemetry_records_only_operational_aggregates(monkeypatch) -> None:

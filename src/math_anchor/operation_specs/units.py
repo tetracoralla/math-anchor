@@ -9,7 +9,17 @@ from .shared import (
     quantity,
     units,
 )
-from ..operations.units import CALENDAR_POLICIES, UNIT_CATEGORIES
+from ..operations.units import CALENDAR_POLICIES, UNIT_CATALOG, UNIT_CATEGORIES
+
+
+_STABLE_UNIT_SEARCH_TERMS = tuple(
+    dict.fromkeys(
+        term
+        for unit in UNIT_CATALOG
+        for term in (unit.id, unit.name, *unit.aliases)
+        if term
+    )
+)
 
 
 SPECS = (
@@ -61,7 +71,17 @@ SPECS = (
             {"value": 100, "fromUnit": "megabit-per-second", "toUnit": "megabyte-per-second"},
         ),
         handler=data.units_convert,
-        keywords=("measurement", "dimension", "temperature", "length", "energy", "单位换算", "单位转换", "温度转换"),
+        keywords=(
+            "convert",
+            "unit conversion",
+            "measurement",
+            "dimension",
+            *UNIT_CATEGORIES,
+            *_STABLE_UNIT_SEARCH_TERMS,
+            "单位换算",
+            "单位转换",
+            "温度转换",
+        ),
         backends=("pint", "sympy"),
     ),
     OperationSpec(

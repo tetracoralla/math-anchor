@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 from typing import Any
 
 
@@ -9,6 +10,12 @@ MAX_REQUEST_NODES = 250_000
 MAX_REQUEST_DEPTH = 64
 MAX_BATCH_REQUEST_BYTES = 16 * 1024 * 1024
 MAX_BATCH_REQUEST_NODES = 500_000
+BATCH_ITEM_FIELDS = frozenset(
+    {
+        "operation", "arguments", "timeoutMs", "memoryMb",
+        "resultMode", "maxOutputBytes",
+    }
+)
 
 
 class TransportBudgetError(ValueError):
@@ -30,7 +37,11 @@ def encode_json_line(
         max_nodes=max_nodes,
         max_depth=max_depth,
     )
-    encoder = json.JSONEncoder(ensure_ascii=False, separators=(",", ":"))
+    encoder = json.JSONEncoder(
+        ensure_ascii=False,
+        separators=(",", ":"),
+        allow_nan=False,
+    )
     chunks: list[str] = []
     encoded_bytes = 1  # newline
     for chunk in encoder.iterencode(value):
@@ -100,6 +111,10 @@ def _validate_shape(
             for child in reversed(current):
                 stack.append((child, depth + 1, False))
             continue
-        if current is None or isinstance(current, (bool, int, float)):
+        if isinstance(current, float):
+            if not math.isfinite(current):
+                raise ValueError("request numbers must be finite")
+            continue
+        if current is None or isinstance(current, (bool, int)):
             continue
         raise TypeError(f"request contains a non-JSON value: {type(current).__name__}")

@@ -87,11 +87,9 @@ fastmcp_server.Settings.model_rebuild(
 mcp = FastMCP(
     "Math Anchor",
     instructions=(
-        "Use this runtime for reliability-sensitive mathematics, not trivial low-risk arithmetic. "
-        "For ordinary supported requests, call math.run directly using its operation-specific typed schema. "
-        "Stop after the first successful ordinary call; repeating identical inputs is not independent validation. "
-        "Use search and describe only when the operation is genuinely unfamiliar or ambiguous. "
-        "Preserve the distinction between exact and approximate results."
+        "Use for reliability-sensitive mathematics, not trivial arithmetic. "
+        "Call math.run directly when the operation is known; search and describe only when needed. "
+        "Keep exact and approximate results distinct and stop after one successful ordinary call."
     ),
 )
 # FastMCP 1.x otherwise reports the MCP SDK version as the server version.
@@ -114,8 +112,10 @@ def _caught(callable_: Any, *arguments: Any) -> dict[str, Any]:
         "IEEE-754, named rounding or division conventions, large integers, matrices, units and dimensions, "
         "uncertainty, probability, numerical methods, or finance. Do not use for trivial low-risk arithmetic. "
         "Always pass operation-specific fields inside the arguments object: {operation, arguments}; never flatten them. "
-        "Known direct shapes need no describe call: integer.machine_arithmetic arguments include action, left, right, "
-        "bitWidth, signedness, inputMode, and overflowBehavior; combinatorics.count arguments use action, n, and k; "
+        "Known direct shapes: integer.machine_arithmetic arguments include action, left, right, "
+        "bitWidth, signedness, inputMode (value or bits), and overflowBehavior (checked, wrapping, or saturating); left and right "
+        "must be exact integer text strings (for example \"65535\", not 65535); "
+        "do not substitute decimal or wrap. combinatorics.count arguments use action, n, and k; "
         "certificate.polynomial_identity arguments use left, right, and variables. "
         "The typed operation keeps exact and approximate results separate; one successful ordinary call is sufficient."
     ),
@@ -172,15 +172,22 @@ async def math_batch(
 @mcp.tool(
     name="math.search",
     title="Search mathematical operations",
-    description="Search operations only when the id is unknown; otherwise use math.run.",
+    description=(
+        "Search operations only when the id is unknown; otherwise use math.run. "
+        "matchStatus=no_registered_operation means the catalog does not support the requested domain; "
+        "do not substitute a lexical near-match."
+    ),
     annotations=_READ_ONLY,
     structured_output=True,
 )
 def math_search(
     query: Annotated[str, Field(max_length=MAX_SEARCH_QUERY_LENGTH)] = "",
     category: Annotated[str | None, Field(max_length=MAX_CATEGORY_LENGTH)] = None,
-) -> dict[str, Any]:
-    return _caught(search_operations, query, category)
+) -> CallToolResult:
+    return _tool_result(
+        _caught(search_operations, query, category),
+        operation_label="math.search",
+    )
 
 
 @mcp.tool(
@@ -199,8 +206,11 @@ def math_describe(
         str,
         Field(min_length=1, max_length=MAX_OPERATION_ID_LENGTH),
     ],
-) -> dict[str, Any]:
-    return _caught(describe_operation, operation)
+) -> CallToolResult:
+    return _tool_result(
+        _caught(describe_operation, operation),
+        operation_label="math.describe",
+    )
 
 
 async def _run_cancellable(callable_: Any, *arguments: Any, **keywords: Any) -> dict[str, Any]:
@@ -258,13 +268,20 @@ async def _run_cancellable(callable_: Any, *arguments: Any, **keywords: Any) -> 
         raise
 
 
-def _tool_result(result: dict[str, Any]) -> CallToolResult:
+def _tool_result(
+    result: dict[str, Any],
+    *,
+    operation_label: str | None = None,
+) -> CallToolResult:
     failed = result.get("status") == "error"
     if failed:
         error = result.get("error", {})
         summary = f"{error.get('code', 'E_RUNTIME')}: {error.get('message', 'Calculation failed')}"
     else:
-        summary = f"{result.get('status', 'ok')}: {result.get('operation', 'math.batch')}"
+        summary = (
+            f"{result.get('status', 'ok')}: "
+            f"{operation_label or result.get('operation', 'math.batch')}"
+        )
     return CallToolResult(
         content=[TextContent(type="text", text=summary)],
         structuredContent=result,
@@ -296,6 +313,12 @@ def _install_generated_tool_contracts() -> None:
     run_tool.__dict__["output_schema"] = RUN_TOOL_OUTPUT_SCHEMA
     batch_tool.parameters = batch_tool_parameters()
     batch_tool.__dict__["output_schema"] = BATCH_RESULT_SCHEMA
+    # CallToolResult keeps protocol-level isError aligned with every tool's
+    # structured status. Discovery payloads intentionally retain their compact,
+    # open result shape rather than advertising the MCP envelope itself.
+    discovery_output_schema = {"type": "object", "additionalProperties": True}
+    search_tool.__dict__["output_schema"] = discovery_output_schema
+    describe_tool.__dict__["output_schema"] = discovery_output_schema
     for tool in (search_tool, describe_tool, run_tool, batch_tool):
         # FastMCP's generated pydantic models otherwise ignore unexpected
         # top-level keys even when the advertised JSON Schema is closed.
