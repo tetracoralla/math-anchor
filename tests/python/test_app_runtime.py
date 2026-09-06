@@ -80,6 +80,17 @@ def test_incompatible_unit_conversion_is_a_bounded_error() -> None:
     assert response["error"]["code"] == "E_UNIT"
 
 
+def test_zero_denominator_is_a_unit_input_error_and_runtime_recovers() -> None:
+    response = app_runtime._handle({
+        "id": "invalid-rational", "operation": "units.convert",
+        "value": "1/0", "fromUnit": "meter", "toUnit": "foot",
+    })
+    assert response["id"] == "invalid-rational"
+    assert response["status"] == "error"
+    assert response["error"]["code"] == "E_UNIT"
+    assert app_runtime._handle({"id": "recovery", "expression": "6*7"})["exact"] == "42"
+
+
 def test_unknown_app_operation_preserves_request_id() -> None:
     response = app_runtime._handle(
         {"id": "unknown-1", "operation": "unknown.operation"}

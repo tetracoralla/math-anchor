@@ -4,7 +4,8 @@ import Foundation
 @MainActor
 package final class CalculatorStore: ObservableObject {
     @Published package var mode: CalculatorMode = .basic
-    @Published package var expression = ""
+    @Published package private(set) var angleUnit: AngleUnit = .radians
+    @Published private var draft = CalculatorExpression()
     @Published package var display = "0"
     @Published package var errorMessage: String?
     @Published package var isEvaluating = false
@@ -17,22 +18,14 @@ package final class CalculatorStore: ObservableObject {
     private let runtime: any MathEvaluating
     private let historyStore: HistoryStore
     private let clipboard: any ClipboardWriting
-    private var evaluationExpression = ""
     private var memoryEvaluation: String?
     private var lastExact: String?
-    private var lastSubmittedEvaluation = ""
     private var showingResult = false
     private var inputRevision = 0
     private var activeEvaluationID: UUID?
     private var evaluationTask: Task<Void, Never>?
-    private var semanticUndo: [String: ExpressionState] = [:]
-
+    private var semanticUndo: [String: CalculatorExpression] = [:]
     private let maximumOperandDigits = 18
-
-    private struct ExpressionState {
-        let visible: String
-        let evaluation: String
-    }
 
     package init(
         runtime: any MathEvaluating = MathRuntimeService(),
@@ -45,224 +38,128 @@ package final class CalculatorStore: ObservableObject {
         history = historyStore.load()
     }
 
-    package var expressionForDisplay: String {
-        MathDisplayFormatting.expression(expression)
-    }
-
-    package var isShowingResult: Bool {
-        showingResult
+    package var expression: String { draft.visible }
+    package var expressionForDisplay: String { MathDisplayFormatting.expression(expression) }
+    package var isShowingResult: Bool { showingResult }
+    package var canStoreMemory: Bool {
+        !isEvaluating && errorMessage == nil
+            && (draft.source.isEmpty || !endsWithOperatorOrOpeningParenthesis(draft.source))
     }
 
     package func selectMode(_ mode: CalculatorMode) {
-        if self.mode != mode {
-            // A calculation belongs to the mode in which it was submitted.
-            // Letting it survive a mode change can occupy the shared serial
-            // app runtime and make the first conversion request time out.
-            invalidatePendingEvaluation()
-        }
+        if self.mode != mode { invalidatePendingEvaluation() }
         self.mode = mode
         isModePopoverPresented = false
-        if mode == .conversion {
-            isHistoryPresented = false
-        }
+        if mode == .conversion { isHistoryPresented = false }
+    }
+
+    package func selectAngleUnit(_ unit: AngleUnit) {
+        guard unit != angleUnit else { return }
+        invalidatePendingEvaluation()
+        angleUnit = unit
+        draft.angleUnit = unit
     }
 
     package func replaceExpression(_ value: String) {
         invalidatePendingEvaluation()
-        expression = value
-        evaluationExpression = ExpressionEditing.evaluationExpression(forVisible: value)
+        draft = CalculatorExpression()
+        draft.angleUnit = angleUnit
+        draft.source = value
         semanticUndo.removeAll(keepingCapacity: true)
-        display = value.isEmpty ? "0" : expressionForDisplay
-        errorMessage = nil
-        showingResult = false
         lastExact = nil
-        distinctExactResult = nil
+        updateEntryDisplay()
     }
 
-    package func append(_ token: String, evaluationToken: String? = nil) {
-        errorMessage = nil
+    package func append(_ token: String) {
+        guard !(showingResult && token == ")") else { return }
         if showingResult {
             if ["+", "-", "*", "/", "^"].contains(token) {
-                expression = display
-                evaluationExpression = lastExact ?? display
+                prepareResultForEditing()
             } else {
-                expression = ""
-                evaluationExpression = ""
+                draft = CalculatorExpression()
+                draft.angleUnit = angleUnit
             }
             semanticUndo.removeAll(keepingCapacity: true)
         }
-        guard let edit = normalizedAppend(token, evaluationToken: evaluationToken) else { return }
+        guard let edit = normalizedAppend(token) else { return }
         invalidatePendingEvaluation()
-        showingResult = false
-        expression = edit.visible
-        evaluationExpression = edit.evaluation
-        display = expressionForDisplay.isEmpty ? "0" : expressionForDisplay
-        distinctExactResult = nil
+        draft.source = edit
+        updateEntryDisplay()
     }
 
-    package func appendFunction(_ name: String) {
-        if expression.isEmpty || endsWithOperatorOrOpeningParenthesis(expression) {
-            appendFunctionCall(name)
-        } else {
-            applyFunction(name)
-        }
-    }
+    package func appendFunction(_ name: String) { applyFunction(name) }
 
     package func applyFunction(_ name: String) {
-        guard !expression.isEmpty else {
-            appendFunctionCall(name)
+        if draft.source.isEmpty || endsWithOperatorOrOpeningParenthesis(draft.source) {
+            append("\(name)(")
             return
         }
-        if endsWithOperatorOrOpeningParenthesis(expression) {
-            appendFunctionCall(name)
-            return
-        }
-        prepareResultForUnaryEditing()
-        guard let visible = applyingToTrailingOperand(name, in: expression) else { return }
-        // The executable string is re-derived from the edited visible string:
-        // after a percent expansion the two strings are structurally
-        // divergent, so trailing-operand surgery on the stale expansion would
-        // splice the function onto the wrong operand.
-        transformExpressions(
-            visible: visible,
-            evaluation: ExpressionEditing.evaluationExpression(forVisible: visible)
-        )
+        prepareResultForEditing()
+        guard let split = ExpressionEditing.trailingOperand(in: draft.source),
+              let edited = ExpressionEditing.replacingTrailingOperand(
+                in: draft.source, with: "\(name)(\(split.operand))"
+              ) else { return }
+        transformExpression(edited)
     }
 
-    package func square() {
-        raiseCurrentExpression(to: 2)
-    }
-
-    package func cube() {
-        raiseCurrentExpression(to: 3)
-    }
+    package func square() { raiseCurrentExpression(to: 2) }
+    package func cube() { raiseCurrentExpression(to: 3) }
 
     package func reciprocal() {
-        guard !expression.isEmpty, !endsWithOperatorOrOpeningParenthesis(expression) else {
-            appendFunction("1/")
+        if draft.source.isEmpty || endsWithOperatorOrOpeningParenthesis(draft.source) {
+            append("1/(")
             return
         }
-        prepareResultForUnaryEditing()
-        guard let visible = wrappingTrailingOperand(prefix: "1/", in: expression) else { return }
-        transformExpressions(
-            visible: visible,
-            evaluation: ExpressionEditing.evaluationExpression(forVisible: visible)
-        )
+        prepareResultForEditing()
+        guard let split = ExpressionEditing.trailingOperand(in: draft.source),
+              let edited = ExpressionEditing.replacingTrailingOperand(
+                in: draft.source, with: "1/(\(split.operand))"
+              ) else { return }
+        transformExpression(edited)
     }
 
-    package func clear() {
-        invalidatePendingEvaluation()
-        expression = ""
-        evaluationExpression = ""
-        semanticUndo.removeAll(keepingCapacity: false)
-        display = "0"
-        lastExact = nil
-        distinctExactResult = nil
-        errorMessage = nil
-        showingResult = false
-    }
+    package func clear() { replaceExpression("") }
 
     package func backspace() {
-        guard !expression.isEmpty else { return }
+        guard !draft.source.isEmpty else { return }
         if showingResult {
-            // Undo on the result returns to editing the value itself rather
-            // than discarding the whole calculation.
-            invalidatePendingEvaluation()
-            let plain = ExpressionEditing.normalizedForRuntime(display)
-            expression = plain
-            evaluationExpression = plain
-            lastExact = plain
-            lastSubmittedEvaluation = ""
-            showingResult = false
-            distinctExactResult = nil
-            display = expressionForDisplay.isEmpty ? "0" : expressionForDisplay
-            errorMessage = nil
+            // The first Delete opens the displayed value for digit editing.
+            replaceExpression(ExpressionEditing.normalizedForRuntime(display))
             return
         }
         invalidatePendingEvaluation()
-        if expression.hasSuffix("%") {
-            expression.removeLast()
-            evaluationExpression = ExpressionEditing.evaluationExpression(forVisible: expression)
-            semanticUndo.removeValue(forKey: expression + "%")
-        } else if let previous = semanticUndo.removeValue(forKey: expression) {
-            expression = previous.visible
-            evaluationExpression = previous.evaluation
+        if let previous = semanticUndo.removeValue(forKey: draft.source) {
+            draft = previous
+            draft.angleUnit = angleUnit
         } else {
-            expression.removeLast()
-            // Visible and executable spellings are not always the same
-            // (`log(` executes as `log10(`, and percent expands structurally).
-            // Re-derive instead of deleting one hidden character and leaving
-            // an invisible fragment behind after repeated backspace presses.
-            evaluationExpression = ExpressionEditing.evaluationExpression(forVisible: expression)
+            draft.removeLast()
         }
-        display = expression.isEmpty ? "0" : expressionForDisplay
-        errorMessage = nil
+        updateEntryDisplay()
     }
 
     package func toggleSign() {
-        guard !expression.isEmpty else {
-            append("-")
-            return
-        }
-        prepareResultForUnaryEditing()
-        guard let visible = ExpressionEditing.togglingSign(in: expression) else { return }
-        transformExpressions(
-            visible: visible,
-            evaluation: ExpressionEditing.evaluationExpression(forVisible: visible)
-        )
+        guard !draft.source.isEmpty else { append("-"); return }
+        prepareResultForEditing()
+        guard let edited = ExpressionEditing.togglingSign(in: draft.source) else { return }
+        transformExpression(edited)
     }
 
     package func percent() {
-        guard !expression.isEmpty, !endsWithOperatorOrOpeningParenthesis(expression) else { return }
-        prepareResultForUnaryEditing()
-        guard let visibleSplit = ExpressionEditing.trailingOperand(in: expression),
-              let evaluationSplit = ExpressionEditing.trailingOperand(in: evaluationExpression),
-              !visibleSplit.operand.hasSuffix("%")
-        else { return }
-
-        let visibleReplacement = visibleSplit.operand + "%"
-        let evaluationReplacement: String
-        if let left = evaluationSplit.left,
-           evaluationSplit.operatorToken == "+" || evaluationSplit.operatorToken == "-"
-        {
-            evaluationReplacement = "((\(left))*(\(evaluationSplit.operand))/100)"
-        } else if evaluationSplit.left != nil {
-            evaluationReplacement = "(\(evaluationSplit.operand))/100"
-        } else {
-            // Without a left operand the percent divides the operand itself.
-            // Appending (rather than wrapping) keeps the executable string's
-            // open parentheses in lockstep with the visible suffix notation.
-            evaluationReplacement = "\(evaluationSplit.operand)/100"
-        }
-        guard let visible = ExpressionEditing.replacingTrailingOperand(
-            in: expression,
-            with: visibleReplacement
-        ),
-        let evaluation = ExpressionEditing.replacingTrailingOperand(
-            in: evaluationExpression,
-            with: evaluationReplacement
-        ) else { return }
-        transformExpressions(visible: visible, evaluation: evaluation)
+        guard !draft.source.isEmpty, !endsWithOperatorOrOpeningParenthesis(draft.source) else { return }
+        prepareResultForEditing()
+        guard !draft.source.hasSuffix("%") else { return }
+        transformExpression(draft.source + "%")
     }
 
     package func evaluate() {
-        guard !isEvaluating, !expression.isEmpty else { return }
-        if showingResult && evaluationExpression == lastSubmittedEvaluation {
-            // Re-pressing equals on the already-shown result is a repeat of
-            // the completed submission, not a new calculation.
-            return
-        }
-        // Familiar calculators close still-open groups at submission instead
-        // of reporting a syntax error for work the machine can finish itself.
-        let openGroups = unmatchedOpeningParentheses(in: evaluationExpression)
-        let submittedExpression =
-            evaluationExpression + String(repeating: ")", count: openGroups)
-        let submittedVisibleExpression =
-            expression + String(repeating: ")", count: unmatchedOpeningParentheses(in: expression))
+        guard !isEvaluating, !draft.source.isEmpty, !showingResult else { return }
+        var submission = draft
+        submission.source += String(repeating: ")", count: unmatchedOpeningParentheses(in: draft.source))
+        let submittedExpression = submission.evaluation
+        let submittedVisibleExpression = submission.visible
         let submittedRevision = inputRevision
         let evaluationID = UUID()
         activeEvaluationID = evaluationID
-        lastSubmittedEvaluation = submittedExpression
         isEvaluating = true
         errorMessage = nil
         evaluationTask = Task {
@@ -270,45 +167,36 @@ package final class CalculatorStore: ObservableObject {
             do {
                 let result = try await runtime.evaluate(expression: submittedExpression, precision: 16)
                 guard isCurrentEvaluation(evaluationID, revision: submittedRevision) else { return }
-                evaluationTask = nil
-                activeEvaluationID = nil
-                isEvaluating = false
+                finishEvaluation()
                 lastExact = result.continuationValue
                 display = result.displayValue
                 distinctExactResult = result.distinctExactValue
-                expression = submittedVisibleExpression
-                evaluationExpression = submittedExpression
+                draft = submission
                 showingResult = true
-                let entry = HistoryEntry(
+                history.insert(HistoryEntry(
                     expression: submittedVisibleExpression,
                     executionExpression: submittedExpression,
                     exact: result.exact,
-                    result: result.displayValue
-                )
-                history.insert(entry, at: 0)
+                    result: result.displayValue,
+                    angleUnit: AngleUnit.applies(to: submission.source) ? submission.angleUnit : nil
+                ), at: 0)
                 history = Array(history.prefix(100))
                 historyStore.save(history)
             } catch {
                 guard isCurrentEvaluation(evaluationID, revision: submittedRevision) else { return }
-                evaluationTask = nil
-                activeEvaluationID = nil
-                isEvaluating = false
+                finishEvaluation()
                 errorMessage = error.localizedDescription
             }
         }
     }
 
     package func restore(_ entry: HistoryEntry) {
-        invalidatePendingEvaluation()
-        expression = entry.expression
-        evaluationExpression = entry.executionExpression
-            ?? ExpressionEditing.evaluationExpression(forVisible: entry.expression)
-        lastSubmittedEvaluation = evaluationExpression
+        if let unit = entry.angleUnit { selectAngleUnit(unit) }
+        replaceExpression(entry.expression)
         display = entry.result
         lastExact = entry.exact ?? entry.result
         distinctExactResult = entry.exact == entry.result ? nil : entry.exact
         showingResult = true
-        errorMessage = nil
     }
 
     package func clearHistory() {
@@ -317,13 +205,7 @@ package final class CalculatorStore: ObservableObject {
     }
 
     package func copyResult() {
-        if showingResult {
-            clipboard.write(display)
-        } else {
-            // Mid-entry the display carries presentation glyphs (×, ÷, −);
-            // what lands on the pasteboard must stay plain ASCII.
-            clipboard.write(ExpressionEditing.normalizedForRuntime(expression))
-        }
+        clipboard.write(showingResult ? display : ExpressionEditing.normalizedForRuntime(expression))
     }
 
     package func copyExactResult() {
@@ -338,186 +220,110 @@ package final class CalculatorStore: ObservableObject {
 
     package func memoryRecall() {
         guard let memory, let memoryEvaluation else { return }
-        let isFresh = expression.isEmpty || showingResult
-        let separator = !isFresh && endsValue(expression) ? "*" : ""
-        appendPaired(
-            visible: isFresh ? memory : "\(separator)(\(memory))",
-            evaluation: isFresh ? memoryEvaluation : "\(separator)(\(memoryEvaluation))"
-        )
-    }
-
-    package func memoryAdd() {
-        let current = currentValue
-        if let memory, let memoryEvaluation {
-            self.memory = "\(memory)+(\(current.visible))"
-            self.memoryEvaluation = "\(memoryEvaluation)+(\(current.evaluation))"
-        } else {
-            memory = current.visible
-            memoryEvaluation = current.evaluation
-        }
-    }
-
-    package func memorySubtract() {
-        let current = currentValue
-        if let memory, let memoryEvaluation {
-            self.memory = "\(memory)-(\(current.visible))"
-            self.memoryEvaluation = "\(memoryEvaluation)-(\(current.evaluation))"
-        } else {
-            memory = "-(\(current.visible))"
-            memoryEvaluation = "-(\(current.evaluation))"
-        }
-    }
-
-    private var currentValue: ExpressionState {
+        let isFresh = draft.source.isEmpty || showingResult
         if showingResult {
-            return ExpressionState(visible: display, evaluation: lastExact ?? display)
+            draft = CalculatorExpression()
+            draft.angleUnit = angleUnit
         }
-        return ExpressionState(
-            visible: expression.isEmpty ? "0" : expression,
-            evaluation: evaluationExpression.isEmpty ? "0" : evaluationExpression
-        )
+        let token = draft.bind(visible: memory, evaluation: memoryEvaluation)
+        let separator = !isFresh && endsValue(draft.source) ? "*" : ""
+        invalidatePendingEvaluation()
+        draft.source += isFresh ? token : "\(separator)(\(token))"
+        updateEntryDisplay()
     }
 
-    private func prepareResultForUnaryEditing() {
+    package func memoryAdd() { updateMemory(subtract: false) }
+    package func memorySubtract() { updateMemory(subtract: true) }
+
+    private func updateMemory(subtract: Bool) {
+        guard canStoreMemory else { return }
+        var completed = draft
+        completed.source += String(repeating: ")", count: unmatchedOpeningParentheses(in: draft.source))
+        let visible = showingResult ? display : (expression.isEmpty ? "0" : completed.visible)
+        let evaluation = showingResult ? (lastExact ?? display) : (draft.source.isEmpty ? "0" : completed.evaluation)
+        if let memory, let memoryEvaluation {
+            let operation = subtract ? "-" : "+"
+            self.memory = "\(memory)\(operation)(\(visible))"
+            self.memoryEvaluation = "(\(memoryEvaluation))\(operation)(\(evaluation))"
+        } else {
+            memory = subtract ? "-(\(visible))" : visible
+            memoryEvaluation = subtract ? "-(\(evaluation))" : evaluation
+        }
+    }
+
+    private func prepareResultForEditing() {
         guard showingResult else { return }
-        expression = display
-        evaluationExpression = lastExact ?? display
+        draft = CalculatorExpression()
+        draft.angleUnit = angleUnit
+        draft.source = draft.bind(visible: display, evaluation: lastExact ?? display)
         showingResult = false
+        semanticUndo.removeAll(keepingCapacity: true)
     }
 
     private func raiseCurrentExpression(to exponent: Int) {
-        guard !expression.isEmpty else { return }
-        transformExpressions(
-            visible: "(\(expression))^\(exponent)",
-            evaluation: "(\(evaluationExpression))^\(exponent)"
-        )
+        guard !draft.source.isEmpty else { return }
+        prepareResultForEditing()
+        transformExpression("(\(draft.source))^\(exponent)")
     }
 
-    private func transformExpressions(visible: String, evaluation: String) {
-        let previous = ExpressionState(visible: expression, evaluation: evaluationExpression)
+    private func transformExpression(_ edited: String) {
+        let previous = draft
         invalidatePendingEvaluation()
-        semanticUndo[visible] = previous
-        expression = visible
-        evaluationExpression = evaluation
-        display = expressionForDisplay
-        distinctExactResult = nil
-        showingResult = false
+        semanticUndo[edited] = previous
+        draft.source = edited
+        updateEntryDisplay()
     }
 
-    private func appendPaired(visible: String, evaluation: String) {
+    private func updateEntryDisplay() {
+        display = expression.isEmpty ? "0" : expressionForDisplay
         errorMessage = nil
-        if showingResult {
-            expression = ""
-            evaluationExpression = ""
-            semanticUndo.removeAll(keepingCapacity: true)
-        }
-        invalidatePendingEvaluation()
-        showingResult = false
-        expression.append(visible)
-        evaluationExpression.append(evaluation)
-        display = expressionForDisplay.isEmpty ? "0" : expressionForDisplay
         distinctExactResult = nil
+        showingResult = false
+    }
+
+    private func finishEvaluation() {
+        evaluationTask = nil
+        activeEvaluationID = nil
+        isEvaluating = false
     }
 
     private func invalidatePendingEvaluation() {
         evaluationTask?.cancel()
-        evaluationTask = nil
         runtime.cancelPendingEvaluation()
         inputRevision &+= 1
-        activeEvaluationID = nil
-        isEvaluating = false
+        finishEvaluation()
     }
 
     private func isCurrentEvaluation(_ id: UUID, revision: Int) -> Bool {
         activeEvaluationID == id && inputRevision == revision
     }
 
-    private func normalizedAppend(_ token: String, evaluationToken: String? = nil) -> ExpressionState? {
-        let operators = ["+", "-", "*", "/", "^"]
-        if operators.contains(token) {
-            if expression.isEmpty {
-                return token == "-" ? ExpressionState(visible: "-", evaluation: "-") : nil
-            }
-            if endsWithOperatorOrOpeningParenthesis(expression) {
-                if expression.last == "(" {
-                    return token == "-"
-                        ? ExpressionState(
-                            visible: expression + token,
-                            evaluation: evaluationExpression + token
-                        )
-                        : nil
-                } else {
-                    let visible = String(expression.dropLast()) + token
-                    let evaluation = String(evaluationExpression.dropLast()) + token
-                    return ExpressionState(visible: visible, evaluation: evaluation)
-                }
+    private func normalizedAppend(_ token: String) -> String? {
+        let source = draft.source
+        if ["+", "-", "*", "/", "^"].contains(token) {
+            if source.isEmpty { return token == "-" ? "-" : nil }
+            if endsWithOperatorOrOpeningParenthesis(source) {
+                if source.last == "(" { return token == "-" ? source + token : nil }
+                return String(source.dropLast()) + token
             }
         }
-
         if token == "." {
-            if currentNumberContainsDecimal(expression) { return nil }
-            if expression.isEmpty || endsWithOperatorOrOpeningParenthesis(expression) {
-                return ExpressionState(
-                    visible: expression + "0.",
-                    evaluation: evaluationExpression + "0."
-                )
-            }
-            if endsNonNumericValue(expression) {
-                return ExpressionState(
-                    visible: expression + "*0.",
-                    evaluation: evaluationExpression + "*0."
-                )
-            }
+            if currentNumberContainsDecimal(source) { return nil }
+            if source.isEmpty || endsWithOperatorOrOpeningParenthesis(source) { return source + "0." }
+            if endsNonNumericValue(source) { return source + "*0." }
         }
-
         if token == ")" {
-            guard unmatchedOpeningParentheses(in: expression) > 0,
-                  !endsWithOperatorOrOpeningParenthesis(expression),
-                  unmatchedOpeningParentheses(in: evaluationExpression) > 0
-            else { return nil }
+            guard unmatchedOpeningParentheses(in: source) > 0,
+                  !endsWithOperatorOrOpeningParenthesis(source) else { return nil }
         }
-
         if token.count == 1, token.first?.isNumber == true {
-            if let replacement = replacingLoneLeadingZero(token) {
-                return replacement
-            }
-            if trailingNumberDigitCount(in: expression) >= maximumOperandDigits {
-                return nil
-            }
+            if let replacement = replacingLoneLeadingZero(token) { return replacement }
+            if trailingNumberDigitCount(in: source) >= maximumOperandDigits { return nil }
         }
-
-        let tokenStartsNamedValue = token.first?.isLetter == true || token.first == "("
-        let digitFollowsNonNumericValue = token.count == 1
-            && token.first?.isNumber == true
-            && endsNonNumericValue(expression)
-        let needsMultiplication = (tokenStartsNamedValue && endsValue(expression))
-            || digitFollowsNonNumericValue
-        let separator = needsMultiplication ? "*" : ""
-        return ExpressionState(
-            visible: expression + separator + token,
-            evaluation: evaluationExpression + separator + (evaluationToken ?? token)
-        )
-    }
-
-    /// Starts a named call with the visible spelling the user pressed and the
-    /// core's executable spelling (the familiar `log` key runs as `log10`).
-    private func appendFunctionCall(_ name: String) {
-        append(
-            "\(name)(",
-            evaluationToken: ExpressionEditing.runtimeFunctionName(name) + "("
-        )
-    }
-
-    private func applyingToTrailingOperand(_ function: String, in value: String) -> String? {
-        guard let split = ExpressionEditing.trailingOperand(in: value) else { return nil }
-        let replacement = "\(function)(\(split.operand))"
-        return ExpressionEditing.replacingTrailingOperand(in: value, with: replacement)
-    }
-
-    private func wrappingTrailingOperand(prefix: String, in value: String) -> String? {
-        guard let split = ExpressionEditing.trailingOperand(in: value) else { return nil }
-        let replacement = "\(prefix)(\(split.operand))"
-        return ExpressionEditing.replacingTrailingOperand(in: value, with: replacement)
+        let startsValue = token.first?.isLetter == true || token.first == "("
+        let digitFollowsValue = token.count == 1 && token.first?.isNumber == true && endsNonNumericValue(source)
+        let separator = (startsValue && endsValue(source)) || digitFollowsValue ? "*" : ""
+        return source + separator + token
     }
 
     /// Range of the number currently being entered, or nil when the entry
@@ -565,30 +371,11 @@ package final class CalculatorStore: ObservableObject {
     /// A digit typed while the current operand is a lone zero replaces that
     /// zero, so `0` `0` `5` reads `5` instead of forming `005`, which the
     /// core would reject as a syntax error.
-    private func replacingLoneLeadingZero(_ digit: String) -> ExpressionState? {
-        guard let range = trailingNumberRange(in: expression) else { return nil }
-        let number = String(expression[range])
+    private func replacingLoneLeadingZero(_ digit: String) -> String? {
+        guard let range = trailingNumberRange(in: draft.source) else { return nil }
+        let number = String(draft.source[range])
         guard number == "0" || number == "-0" || number == "−0" else { return nil }
-        guard let evaluationRange = trailingNumberRange(in: evaluationExpression),
-              evaluationExpression.distance(
-                  from: evaluationRange.lowerBound,
-                  to: evaluationRange.upperBound
-              ) == number.count
-        else { return nil }
-
-        // "-0" keeps its sign; only the zero itself is replaced.
-        let replacementRange = number == "0"
-            ? range
-            : range.lowerBound..<expression.index(before: range.upperBound)
-        let visible = expression.replacingCharacters(in: replacementRange, with: digit)
-        let evaluationReplacementRange = number == "0"
-            ? evaluationRange
-            : evaluationRange.lowerBound..<evaluationExpression.index(before: evaluationRange.upperBound)
-        let evaluation = evaluationExpression.replacingCharacters(
-            in: evaluationReplacementRange,
-            with: digit
-        )
-        return ExpressionState(visible: visible, evaluation: evaluation)
+        return String(draft.source[..<range.lowerBound]) + digit
     }
 
     private func endsWithOperatorOrOpeningParenthesis(_ value: String) -> Bool {

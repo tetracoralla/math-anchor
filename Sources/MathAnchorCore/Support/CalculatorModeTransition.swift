@@ -99,6 +99,9 @@ package final class CalculatorModeTransition: ObservableObject {
         calculatorStore: CalculatorStore,
         conversionStore: UnitConversionStore
     ) {
+        if calculatorStore.mode == .conversion && mode != .conversion {
+            conversionStore.deactivate()
+        }
         calculatorStore.selectMode(mode)
         if mode == .conversion {
             conversionStore.activate()

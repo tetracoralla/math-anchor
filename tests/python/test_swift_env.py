@@ -75,3 +75,22 @@ def test_invalid_explicit_sdk_does_not_fall_back_to_discovery(tmp_path: Path) ->
 
     assert completed.returncode != 0
     assert "Explicit macOS SDK does not exist" in completed.stderr
+
+
+def test_swift_test_uses_the_macos_framework_not_another_platform(tmp_path: Path) -> None:
+    developer = tmp_path / "Developer"
+    for platform in ("AppleTVOS", "MacOSX"):
+        root = developer / "Platforms" / f"{platform}.platform" / "Developer"
+        (root / "Library/Frameworks/Testing.framework").mkdir(parents=True)
+        (root / "usr/lib").mkdir(parents=True)
+        (root / "usr/lib/lib_TestingInterop.dylib").touch()
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    _write_executable(fake_bin / "swiftc", "#!/bin/sh\nexit 0\n")
+    _write_executable(fake_bin / "swift", "#!/bin/sh\nprintf '%s\\n' \"$@\"\n")
+    sdk = tmp_path / "MacOSX.sdk"
+    sdk.mkdir()
+    environment = dict(os.environ, PATH=f"{fake_bin}:{os.environ['PATH']}", DEVELOPER_DIR=str(developer), MATH_ANCHOR_SDKROOT=str(sdk))
+    completed = subprocess.run(["bash", "script/swift_test.sh"], cwd=ROOT, env=environment, capture_output=True, text=True, check=True)
+    assert "MacOSX.platform/Developer/Library/Frameworks" in completed.stdout
+    assert "AppleTVOS" not in completed.stdout

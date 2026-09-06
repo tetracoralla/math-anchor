@@ -57,6 +57,11 @@ An unregistered kind is accepted as bounded JSON so the runtime can return
 `unsupported` explicitly. It is not lexically mapped to the nearest operation,
 and its claim is not executed.
 
+A polynomial witness must pass the independent coefficient/digest checker
+and match this obligation's normalized left side, right side, and ordered
+variables. A valid certificate for a different statement returns `unknown`;
+its internal consistency cannot establish the caller's claim.
+
 Up to 16 shared assumption sets may be declared and referenced by id. Their
 canonical digest is placed in every relevant receipt entry. The runtime does
 not parse or prove caller-authored assumption text; the receipt marks it

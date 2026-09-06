@@ -248,6 +248,52 @@ def test_independent_certificate_rejection_cannot_be_promoted_to_checked(
     assert entry["detail"]["reason"] == "certificate_rejected"
 
 
+def test_valid_certificate_for_another_claim_cannot_check_this_obligation(monkeypatch: pytest.MonkeyPatch) -> None:
+    from math_anchor.sandbox import run_operation
+
+    other = run_operation("certificate.polynomial_identity", {
+        "left": "x", "right": "x", "variables": ["x", "y"],
+    })
+    assert other["status"] == "ok"
+    monkeypatch.setattr("math_anchor.obligations.run_operation", lambda *args, **kwargs: other)
+    feedback, receipt = check_obligation_set(_request(_polynomial("wrong", "0")))
+    assert feedback["status"] == "attention_required"
+    assert receipt["obligations"][0]["status"] == "unknown"
+    assert receipt["obligations"][0]["detail"]["reason"] == "certificate_rejected"
+
+
+@pytest.mark.parametrize("claim", [{"left": "x"}, {"left": "x", "right": "x"}, {"left": 1, "right": "x", "variables": ["x"]}])
+def test_malformed_registered_claim_is_rejected_before_execution(claim: dict[str, object]) -> None:
+    with pytest.raises(CalculatorError) as raised:
+        check_obligation_set(_request({"id": "identity", "kind": "polynomial_identity", "claim": claim}))
+    assert raised.value.code in {"E_INPUT", "E_LIMIT"}
+
+
+def test_certificate_binding_survives_malformed_claim_when_claim_validation_is_bypassed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from math_anchor.sandbox import run_operation
+
+    other = run_operation("certificate.polynomial_identity", {
+        "left": "x", "right": "x", "variables": ["x"],
+    })
+    assert other["status"] == "ok"
+    monkeypatch.setattr(
+        "math_anchor.obligations.validate_operation_arguments", lambda *args, **kwargs: None
+    )
+    monkeypatch.setattr("math_anchor.obligations.run_operation", lambda *args, **kwargs: other)
+    obligation = {
+        "id": "identity",
+        "kind": "polynomial_identity",
+        "claim": {"left": "x"},
+    }
+    feedback, receipt = check_obligation_set(_request(obligation))
+    assert feedback["status"] == "attention_required"
+    entry = receipt["obligations"][0]
+    assert entry["status"] == "unknown"
+    assert entry["detail"]["reason"] == "certificate_rejected"
+
+
 @pytest.mark.parametrize(
     "error_code",
     ["E_AST_BLOCK", "E_DOMAIN", "E_INPUT", "E_NAME", "E_SYNTAX", "E_UNIT"],

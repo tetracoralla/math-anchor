@@ -7,6 +7,34 @@ and Apple notarization record exist.
 
 ## Unreleased
 
+## 0.7.0 - 2026-09-06
+
+### Added
+
+- Added RAD/DEG selection to the scientific calculator, including inverse
+  trigonometric output and angle-preserving history restoration.
+- Unit conversion accepts exact rational text, allowing a converted value to
+  be reversed without decimal rounding loss.
+
+### Fixed
+
+- Keep exact values atomic across unary operations, binary continuation,
+  memory recall, and edits to later operands. Preserve open-function operands
+  and percent notation through editing and execution.
+- Prevent copying or swapping stale conversion output, cancel pending
+  conversion on mode changes, and recover from invalid rational input.
+- Bind polynomial certificates to the requested statement before reporting a
+  checked obligation, including defensive handling of malformed claims.
+- Preserve keyboard navigation in popovers, add scientific-key descriptions,
+  and select macOS testing frameworks when multiple Xcode platforms exist.
+
+### Changed
+
+- Architecture checks cover operation ownership and import boundaries instead
+  of file-length limits; review guidance keeps current user behavior primary.
+
+## Earlier source work through 0.6.0
+
 ### Added
 
 - Added the provider-native `math-anchor.obligation-set.v0.1` Python/CLI

@@ -185,7 +185,7 @@ proof that the Agent used or benefited from the result.
 
 ## Current isolated and direct-host findings
 
-The checked-in suites and experiments now target `0.6.0`. Existing
+The checked-in suites and experiments now target `0.7.0`. Existing
 model-backed observations below remain explicitly historical `0.5.0` results;
 they are not silently promoted to the new runtime identity.
 

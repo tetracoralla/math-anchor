@@ -16,6 +16,7 @@ from .certificate_checker import (
 )
 from .contracts import validate_operation_arguments
 from .errors import CalculatorError, error_payload
+from .expression_source import normalize_expression_source
 from .output_policy import MAX_OUTPUT_BYTES, MIN_OUTPUT_BYTES
 from .result_contracts.shared import ERROR_RESULT_SCHEMA
 from .sandbox import run_batch, run_operation
@@ -649,6 +650,31 @@ def _polynomial_entry(
     certificate = raw_result.get("certificate")
     try:
         check = verify_polynomial_identity_certificate(certificate)
+        # A valid witness for another statement says nothing about this claim.
+        # Bind the checker result to the caller's normalized source as well as
+        # checking the witness's own coefficients and internal digests. The
+        # claim shape is re-validated here because a faulted provider can
+        # return a success envelope without ever interpreting the claim.
+        claim = obligation["claim"]
+        left = claim.get("left")
+        right = claim.get("right")
+        variables = claim.get("variables")
+        if (
+            not isinstance(left, str)
+            or not isinstance(right, str)
+            or not isinstance(variables, list)
+            or not all(isinstance(name, str) for name in variables)
+        ):
+            raise CertificateValidationError(
+                "obligation claim does not define a polynomial statement"
+            )
+        expected_statement = {
+            "left": normalize_expression_source(left),
+            "right": normalize_expression_source(right),
+            "variables": [name.strip() for name in variables],
+        }
+        if certificate["statement"] != expected_statement:
+            raise CertificateValidationError("certificate does not match the requested statement")
     except CertificateValidationError as error:
         detail = {"reason": "certificate_rejected", "message": str(error)}
         return _entry(

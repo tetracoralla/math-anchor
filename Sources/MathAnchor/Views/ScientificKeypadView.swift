@@ -13,15 +13,15 @@ struct ScientificKeypadView: View {
                     .gridCellColumns(4)
             }
             GridRow {
-                key("x²", action: store.square)
-                key("x³", action: store.cube)
-                key("xʸ") { store.append("^") }
+                key("x²", accessibilityLabel: "Square", action: store.square)
+                key("x³", accessibilityLabel: "Cube", action: store.cube)
+                key("xʸ", accessibilityLabel: "Raise to a power") { store.append("^") }
                 function("sqrt", title: "√x")
                 key("π") { store.append("pi") }
                 key("e") { store.append("e") }
             }
             GridRow {
-                key("1/x", action: store.reciprocal)
+                key("1/x", accessibilityLabel: "Reciprocal", action: store.reciprocal)
                 function("sin")
                 function("cos")
                 function("tan")
@@ -49,7 +49,15 @@ struct ScientificKeypadView: View {
     }
 
     private func function(_ name: String, title: String? = nil) -> some View {
-        key(title ?? name) { store.applyFunction(name) }
+        let labels = [
+            "sqrt": "Square root", "sin": "Sine", "cos": "Cosine", "tan": "Tangent",
+            "asin": "Inverse sine", "acos": "Inverse cosine", "atan": "Inverse tangent",
+            "ln": "Natural logarithm", "log": "Base-10 logarithm", "exp": "Exponential",
+            "factorial": "Factorial", "abs": "Absolute value",
+            "sinh": "Hyperbolic sine", "cosh": "Hyperbolic cosine", "tanh": "Hyperbolic tangent",
+            "floor": "Round down to an integer", "ceil": "Round up to an integer",
+        ]
+        return key(title ?? name, accessibilityLabel: labels[name]) { store.applyFunction(name) }
     }
 
     private func key(

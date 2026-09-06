@@ -47,6 +47,18 @@ final class CalculatorKeyboardMonitor {
                 return event
             }
 
+            // Navigation belongs to the focused control/popover. Previously
+            // Tab, arrows and Space dismissed the menu before AppKit could
+            // move focus or activate its selection.
+            let characters = event.charactersIgnoringModifiers
+            let isEntryKey = [36, 76, 51, 117].contains(event.keyCode)
+                || (characters.map { $0.count == 1 && "0123456789.+-*/^()%=".contains($0) } ?? false)
+            guard isEntryKey else { return event }
+            if (store.isModePopoverPresented || conversionStore.activePopover != nil)
+                && [36, 76].contains(event.keyCode) {
+                return event
+            }
+
             // Any calculator keystroke closes an open popover so digits and
             // operators never edit the value invisibly behind it.
             if store.isModePopoverPresented || conversionStore.activePopover != nil {
@@ -73,7 +85,7 @@ final class CalculatorKeyboardMonitor {
                 break
             }
 
-            guard let characters = event.charactersIgnoringModifiers, characters.count == 1 else {
+            guard let characters, characters.count == 1 else {
                 return event
             }
             if store.mode == .conversion {

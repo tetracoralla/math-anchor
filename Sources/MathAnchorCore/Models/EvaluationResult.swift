@@ -9,7 +9,7 @@ package struct EvaluationResult: Equatable, Sendable {
     }
 
     package var displayValue: String {
-        guard let exact else { return approximate ?? "0" }
+        guard let exact else { return Self.trimmedForDisplay(approximate ?? "0") }
         if exact.range(of: #"^-?\d+$"#, options: .regularExpression) != nil {
             return exact
         }

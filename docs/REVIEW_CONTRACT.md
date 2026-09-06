@@ -1,9 +1,9 @@
 # Math Anchor review contract
 
-This contract tells a reviewer what current evidence is required before calling
-Math Anchor safe, Agent-usable, efficient, or release-ready. It is a review
-route, not a self-certifying checklist: a green script controls only the named
-facts it actually exercises.
+This contract records known product boundaries and useful review routes.
+Derive additional cases from current user tasks and reachable behavior; these
+headings do not define the product's ceiling. A green script establishes only
+the named facts it actually exercises, and does not authorize release.
 
 Read `product-model.md` and `agent-runtime.md` first. Review the current source,
 the generated MCP surface, the packaged runtime, and the macOS app as separate
@@ -43,6 +43,10 @@ benchmark number.
   app chrome. The human carrier may add conveniences such as the ECB-backed
   currency workflow, but mathematical calculations still go through the
   shared runtime. Currency is not a hidden fifth MCP tool.
+- `CalculatorExpression` owns the editable expression and bound result operands;
+  `ExpressionEditing` projects human percent/function/angle notation before
+  exact substitution. Avoid reconstructing executable values from display
+  strings or editing a percent expansion as if it were the visible operand.
 - `plugins/math-anchor/`, packaging scripts, and the installed plugin cache are
   distinct distribution carriers. Source tests do not prove an installed
   package starts, routes, or uses the intended bundled runtime.
@@ -122,7 +126,7 @@ benchmark number.
     validated on replay. Default feedback omits checked details, while the
     full receipt remains available outside model context.
 
-## Mandatory adversarial review matrix
+## Known adversarial seams
 
 For any changed seam, exercise the smallest relevant rows below in addition to
 the normal suite:
@@ -158,6 +162,19 @@ the normal suite:
   utility estimate;
 - macOS launch, keyboard-only calculation, history, human-only currency cache
   and stale/failure paths, app relaunch, and visible error recovery.
+- exact result -> unary operation / binary continuation / memory -> delete a
+  later operand -> evaluate; compound exact values must remain atomic;
+- open function -> sign/root/reciprocal on its current operand; RAD/DEG ->
+  inverse trig -> history -> restore, without reinterpreting bound results;
+- conversion result -> edit -> immediate copy/swap -> delayed success or
+  failure -> leave and re-enter Convert; an old visible result is not current;
+- a valid polynomial certificate for a different requested statement: its
+  internal digests and coefficients may be correct while claim binding fails.
+
+Architecture checks protect concrete ownership and registry reachability.
+File lengths and prescribed numbers of findings or examples are not quality
+criteria. Preserve behavioral oracles when refactoring notation; different
+parentheses alone are not a different mathematical result.
 
 Do not turn the numeric limits above into speculative scale claims. If a change
 targets high-frequency or batch performance, compare current source before and
