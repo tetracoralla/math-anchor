@@ -7,6 +7,13 @@ and Apple notarization record exist.
 
 ## Unreleased
 
+## 0.7.1 - 2026-09-06
+
+- Declare bounded, metadata-only MCP outcome and batch failure counts so Host
+  monitoring can distinguish partial results from transport completion.
+- Keep the four tools, mathematical results and partial-batch transport behavior
+  unchanged; do not store input expressions or output values in observations.
+
 ## 0.7.0 - 2026-09-06
 
 ### Added

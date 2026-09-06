@@ -150,3 +150,12 @@ See `docs/agent-evaluation.md` for the 30-task paired Coding Agent corpus, its
 independent Controller-side oracles, exact model-run confirmations, and the
 claim boundary between natural MCP discovery, deterministic direct-host value,
 and the full installed Plugin experience.
+
+### Metadata-only execution outcome
+
+MCP results also declare `io.openadam.executionOutcome.v1` in `_meta`: overall
+completed/partial/error/cancelled/unknown status, optional batch item counts, and
+stable error-code counts. It contains no expressions, result values or messages.
+A partial batch keeps `isError: false` and all ordered per-item results. Consumers
+must not equate a returned batch with all items succeeding. This metadata does
+not attest mathematical correctness or whether the Agent used the answer.

@@ -4,7 +4,7 @@
   "title": "Math Anchor 0.6 public mathematics smoke in Codex Terra",
   "purpose": "development-smoke",
   "suiteRef": {"id": "math-anchor.research-public-math-smoke", "version": "0.1.0"},
-  "targetRef": {"id": "math-anchor", "version": "0.7.0"},
+  "targetRef": {"id": "math-anchor", "version": "0.7.1"},
   "agent": {"provider": "openai", "model": "gpt-5.6-terra"},
   "harness": {"id": "codex-cli", "version": "0.152.0"},
   "repeats": 1,

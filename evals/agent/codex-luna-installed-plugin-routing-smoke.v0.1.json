@@ -4,7 +4,7 @@
   "title": "Math Anchor 0.6 isolated installed Plugin routing smoke in Codex Luna",
   "purpose": "development-smoke",
   "suiteRef": {"id": "math-anchor.routing-smoke", "version": "0.1.0"},
-  "targetRef": {"id": "math-anchor", "version": "0.7.0"},
+  "targetRef": {"id": "math-anchor", "version": "0.7.1"},
   "agent": {"provider": "openai", "model": "gpt-5.6-luna"},
   "harness": {"id": "codex-cli", "version": "0.152.0"},
   "repeats": 1,
