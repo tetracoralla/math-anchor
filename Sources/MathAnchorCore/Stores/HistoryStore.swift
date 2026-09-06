@@ -28,14 +28,16 @@ package struct HistoryStore {
     private func migratingLegacyExpression(_ entry: HistoryEntry) -> HistoryEntry {
         let original = entry.expression
         let visible = readableLegacyExpression(original)
-        guard visible != original else { return entry }
+        let angleUnit = entry.angleUnit ?? (AngleUnit.applies(to: original) ? .radians : nil)
+        guard visible != original || angleUnit != entry.angleUnit else { return entry }
         return HistoryEntry(
             id: entry.id,
             expression: visible,
             executionExpression: entry.executionExpression ?? original,
             exact: entry.exact,
             result: entry.result,
-            createdAt: entry.createdAt
+            createdAt: entry.createdAt,
+            angleUnit: angleUnit
         )
     }
 

@@ -7,11 +7,17 @@ cd "$ROOT_DIR"
 source "$ROOT_DIR/script/swift_env.sh"
 configure_swift_environment "$ROOT_DIR"
 
-DEVELOPER_ROOT="$(/usr/bin/xcode-select -p)"
-TESTING_FRAMEWORK="$(find "$DEVELOPER_ROOT" -type d -name Testing.framework -print -quit 2>/dev/null || true)"
-TESTING_INTEROP="$(find "$DEVELOPER_ROOT" -type f -name lib_TestingInterop.dylib -print -quit 2>/dev/null || true)"
+DEVELOPER_ROOT="${DEVELOPER_DIR:-$(/usr/bin/xcode-select -p)}"
+# Xcode contains testing frameworks for every platform. Taking the first
+# filesystem match can silently import tvOS/iOS modules into a macOS test.
+TESTING_ROOT="$DEVELOPER_ROOT/Platforms/MacOSX.platform/Developer"
+if [[ ! -d "$TESTING_ROOT" ]]; then
+  TESTING_ROOT="$DEVELOPER_ROOT"
+fi
+TESTING_FRAMEWORK="$TESTING_ROOT/Library/Frameworks/Testing.framework"
+TESTING_INTEROP="$TESTING_ROOT/usr/lib/lib_TestingInterop.dylib"
 
-if [[ -z "$TESTING_FRAMEWORK" || -z "$TESTING_INTEROP" ]]; then
+if [[ ! -d "$TESTING_FRAMEWORK" || ! -f "$TESTING_INTEROP" ]]; then
   swift test --package-path "$ROOT_DIR" "$@"
   exit 0
 fi

@@ -8,6 +8,21 @@ struct CalculatorHeaderView: View {
 
     var body: some View {
         HStack(spacing: 9) {
+            if store.mode == .scientific {
+                Picker("Angle unit", selection: Binding(
+                    get: { store.angleUnit },
+                    set: { store.selectAngleUnit($0) }
+                )) {
+                    ForEach(AngleUnit.allCases) { unit in
+                        Text(unit.symbol).tag(unit)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(width: 112)
+                .help("Trigonometric angles: radians or degrees")
+                .accessibilityLabel("Angle unit")
+            }
             Spacer()
 
             if store.mode != .conversion {

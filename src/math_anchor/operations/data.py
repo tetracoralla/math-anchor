@@ -124,7 +124,7 @@ def units_convert(arguments: dict[str, Any]) -> dict[str, Any]:
     require(
         isinstance(value, (int, float, str)) and not isinstance(value, bool),
         "E_INPUT",
-        "value must be a number or decimal string",
+        "value must be a number, decimal text, or exact rational text",
     )
     from_unit = string_arg(arguments, "fromUnit", max_length=128)
     to_unit = string_arg(arguments, "toUnit", max_length=128)
@@ -145,7 +145,7 @@ def units_convert(arguments: dict[str, Any]) -> dict[str, Any]:
         source_value: Fraction | float
         if exact_source:
             registry = _exact_unit_registry()
-            source_value = Fraction(Decimal(str(value)))
+            source_value = Fraction(str(value))
         else:
             registry = _float_unit_registry()
             source_value = float(value)
@@ -167,10 +167,10 @@ def units_convert(arguments: dict[str, Any]) -> dict[str, Any]:
                 units.calendar_unit_names(parsed_from) | units.calendar_unit_names(parsed_to),
                 calendar_policy,
             )
-            converted = registry.Quantity(float(value), parsed_from).to(parsed_to)
+            converted = registry.Quantity(float(source_value), parsed_from).to(parsed_to)
         except (pint.PintError, TypeError, ValueError) as error:
             raise CalculatorError("E_UNIT", f"unit conversion failed: {error}") from error
-    except (InvalidOperation, pint.PintError, ValueError) as error:
+    except (InvalidOperation, pint.PintError, ValueError, ZeroDivisionError) as error:
         raise CalculatorError("E_UNIT", f"unit conversion failed: {error}") from error
 
     exact_conversion = (

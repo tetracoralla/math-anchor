@@ -121,9 +121,9 @@ mathematical domains:
    back;
 3. add typed result-to-result bindings only from repeated workflows that need
    them; dependency order alone must not be described as data propagation;
-4. add a provider or certificate family only when at least three real repeated
-   workflows share one bounded meaning and the conformance corpus can falsify
-   it;
+4. add a provider or certificate family when a concrete repeated workflow needs
+   its bounded meaning and executable regressions can falsify an incorrect
+   implementation; a prescribed workflow count is not a product criterion;
 5. after the kernel and checkpoint route are stable, build a thin research
    audit pack from selected source material and publish a coverage table that
    keeps external theorem steps explicitly unchecked.

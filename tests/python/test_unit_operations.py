@@ -150,3 +150,17 @@ def test_unit_search_handler_rejects_unknown_category_directly() -> None:
     with pytest.raises(CalculatorError) as raised:
         units.search({"query": "hz", "category": "velocity"})
     assert raised.value.code == "E_INPUT"
+
+
+def test_exact_unit_result_can_be_used_for_a_round_trip() -> None:
+    forward = execute_direct("units.convert", {"value": "1", "fromUnit": "meter", "toUnit": "foot"})
+    backward = execute_direct("units.convert", {
+        "value": forward["exact"], "fromUnit": "foot", "toUnit": "meter",
+    })
+    assert backward["exact"] == "1"
+
+
+@pytest.mark.parametrize("value", ["1/0", "1/-2", "1/2+1", "__import__('os')", "1/" + "9" * 256])
+def test_rational_unit_input_rejects_invalid_or_unbounded_text(value: str) -> None:
+    with pytest.raises(CalculatorError):
+        execute_direct("units.convert", {"value": value, "fromUnit": "foot", "toUnit": "meter"})

@@ -7,6 +7,7 @@ package struct HistoryEntry: Codable, Identifiable, Equatable, Sendable {
     package let exact: String?
     package let result: String
     package let createdAt: Date
+    package let angleUnit: AngleUnit?
 
     package init(
         id: UUID = UUID(),
@@ -14,7 +15,8 @@ package struct HistoryEntry: Codable, Identifiable, Equatable, Sendable {
         executionExpression: String? = nil,
         exact: String?,
         result: String,
-        createdAt: Date = Date()
+        createdAt: Date = Date(),
+        angleUnit: AngleUnit? = nil
     ) {
         self.id = id
         self.expression = expression
@@ -22,5 +24,6 @@ package struct HistoryEntry: Codable, Identifiable, Equatable, Sendable {
         self.exact = exact
         self.result = result
         self.createdAt = createdAt
+        self.angleUnit = angleUnit
     }
 }

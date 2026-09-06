@@ -65,6 +65,7 @@ struct CalculatorKeyButton: View {
         .disabled(!isEnabled)
         .opacity(isEnabled ? 1 : 0.34)
         .accessibilityLabel(accessibilityLabel ?? title)
+        .help(accessibilityLabel ?? title)
     }
 
     private var keyFont: Font {

@@ -42,7 +42,7 @@ struct HistoryView: View {
                                 store.restore(entry)
                             } label: {
                                 VStack(alignment: .trailing, spacing: 4) {
-                                    Text(MathDisplayFormatting.expression(entry.expression))
+                                    Text(MathDisplayFormatting.expression(entry.expression) + (entry.angleUnit.map { " · \($0.symbol)" } ?? ""))
                                         .font(.system(size: 11, weight: .medium, design: .rounded))
                                         .foregroundStyle(CalculatorPalette.secondaryText)
                                         .lineLimit(1)
@@ -67,7 +67,8 @@ struct HistoryView: View {
                                 .contentShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
                             }
                             .buttonStyle(.plain)
-                            .accessibilityLabel("\(entry.expression) equals \(entry.result)")
+                            .accessibilityLabel("\(entry.expression) equals \(entry.result)" + (entry.angleUnit.map { ", \($0.title)" } ?? ""))
+                            .help(MathDisplayFormatting.expression(entry.expression) + " = " + entry.result)
                         }
                     }
                     .padding(12)

@@ -9,6 +9,7 @@ from typing import Any
 import sympy as sp
 
 from .errors import CalculatorError, require
+from .expression_source import normalize_expression_source
 
 
 _IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -62,17 +63,6 @@ _BINARY = {
     ast.Mod: lambda left, right: sp.Mod(left, right),
     ast.Pow: lambda left, right: left**right,
 }
-
-
-def normalize_expression_source(source: str) -> str:
-    return (
-        source.strip()
-        .replace("×", "*")
-        .replace("÷", "/")
-        .replace("−", "-")
-        .replace("π", "pi")
-        .replace("^", "**")
-    )
 
 
 class _Translator(ast.NodeVisitor):

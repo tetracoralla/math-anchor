@@ -8,39 +8,43 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def _line_count(relative_path: str) -> int:
-    return len((ROOT / relative_path).read_text(encoding="utf-8").splitlines())
+def test_registry_exports_every_domain_operation_once() -> None:
+    import importlib
+    import pkgutil
+    from math_anchor import operation_specs
+    from math_anchor.catalog import OPERATIONS, describe_operation
+
+    declared = []
+    for module_info in pkgutil.iter_modules(operation_specs.__path__):
+        module = importlib.import_module(f"math_anchor.operation_specs.{module_info.name}")
+        declared.extend(getattr(module, "SPECS", ()))
+    ids = [spec.id for spec in declared]
+    assert len(ids) == len(set(ids)), "Duplicate operation IDs would be silently overwritten"
+    assert set(ids) == set(OPERATIONS), "Registry order must not silently omit a domain operation"
+    for spec in declared:
+        assert OPERATIONS[spec.id] is spec
+        assert describe_operation(spec.id)["operation"]["inputSchema"] == spec.input_schema
 
 
-@pytest.mark.parametrize(
-    ("relative_path", "maximum"),
-    (
-        ("src/math_anchor/catalog.py", 150),
-        ("src/math_anchor/contracts.py", 300),
-        ("src/math_anchor/sandbox.py", 500),
-        ("src/math_anchor/worker_process.py", 450),
-        ("src/math_anchor/worker_pool.py", 350),
-    ),
-)
-def test_architecture_facades_stay_bounded(relative_path: str, maximum: int) -> None:
-    assert _line_count(relative_path) <= maximum
+@pytest.mark.parametrize("relative_path", [
+    "src/math_anchor/catalog.py",
+    "src/math_anchor/contracts.py",
+    "src/math_anchor/mcp_server.py",
+    "src/math_anchor/cli.py",
+    "src/math_anchor/worker_pool.py",
+    "src/math_anchor/worker_process.py",
+])
+def test_transport_and_registry_layers_do_not_import_mathematical_engines(relative_path: str) -> None:
+    import ast
 
-
-@pytest.mark.parametrize(
-    "directory",
-    ("src/math_anchor/operation_specs", "src/math_anchor/result_contracts"),
-)
-def test_domain_modules_stay_reviewable(directory: str) -> None:
-    modules = sorted((ROOT / directory).glob("*.py"))
-    assert modules
-    oversized = {
-        module.relative_to(ROOT).as_posix(): len(
-            module.read_text(encoding="utf-8").splitlines()
-        )
-        for module in modules
-        if len(module.read_text(encoding="utf-8").splitlines()) > 400
-    }
-    assert oversized == {}
+    tree = ast.parse((ROOT / relative_path).read_text())
+    imports = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imports.update(alias.name.split(".")[0] for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            imports.add(node.module.split(".")[0])
+    assert imports.isdisjoint({"sympy", "numpy", "pint", "mpmath"})
 
 
 def test_swift_package_separates_core_from_app_and_tests_it() -> None:

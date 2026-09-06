@@ -52,7 +52,16 @@ SPECS = (
         description="Use Pint for dimensional conversion and claim an exact result only when the source value and full conversion path are rational.",
         input_schema=_object(
             {
-                "value": {"oneOf": [{"type": "number"}, _DECIMAL_TEXT]},
+                "value": {"oneOf": [
+                    {"type": "number"},
+                    _DECIMAL_TEXT,
+                    {
+                        "type": "string",
+                        "pattern": r"^[+-]?[0-9]+/[1-9][0-9]*$",
+                        "maxLength": 256,
+                        "description": "Exact rational text with a positive denominator, including a previous conversion's exact result.",
+                    },
+                ]},
                 "fromUnit": {"type": "string", "maxLength": 128},
                 "toUnit": {"type": "string", "maxLength": 128},
                 "calendarPolicy": {
@@ -67,6 +76,7 @@ SPECS = (
         ),
         examples=(
             {"value": 72, "fromUnit": "watt", "toUnit": "kilowatt"},
+            {"value": "1250/381", "fromUnit": "foot", "toUnit": "meter"},
             {"value": 68, "fromUnit": "degF", "toUnit": "degC"},
             {"value": 100, "fromUnit": "megabit-per-second", "toUnit": "megabyte-per-second"},
         ),

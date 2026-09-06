@@ -4,7 +4,7 @@
   "title": "Math Anchor 0.6 Coding Agent utility estimate in Codex Luna",
   "purpose": "utility-estimate",
   "suiteRef": {"id": "math-anchor.coding-agent-utility", "version": "0.1.0"},
-  "targetRef": {"id": "math-anchor", "version": "0.6.0"},
+  "targetRef": {"id": "math-anchor", "version": "0.7.0"},
   "agent": {"provider": "openai", "model": "gpt-5.6-luna"},
   "harness": {"id": "codex-cli", "version": "0.152.0"},
   "repeats": 3,

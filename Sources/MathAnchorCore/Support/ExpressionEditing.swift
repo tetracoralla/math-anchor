@@ -1,6 +1,7 @@
 import Foundation
 
 package struct TrailingOperand {
+    package let prefix: String
     package let left: String?
     package let operatorToken: String?
     package let operand: String
@@ -18,36 +19,39 @@ package enum ExpressionEditing {
             .replacingOccurrences(of: "−", with: "-")
     }
 
-    package static func evaluationExpression(forVisible expression: String) -> String {
+    package static func evaluationExpression(forVisible expression: String, angleUnit: AngleUnit = .radians) -> String {
         guard !expression.isEmpty else { return "" }
         if expression.hasSuffix("%") {
             let withoutPercent = String(expression.dropLast())
             guard let split = trailingOperand(in: withoutPercent) else {
                 return normalizedForRuntime(withoutPercent) + "/100"
             }
-            let operand = evaluationExpression(forVisible: split.operand)
+            let operand = evaluationExpression(forVisible: split.operand, angleUnit: angleUnit)
             guard let left = split.left, let operatorToken = split.operatorToken else {
-                return "(\(operand))/100"
+                // The prefix carries any still-open group, exactly as
+                // `replacingTrailingOperand` does for ordinary operand edits.
+                return split.prefix + "(\(operand))/100"
             }
-            let normalizedLeft = evaluationExpression(forVisible: left)
+            let normalizedLeft = evaluationExpression(forVisible: left, angleUnit: angleUnit)
             let normalizedOperator = normalizedOperator(operatorToken)
             if normalizedOperator == "+" || normalizedOperator == "-" {
-                return normalizedLeft
+                return split.prefix
+                    + normalizedLeft
                     + normalizedOperator
                     + "((\(normalizedLeft))*(\(operand))/100)"
             }
-            return normalizedLeft + normalizedOperator + "((\(operand))/100)"
+            return split.prefix + normalizedLeft + normalizedOperator + "((\(operand))/100)"
         }
 
         guard let split = trailingOperand(in: expression),
               let left = split.left,
               let operatorToken = split.operatorToken
         else {
-            return translatedOperand(expression)
+            return translatedOperand(expression, angleUnit: angleUnit)
         }
-        return evaluationExpression(forVisible: left)
+        return evaluationExpression(forVisible: left, angleUnit: angleUnit)
             + normalizedOperator(operatorToken)
-            + evaluationExpression(forVisible: split.operand)
+            + evaluationExpression(forVisible: split.operand, angleUnit: angleUnit)
     }
 
     /// The familiar `log` key means base 10; the core's `log` name is natural
@@ -59,15 +63,25 @@ package enum ExpressionEditing {
     /// Translates a trailing operand that carries no top-level operator.
     /// Closed groups and named calls descend so percent notation anywhere in
     /// the visible expression reaches its executable expansion.
-    private static func translatedOperand(_ operand: String) -> String {
+    private static func translatedOperand(_ operand: String, angleUnit: AngleUnit) -> String {
+        if operand.hasPrefix("-") || operand.hasPrefix("+") || operand.hasPrefix("−") {
+            return normalizedOperator(String(operand.prefix(1)))
+                + translatedOperand(String(operand.dropFirst()), angleUnit: angleUnit)
+        }
         if let inner = closedGroupInner(operand) {
-            return "(" + evaluationExpression(forVisible: inner) + ")"
+            return "(" + evaluationExpression(forVisible: inner, angleUnit: angleUnit) + ")"
         }
         if let call = namedCall(operand) {
-            return runtimeFunctionName(call.name)
-                + "("
-                + evaluationExpression(forVisible: call.argument)
-                + ")"
+            let argument = evaluationExpression(forVisible: call.argument, angleUnit: angleUnit)
+            if angleUnit == .degrees {
+                if ["sin", "cos", "tan"].contains(call.name) {
+                    return "\(call.name)((\(argument))*pi/180)"
+                }
+                if ["asin", "acos", "atan"].contains(call.name) {
+                    return "(\(call.name)(\(argument))*180/pi)"
+                }
+            }
+            return runtimeFunctionName(call.name) + "(" + argument + ")"
         }
         return normalizedForRuntime(operand)
     }
@@ -126,10 +140,10 @@ package enum ExpressionEditing {
         let operatorToken = split.operatorToken.map(normalizedOperator)
 
         if let left = split.left, operatorToken == "+" {
-            return left + "-" + split.operand
+            return split.prefix + left + "-" + split.operand
         }
         if let left = split.left, operatorToken == "-" {
-            return left + "+" + split.operand
+            return split.prefix + left + "+" + split.operand
         }
 
         let toggledOperand: String
@@ -147,6 +161,7 @@ package enum ExpressionEditing {
         // inside "(5+3" address the pending `3` exactly as they would at the
         // top level instead of swallowing the whole open parenthetical.
         let scanStart = innermostGroupStart(in: expression)
+        let prefix = String(expression[..<scanStart])
         var depth = 0
         var lastOperatorRange: Range<String.Index>?
         var lastOperatorToken: String?
@@ -193,12 +208,15 @@ package enum ExpressionEditing {
         }
 
         guard let range = lastOperatorRange, let operatorToken = lastOperatorToken else {
-            return TrailingOperand(left: nil, operatorToken: nil, operand: expression)
+            let operand = String(expression[scanStart...])
+            guard !operand.isEmpty else { return nil }
+            return TrailingOperand(prefix: prefix, left: nil, operatorToken: nil, operand: operand)
         }
         let operandStart = range.upperBound
         guard operandStart < expression.endIndex else { return nil }
         return TrailingOperand(
-            left: String(expression[..<range.lowerBound]),
+            prefix: prefix,
+            left: String(expression[scanStart..<range.lowerBound]),
             operatorToken: operatorToken,
             operand: String(expression[operandStart...])
         )
@@ -207,9 +225,9 @@ package enum ExpressionEditing {
     package static func replacingTrailingOperand(in expression: String, with replacement: String) -> String? {
         guard let split = trailingOperand(in: expression) else { return nil }
         guard let left = split.left, let operatorToken = split.operatorToken else {
-            return replacement
+            return split.prefix + replacement
         }
-        return left + operatorToken + replacement
+        return split.prefix + left + operatorToken + replacement
     }
 
     /// Index just past the last "(" with no matching ")". Scanning backward,

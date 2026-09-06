@@ -1,6 +1,6 @@
 {
   "name": "math-anchor-obligation-runtime",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "A scoped mathematical obligation and direct-operation runtime backed by Math Anchor's deterministic providers.",
   "author": {
     "name": "openAdam",

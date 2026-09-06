@@ -16,6 +16,7 @@ swiftc \
   -module-cache-path "$ROOT_DIR/.build/ModuleCache" \
   -parse-as-library \
   "$ROOT_DIR/Sources/MathAnchorCore/Models/CalculatorMode.swift" \
+  "$ROOT_DIR/Sources/MathAnchorCore/Models/AngleUnit.swift" \
   "$ROOT_DIR/Sources/MathAnchorCore/Models/HistoryEntry.swift" \
   "$ROOT_DIR/Sources/MathAnchorCore/Models/EvaluationResult.swift" \
   "$ROOT_DIR/Sources/MathAnchorCore/Models/UnitDefinition.swift" \
@@ -27,6 +28,7 @@ swiftc \
   "$ROOT_DIR/Sources/MathAnchorCore/Services/ClipboardWriting.swift" \
   "$ROOT_DIR/Sources/MathAnchorCore/Services/MathRuntimeService.swift" \
   "$ROOT_DIR/Sources/MathAnchorCore/Support/ExpressionEditing.swift" \
+  "$ROOT_DIR/Sources/MathAnchorCore/Support/CalculatorExpression.swift" \
   "$ROOT_DIR/Sources/MathAnchorCore/Support/ConversionDisplayFormatting.swift" \
   "$ROOT_DIR/Sources/MathAnchorCore/Support/MathDisplayFormatting.swift" \
   "$ROOT_DIR/Sources/MathAnchor/Support/CalculatorKeyboardMonitor.swift" \

@@ -35,6 +35,8 @@ package final class UnitConversionStore: ObservableObject {
     private var scheduledTask: Task<Void, Never>?
     private var progressTask: Task<Void, Never>?
     private var inputComesFromResult = false
+    private var inputExecutionValue: String?
+    private var exactOutput: String?
     private var completedSourceUnit: UnitDefinition?
     private var completedTargetUnit: UnitDefinition?
     private let popoverClock = ContinuousClock()
@@ -74,6 +76,10 @@ package final class UnitConversionStore: ObservableObject {
         sourceUnit.isCurrency
     }
 
+    package var hasCurrentResult: Bool {
+        !isConverting && output != "—" && errorMessage == nil
+    }
+
     package var inputForDisplay: String {
         inputComesFromResult ? ConversionDisplayFormatting.value(input) : input
     }
@@ -83,9 +89,24 @@ package final class UnitConversionStore: ObservableObject {
         scheduleConversion(immediate: true)
     }
 
+    package func deactivate() {
+        scheduledTask?.cancel()
+        scheduledTask = nil
+        revision &+= 1
+        activeRequestID = nil
+        activePopover = nil
+        finishProgress()
+        if isConverting {
+            output = "—"
+            exactOutput = nil
+            distinctExactResult = nil
+        }
+        isConverting = false
+    }
+
     package func appendDigit(_ digit: String) {
         guard digit.count == 1, digit.first?.isNumber == true else { return }
-        prepareInputForEditing()
+        prepareInputForEditing(startingNewValue: true)
         guard input.count < 18 else { return }
         if input == "0" {
             input = digit
@@ -98,15 +119,17 @@ package final class UnitConversionStore: ObservableObject {
     }
 
     package func appendDecimal() {
-        prepareInputForEditing()
+        prepareInputForEditing(startingNewValue: true)
         guard !input.contains("."), input.count < 18 else { return }
         input.append(".")
         scheduleConversion()
     }
 
     package func toggleSign() {
-        prepareInputForEditing()
         guard input != "0" else { return }
+        if let exact = inputExecutionValue {
+            inputExecutionValue = exact.hasPrefix("-") ? String(exact.dropFirst()) : "-" + exact
+        }
         if input.hasPrefix("-") {
             input.removeFirst()
         } else {
@@ -128,6 +151,7 @@ package final class UnitConversionStore: ObservableObject {
     package func clear() {
         input = "0"
         inputComesFromResult = false
+        inputExecutionValue = nil
         scheduleConversion(immediate: true)
     }
 
@@ -135,6 +159,9 @@ package final class UnitConversionStore: ObservableObject {
         guard unit != sourceUnit else { return }
         activePopover = nil
         sourceUnit = unit
+        // Currency accepts a decimal amount and always returns a reference
+        // approximation. A physical rational binding is not currency syntax.
+        if unit.isCurrency { inputExecutionValue = nil }
         if targetUnit.category != unit.category || targetUnit == unit {
             targetUnit = HumanUnitCatalog.alternate(to: unit)
         }
@@ -150,12 +177,15 @@ package final class UnitConversionStore: ObservableObject {
 
     package func swapUnits() {
         guard sourceUnit.category == targetUnit.category else { return }
+        let usesResult = hasCurrentResult
+        let resultExact = exactOutput
         let previousSource = sourceUnit
         sourceUnit = targetUnit
         targetUnit = previousSource
-        if output != "—", errorMessage == nil {
+        if usesResult {
             input = output
             inputComesFromResult = true
+            inputExecutionValue = resultExact
         }
         scheduleConversion(immediate: true)
     }
@@ -191,12 +221,12 @@ package final class UnitConversionStore: ObservableObject {
     }
 
     package func copyResult() {
-        guard output != "—", errorMessage == nil else { return }
+        guard hasCurrentResult else { return }
         clipboard.write(output)
     }
 
     package func copyExactResult() {
-        guard let distinctExactResult else { return }
+        guard hasCurrentResult, let distinctExactResult else { return }
         clipboard.write(distinctExactResult)
     }
 
@@ -213,9 +243,11 @@ package final class UnitConversionStore: ObservableObject {
         activeRequestID = requestID
         isConverting = true
         errorMessage = nil
+        distinctExactResult = nil
+        exactOutput = nil
         let submittedSource = sourceUnit
         let submittedTarget = targetUnit
-        // A value-only edit keeps the previous result, exact value, and rate
+        // A value-only edit keeps the previous display result and rate
         // metadata on screen until the replacement lands; wiping them per
         // keystroke turned every key into an old-value → "…" → new-value
         // flash and churned the currency footer through UPDATING.
@@ -287,6 +319,7 @@ package final class UnitConversionStore: ObservableObject {
                     self.finishProgress()
                     self.output = result.displayValue
                     self.distinctExactResult = result.distinctExactValue
+                    self.exactOutput = result.exact
                 }
                 self.completedSourceUnit = submittedSource
                 self.completedTargetUnit = submittedTarget
@@ -296,6 +329,8 @@ package final class UnitConversionStore: ObservableObject {
                 self.isConverting = false
                 self.finishProgress()
                 self.output = "—"
+                self.distinctExactResult = nil
+                self.exactOutput = nil
                 self.completedSourceUnit = nil
                 self.completedTargetUnit = nil
                 if submittedForCurrency {
@@ -312,13 +347,18 @@ package final class UnitConversionStore: ObservableObject {
     }
 
     private var normalizedInput: String {
-        input.hasSuffix(".") ? String(input.dropLast()) : input
+        inputExecutionValue ?? (input.hasSuffix(".") ? String(input.dropLast()) : input)
     }
 
-    private func prepareInputForEditing() {
+    private func prepareInputForEditing(startingNewValue: Bool = false) {
         guard inputComesFromResult else { return }
-        input = ConversionDisplayFormatting.value(input)
+        let visible = ConversionDisplayFormatting.value(input)
+        // A digit starts a new entry after swapping a result. Delete can edit
+        // an ordinary decimal; exponent notation is one completed value, not
+        // an editable exponent suffix that can silently change its magnitude.
+        input = startingNewValue || visible.lowercased().contains("e") ? "0" : visible
         inputComesFromResult = false
+        inputExecutionValue = nil
     }
 
     private func isCurrent(_ id: UUID, revision: Int) -> Bool {

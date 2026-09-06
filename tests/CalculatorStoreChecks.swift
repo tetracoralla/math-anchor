@@ -302,6 +302,9 @@ struct CalculatorStoreChecks {
         check(!resultStore.isShowingResult, "continuation returns to single-line input state")
         check(resultStore.distinctExactResult == nil, "editing clears the prior exact-result affordance")
         resultStore.memoryAdd()
+        check(resultStore.memory == nil, "memory ignores an unfinished operand")
+        resultStore.append("2")
+        resultStore.memoryAdd()
         check(resultStore.memory != nil, "memory add")
 
         let undoResultStore = CalculatorStore(
@@ -705,7 +708,7 @@ struct CalculatorStoreChecks {
         await waitForEvaluation(liveParenPercentStore)
         check(liveParenPercentStore.display == "5.15", "percent inside a group keeps familiar additive semantics")
         check(
-            liveParenPercentStore.history.first?.executionExpression == "(5+(((5)*(3)/100)))",
+            liveParenPercentStore.history.first?.executionExpression == "(5+((5)*(3)/100))",
             "percent inside a group stores a balanced executable expression"
         )
 
@@ -800,7 +803,7 @@ struct CalculatorStoreChecks {
         await waitForEvaluation(liveUnaryPercentStore)
         check(liveUnaryPercentStore.display == "20", "multiplicative percent scales the operand")
         check(
-            liveUnaryPercentStore.history.first?.executionExpression == "200*(10)/100",
+            liveUnaryPercentStore.history.first?.executionExpression == "200*((10)/100)",
             "multiplicative percent stores the operand-scaled executable expansion"
         )
         liveUnaryPercentStore.clear()

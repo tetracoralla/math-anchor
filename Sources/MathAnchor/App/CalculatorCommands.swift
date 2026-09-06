@@ -26,6 +26,7 @@ struct CalculatorCommands: Commands {
                 }
             }
                 .keyboardShortcut("c", modifiers: [.command])
+                .disabled(store.mode == .conversion && !conversionStore.hasCurrentResult)
             Button("Copy Exact Value") {
                 if store.mode == .conversion {
                     conversionStore.copyExactResult()

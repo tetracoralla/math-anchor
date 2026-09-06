@@ -34,6 +34,7 @@ struct ConversionDisplayView: View {
             )
             .contextMenu {
                 Button("Copy Result", action: store.copyResult)
+                    .disabled(!store.hasCurrentResult)
                 if store.distinctExactResult != nil {
                     Button("Copy Exact Value", action: store.copyExactResult)
                 }
