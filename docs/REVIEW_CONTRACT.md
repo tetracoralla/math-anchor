@@ -279,3 +279,12 @@ Every defect includes a reproducer, affected carrier/seam, impact under normal
 and burst use, and the smallest owning regression. List any untested carrier or
 capacity assumption explicitly; do not promote it through aggregate green
 checks.
+
+
+For installed-runtime or reliability reviews, use current Agent Host usage and
+version/error history when that installation supplies it, alongside source and
+reproduced flows. Preserve the report window, collection freshness, diagnostic
+purpose and missing outcome coverage. Historic execution or script references
+cannot by themselves prove correct answers, adoption or missed opportunities.
+Do not make Host installation or model-backed evaluation a prerequisite for an
+otherwise source-only task.

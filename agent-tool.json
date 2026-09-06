@@ -1,7 +1,7 @@
 {
   "schemaVersion": "openadam.agent-tool-project.v0.1",
   "id": "math-anchor",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "name": "Math Anchor",
   "summary": "Embeddable mathematical obligations and deterministic calculations with scoped receipts and a compact four-tool MCP compatibility carrier.",
   "documents": {
@@ -79,7 +79,7 @@
       "args": ["script/package_agent_component.sh"],
       "timeoutMs": 900000
     },
-    "artifact": "build/openadam/math-anchor-obligation-runtime-0.7.0.tar.gz",
+    "artifact": "build/openadam/math-anchor-obligation-runtime-0.7.1.tar.gz",
     "integration": "integrations/agent-host/tool.integration.json",
     "probes": [
       {

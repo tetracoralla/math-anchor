@@ -165,7 +165,8 @@ async def math_batch(
             items,
             timeout_ms=timeoutMs,
             max_output_bytes=maxOutputBytes,
-        )
+        ),
+        batch=True,
     )
 
 
@@ -272,6 +273,7 @@ def _tool_result(
     result: dict[str, Any],
     *,
     operation_label: str | None = None,
+    batch: bool = False,
 ) -> CallToolResult:
     failed = result.get("status") == "error"
     if failed:
@@ -290,7 +292,45 @@ def _tool_result(
         # call for a successful one. A partial batch is a valid batch result;
         # its per-item envelopes carry their own statuses.
         isError=failed,
+        _meta={"io.openadam.executionOutcome.v1": _execution_outcome(result, batch=batch)},
     )
+
+
+def _execution_outcome(result: dict[str, Any], *, batch: bool) -> dict[str, Any]:
+    """Declare runtime outcome without exporting calculation inputs or values."""
+    status = {"ok": "completed", "partial": "partial", "error": "error"}.get(
+        result.get("status"), "completed" if "status" not in result else "unknown"
+    )
+    errors: dict[str, int] = {}
+    items = result.get("results") if batch else None
+    counts = None
+    if isinstance(items, list):
+        counts = dict(total=len(items), completed=0, errors=0, cancelled=0, unknown=0)
+        for item in items:
+            if not isinstance(item, dict):
+                counts["unknown"] += 1
+                continue
+            item_status = item.get("status")
+            code = item.get("error", {}).get("code") if item_status == "error" else None
+            category = (
+                "completed" if item_status == "ok" else
+                "cancelled" if code == "E_CANCELLED" else
+                "errors" if item_status == "error" else "unknown"
+            )
+            counts[category] += 1
+            if code:
+                errors[code] = errors.get(code, 0) + 1
+    elif status == "error":
+        code = result.get("error", {}).get("code")
+        if code:
+            errors[code] = 1
+        if code == "E_CANCELLED":
+            status = "cancelled"
+    return {
+        "status": status,
+        "items": counts,
+        "errorCodes": [{"code": code, "count": count} for code, count in sorted(errors.items())],
+    }
 
 
 def _install_generated_tool_contracts() -> None:
