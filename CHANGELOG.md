@@ -7,6 +7,10 @@ and Apple notarization record exist.
 
 ## Unreleased
 
+- Added an in-tree **research proposal** for rational-polynomial finite sums
+  (`research/polynomial_finite_sum_proposal/`). It is not a public operation,
+  not a fifth MCP tool, and not a supported domain module.
+
 ## 0.7.1 - 2026-09-06
 
 - Declare bounded, metadata-only MCP outcome and batch failure counts so Host
