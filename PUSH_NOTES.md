@@ -4,6 +4,11 @@ This checkout has **no GitHub authentication** in this environment, so commits
 were left on the local branch. HEAD at start of work:
 `1be6afe70b11c7434a51356c805444eafa12ed80` on `main`.
 
+Local commits on `chore/ai-for-math-a0a1-telescoping`:
+
+- `66dfb6b` Document A0 research notes for a polynomial finite-sum vertical.
+- `ec9504d` Add A0/A1 polynomial finite-sum proposal runner and regressions.
+
 ## Branch
 
 ```sh
