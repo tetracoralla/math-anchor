@@ -21,6 +21,8 @@ steps, and reusable intermediates.
 - **Repeated steps:** construct `G`, expand difference, substitute bounds.
 - **Intermediates:** `G(k)=k(k-1)(2k-1)/6`, difference certificate, `G(11)-G(1)`.
 - **A1 status:** implemented (`examples/sum-k-squared-1-to-10.json`).
+- **A2 status:** extraction source for experimental pack
+  `math-anchor.research.method-pack.polynomial-antidifference-gosper.v0`.
 
 ### T2. Sum of first n integers
 
@@ -136,3 +138,7 @@ Reusable intermediates from T1–T4, if extracted later, are:
 A second task that is not a variable rename should, for example, take T9 after
 an explicit binomial-to-polynomial rewrite, or a different polynomial such as
 `k^3`, not `k^2` from 1 to 11.
+
+A2 chose `sum_{k=1}^{20} k^3` as the held-out task and kept `1/k` as the
+inapplicable rejection. T9 after `C(k,2)=k(k-1)/2` is an extra in-domain apply
+with the binomial rewrite left conditional. See [a2-method-pack.md](a2-method-pack.md).

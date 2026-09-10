@@ -10,6 +10,8 @@ and Apple notarization record exist.
 - Added an in-tree **research proposal** for rational-polynomial finite sums
   (`research/polynomial_finite_sum_proposal/`). It is not a public operation,
   not a fifth MCP tool, and not a supported domain module.
+- Added an experimental A2 **method pack** extracted from that T1 sample
+  (`research/method_packs/`). It is not a public Capability or Procedure.
 
 ## 0.7.1 - 2026-09-06
 

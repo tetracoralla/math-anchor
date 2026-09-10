@@ -133,7 +133,8 @@ A first in-tree research vertical for rational-polynomial finite sums lives in
 `docs/research/ai-for-math/`. It is a proposal runner, not a productized domain
 pack: construction reuses SymPy Gosper/summation, identity checking reuses the
 existing polynomial certificate path, and the telescoping combination rule is
-hand-provided infrastructure.
+hand-provided infrastructure. An experimental A2 method pack extracted from that
+T1 sample lives in `research/method_packs/` and is not a public Capability.
 
 Promotion to a high-frequency or research-utility claim requires current
 comparative results, not a green provider suite. The working stop conditions
