@@ -19,6 +19,7 @@ Branch: `chore/ai-for-math-a2-method-pack` (cut from the A0+A1 tip).
 Local A2 commits:
 
 - `903b828` Add experimental A2 method pack for polynomial antidifferences.
+- `a96711d` Document A2 method-pack extraction, reuse, and gaps.
 
 ```sh
 git checkout chore/ai-for-math-a2-method-pack
