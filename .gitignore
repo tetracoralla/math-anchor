@@ -12,3 +12,5 @@ plugins/math-anchor/runtime/
 integrations/lean/.lake/
 integrations/lean-reference/.lake/
 .DS_Store
+.v2c/
+.video_agent/
