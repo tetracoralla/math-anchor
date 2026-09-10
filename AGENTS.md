@@ -2,11 +2,11 @@
 
 Read `docs/product-model.md` and `docs/REVIEW_CONTRACT.md` before changing or reviewing the product surface.
 
-A plain owner request to review, audit, 审核, or 复核 automatically invokes the
-complete review contract in read-only mode unless fixes are also requested.
-Treat it as the minimum scope, not a ceiling, and finish with `tools-dev
-workspace escalations` for shared contracts, installation, or resource risks;
-do not ask the owner to supply a separate checklist.
+For a requested review, read `docs/REVIEW_CONTRACT.md` within the requested
+scope and follow the relevant source and dependencies. It records known risks,
+not an exhaustive search plan. Report concrete cross-repository implications
+when found. Review is read-only unless fixes are also requested; this entrypoint
+does not dispatch another reviewer.
 
 - Keep the human macOS app and the Agent interface on one calculation core.
 - Keep Agent discovery, schemas, runtime metadata, and protocol concepts out of the human calculator UI.
