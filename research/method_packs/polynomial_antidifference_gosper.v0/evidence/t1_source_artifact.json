@@ -1,0 +1,28 @@
+{
+  "extractionTaskId": "T1",
+  "taskPath": "research/polynomial_finite_sum_proposal/examples/sum-k-squared-1-to-10.json",
+  "summand": "k**2",
+  "variable": "k",
+  "lower": 1,
+  "upper": 10,
+  "constructor": "sympy.concrete.gosper.gosper_sum",
+  "antidifference": "(1/3)*k**3 - (1/2)*k**2 + (1/6)*k",
+  "value": {
+    "exact": "385",
+    "numerator": 385,
+    "denominator": 1
+  },
+  "identity": {
+    "status": "checked",
+    "assuranceLevel": "exact_symbolic",
+    "certificateDigest": "sha256:4deb7d8cba36be33b749ca8099fe9ae5dfb41a6cc51beed7472e6f8a35464fd5",
+    "checker": {
+      "system": "math-anchor-stdlib-polynomial-checker",
+      "version": "1.0.0"
+    },
+    "claimDigest": "sha256:c231623432d58cef0f93721c0c9caa230b3e79171c2b8af3385ea4ad6de66a8b"
+  },
+  "formalKernelChecked": false,
+  "combinationRule": "math-anchor.research.discrete-telescoping-combination.v0",
+  "combinationRuleAgentExtracted": false
+}

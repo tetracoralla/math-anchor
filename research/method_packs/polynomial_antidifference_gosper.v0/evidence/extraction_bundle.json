@@ -1,0 +1,215 @@
+{
+  "schemaVersion": "math-anchor.research.experimental-method-pack.v0",
+  "packId": "math-anchor.research.method-pack.polynomial-antidifference-gosper.v0",
+  "packVersion": "0.1.0-experimental",
+  "t1SourceArtifact": {
+    "extractionTaskId": "T1",
+    "taskPath": "research/polynomial_finite_sum_proposal/examples/sum-k-squared-1-to-10.json",
+    "summand": "k**2",
+    "variable": "k",
+    "lower": 1,
+    "upper": 10,
+    "constructor": "sympy.concrete.gosper.gosper_sum",
+    "antidifference": "(1/3)*k**3 - (1/2)*k**2 + (1/6)*k",
+    "value": {
+      "exact": "385",
+      "numerator": 385,
+      "denominator": 1
+    },
+    "identity": {
+      "status": "checked",
+      "assuranceLevel": "exact_symbolic",
+      "certificateDigest": "sha256:4deb7d8cba36be33b749ca8099fe9ae5dfb41a6cc51beed7472e6f8a35464fd5",
+      "checker": {
+        "system": "math-anchor-stdlib-polynomial-checker",
+        "version": "1.0.0"
+      },
+      "claimDigest": "sha256:c231623432d58cef0f93721c0c9caa230b3e79171c2b8af3385ea4ad6de66a8b"
+    },
+    "formalKernelChecked": false,
+    "combinationRule": "math-anchor.research.discrete-telescoping-combination.v0",
+    "combinationRuleAgentExtracted": false
+  },
+  "candidate": {
+    "id": "math-anchor.research.method-pack.polynomial-antidifference-gosper.v0",
+    "extractionTaskId": "T1",
+    "proposedRule": "From a univariate QQ-polynomial summand p(k), construct an antidifference G via SymPy Gosper (summation fallback), independently check G(k+1)-G(k)=p(k) as a polynomial identity, then combine integer endpoints with the hand-provided telescoping infrastructure rule.",
+    "observedFromT1": {
+      "summand": "k**2",
+      "constructor": "sympy.concrete.gosper.gosper_sum",
+      "antidifference": "(1/3)*k**3 - (1/2)*k**2 + (1/6)*k",
+      "identityStatus": "checked",
+      "value": {
+        "exact": "385",
+        "numerator": 385,
+        "denominator": 1
+      }
+    },
+    "notExtracted": {
+      "id": "math-anchor.research.discrete-telescoping-combination.v0",
+      "origin": "hand-provided-infrastructure",
+      "agentExtracted": false,
+      "reason": "hand-provided combination rule is A1 infrastructure, not A2 novelty"
+    },
+    "novelty": {
+      "status": "known-method-adaptation",
+      "autoClaimed": false,
+      "note": "Gosper, Faulhaber for p(k)=k^m, SymPy gosper_sum/summation, and the Math Anchor polynomial certificate checker already exist. This pack adapts them into a reusable experimental interface."
+    },
+    "hiddenModelReasoning": false
+  },
+  "dedup": {
+    "libraries": [
+      {
+        "name": "sympy.concrete.gosper.gosper_sum",
+        "version": "1.14.0",
+        "present": true,
+        "sample": "k*(k - 1)*(2*k - 1)/6",
+        "decision": "reuse-for-construction-do-not-reimplement"
+      },
+      {
+        "name": "sympy.summation",
+        "version": "1.14.0",
+        "sample": "385",
+        "decision": "baseline-value-only-not-a-certificate"
+      },
+      {
+        "name": "math_anchor.certificate_checker",
+        "format": "math-anchor.polynomial-identity.v1",
+        "system": "math-anchor-stdlib-polynomial-checker",
+        "version": "1.0.0",
+        "decision": "reuse-for-independent-identity-check"
+      },
+      {
+        "name": "Faulhaber formula for sum k^m",
+        "decision": "classical-closed-forms-not-claimed-as-new"
+      },
+      {
+        "name": "math-anchor.research.discrete-telescoping-combination.v0",
+        "origin": "hand-provided-infrastructure",
+        "decision": "infrastructure-not-agent-extracted"
+      }
+    ],
+    "noveltyStatus": "known-method-adaptation",
+    "newMathematicsClaimed": false,
+    "layerValueIfAny": "checked evidence pipeline and a retrieve/instantiate interface; SymPy already computes the number"
+  },
+  "domainAndNegatives": {
+    "note": "Numerical or domain rejection can refute a too-wide claim. It does not prove the pack for every in-scope polynomial.",
+    "cases": [
+      {
+        "id": "N3-harmonic",
+        "summand": "1/k",
+        "variable": "k",
+        "lower": 1,
+        "upper": 3,
+        "expectCode": "E_UNSUPPORTED",
+        "happened": "rejected",
+        "code": "E_UNSUPPORTED",
+        "message": "summand is not a rational-coefficient polynomial with constant denominators only",
+        "passed": true
+      },
+      {
+        "id": "N3-special-function",
+        "summand": "sin(k)",
+        "variable": "k",
+        "lower": 1,
+        "upper": 3,
+        "expectCode": "E_UNSUPPORTED",
+        "happened": "rejected",
+        "code": "E_UNSUPPORTED",
+        "message": "summand is not a rational-coefficient polynomial with constant denominators only",
+        "passed": true
+      },
+      {
+        "id": "N2-reversed-bounds",
+        "summand": "k^2",
+        "variable": "k",
+        "lower": 5,
+        "upper": 1,
+        "expectCode": "E_DOMAIN",
+        "happened": "rejected",
+        "code": "E_DOMAIN",
+        "message": "reversed bounds with upper < lower - 1 are unsupported; empty sums are only the case upper == lower - 1",
+        "passed": true
+      }
+    ],
+    "allRejected": true
+  },
+  "inScopeVerification": {
+    "cases": [
+      {
+        "id": "T1",
+        "summand": "k^2",
+        "lower": 1,
+        "upper": 10,
+        "expected": "385",
+        "got": "385",
+        "identity": "checked",
+        "passed": true
+      },
+      {
+        "id": "T3-empty",
+        "summand": "k^2",
+        "lower": 5,
+        "upper": 4,
+        "expected": "0",
+        "got": "0",
+        "identity": "checked",
+        "passed": true
+      },
+      {
+        "id": "T4-rational",
+        "summand": "(2*k + 1)/3",
+        "lower": 0,
+        "upper": 2,
+        "expected": "3",
+        "got": "3",
+        "identity": "checked",
+        "passed": true
+      }
+    ],
+    "allPassed": true,
+    "heldOutSecondTaskId": "A2-second-sum-k-cubed-1-to-20",
+    "heldOutExcluded": true,
+    "notAUniversalProof": true
+  },
+  "falsifiedWrongAntidifference": {
+    "id": "N1-wrong-antidifference",
+    "status": "falsified",
+    "passed": true,
+    "note": "falsified identity does not yield a sum and does not enter the executable library as verified"
+  },
+  "lifecycle": {
+    "states": [
+      "candidate",
+      "verified-in-declared-scope",
+      "cross-task-use-evidence"
+    ],
+    "candidate": {
+      "status": "candidate",
+      "from": "T1",
+      "proposed": "From a univariate QQ-polynomial summand p(k), construct an antidifference G via SymPy Gosper (summation fallback), independently check G(k+1)-G(k)=p(k) as a polynomial identity, then combine integer endpoints with the hand-provided telescoping infrastructure rule."
+    },
+    "verifiedInDeclaredScope": {
+      "status": "verified-in-declared-scope",
+      "inScopeCases": [
+        "T1",
+        "T3-empty",
+        "T4-rational"
+      ],
+      "heldOutSecondTaskId": "A2-second-sum-k-cubed-1-to-20",
+      "heldOutNotRun": true
+    },
+    "crossTaskUseEvidence": {
+      "status": "not_recorded_by_extraction",
+      "note": "apply the frozen pack to a held-out task; do not carry T1's G or 385"
+    }
+  },
+  "runtime": {
+    "name": "math-anchor",
+    "version": "0.7.1",
+    "sympy": "1.14.0"
+  },
+  "frozenPackConsistent": true
+}

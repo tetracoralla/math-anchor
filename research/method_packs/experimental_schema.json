@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "math-anchor.research.experimental-method-pack.v0",
+  "title": "Experimental method pack (not a public Capability or Procedure)",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schemaVersion",
+    "id",
+    "version",
+    "status",
+    "publicPromotion",
+    "notAPublicCapability",
+    "notAPublicProcedure",
+    "provenance",
+    "mathSemantics",
+    "useInterface",
+    "verification",
+    "infrastructureUsedNotExtracted",
+    "novelty",
+    "humanNotePath",
+    "costAdoption"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "math-anchor.research.experimental-method-pack.v0" },
+    "publicPromotion": { "const": false },
+    "notAPublicCapability": { "const": true },
+    "notAPublicProcedure": { "const": true },
+    "status": {
+      "enum": [
+        "candidate",
+        "verified-in-declared-scope",
+        "cross-task-use-evidence"
+      ]
+    },
+    "novelty": {
+      "type": "object",
+      "required": ["status"],
+      "properties": {
+        "status": {
+          "enum": [
+            "known-method-adaptation",
+            "rediscovery",
+            "unproven-new"
+          ]
+        },
+        "autoClaimed": { "const": false }
+      }
+    },
+    "verification": {
+      "type": "object",
+      "properties": {
+        "formalKernelChecked": { "const": false }
+      }
+    }
+  }
+}

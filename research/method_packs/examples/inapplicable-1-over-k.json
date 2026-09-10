@@ -1,0 +1,8 @@
+{
+  "taskId": "A2-reject-harmonic",
+  "summand": "1/k",
+  "variable": "k",
+  "lower": 1,
+  "upper": 3,
+  "notes": "Inapplicable input: non-constant denominator. Must fail closed."
+}

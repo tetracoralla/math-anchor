@@ -1,0 +1,42 @@
+{
+  "note": "Numerical or domain rejection can refute a too-wide claim. It does not prove the pack for every in-scope polynomial.",
+  "cases": [
+    {
+      "id": "N3-harmonic",
+      "summand": "1/k",
+      "variable": "k",
+      "lower": 1,
+      "upper": 3,
+      "expectCode": "E_UNSUPPORTED",
+      "happened": "rejected",
+      "code": "E_UNSUPPORTED",
+      "message": "summand is not a rational-coefficient polynomial with constant denominators only",
+      "passed": true
+    },
+    {
+      "id": "N3-special-function",
+      "summand": "sin(k)",
+      "variable": "k",
+      "lower": 1,
+      "upper": 3,
+      "expectCode": "E_UNSUPPORTED",
+      "happened": "rejected",
+      "code": "E_UNSUPPORTED",
+      "message": "summand is not a rational-coefficient polynomial with constant denominators only",
+      "passed": true
+    },
+    {
+      "id": "N2-reversed-bounds",
+      "summand": "k^2",
+      "variable": "k",
+      "lower": 5,
+      "upper": 1,
+      "expectCode": "E_DOMAIN",
+      "happened": "rejected",
+      "code": "E_DOMAIN",
+      "message": "reversed bounds with upper < lower - 1 are unsupported; empty sums are only the case upper == lower - 1",
+      "passed": true
+    }
+  ],
+  "allRejected": true
+}

@@ -1,0 +1,8 @@
+{
+  "taskId": "A2-second-sum-k-cubed-1-to-20",
+  "summand": "k^3",
+  "variable": "k",
+  "lower": 1,
+  "upper": 20,
+  "notes": "Held-out second task: cubic summand and different integer bounds from T1."
+}
