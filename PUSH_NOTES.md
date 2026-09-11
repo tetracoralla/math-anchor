@@ -42,6 +42,16 @@ Local A4 commits:
 
 - `95974f2` Add A4 equal-budget no-model smoke harness and honesty tests.
 - `b865568` Document A4 smoke results, decision, and honesty limits.
+- `5217679` Record local A4 commit SHAs in PUSH_NOTES.
+
+L2 F1–F5 (this batch, still Draft; parameterized method content is not done):
+
+- `0684a28` Add PR13 L2 reviewer regressions for original-language and binding failures.
+- `465c08e` Fix L2 F1–F5: original polynomial language, task binding, and observed smoke.
+- `c8c1bd5` Mark the A4 smoke results table as pre-F1–F5 SHA 5217679 evidence.
+
+The A4 table in `docs/research/ai-for-math/a4-smoke.md` is SHA `5217679` evidence.
+Post-fix smoke is a new report (`/tmp/a4-smoke-after-f1f5.json` in the fix notes), not that table.
 
 ```sh
 git checkout chore/ai-for-math-a4-smoke
