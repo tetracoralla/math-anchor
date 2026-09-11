@@ -31,6 +31,7 @@ Local A3 commits (plus the PUSH_NOTES commit that records them):
 
 - `d2d17fa` Add A3 claim-to-obligation coverage and mutation tests.
 - `a0c9e8c` Document A3 coverage, uncovered steps, and A4 next step.
+- `8b94e79` Fail closed on phantom baseline obligations and joint G rewrite.
 
 ```sh
 git checkout chore/ai-for-math-a3-coverage
