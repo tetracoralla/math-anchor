@@ -47,8 +47,8 @@
       "coverage": "fixed-python-rule",
       "fixedRule": "research.polynomial_finite_sum_proposal.polynomials.parse_summand",
       "obligationId": null,
-      "covers": "Summand is a univariate QQ-polynomial with constant denominators only.",
-      "doesNotCover": "Special functions, 1/k, extra symbols, inexact floats."
+      "covers": "Original summand is a univariate QQ-polynomial with nonzero rational constant denominators only, checked before cancellation.",
+      "doesNotCover": "Special functions, 1/k, k/k, extra symbols, inexact floats."
     },
     {
       "id": "integer-bounds-convention",

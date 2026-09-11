@@ -134,9 +134,9 @@
   "reuseSignalIsNotSemanticAdoption": true,
   "latency": {
     "trials": 2,
-    "labels": ["cold", "hot"],
+    "labels": ["first", "repeat"],
     "unit": "ms",
-    "note": "In-process wall time on this machine. First trial of a cell is labeled cold, second hot. Not a statistical benchmark. Not a dollar cost."
+    "note": "In-process wall time on this machine. Trial 0 is first, trial 1 is repeat. These are not isolated cold-process starts. Not a statistical benchmark. Not a dollar cost. equalBudget is zero model calls, not equal wall-clock or memory."
   },
   "scoring": {
     "success": "In-domain: ok with the pre-registered exact rational. Negative: never solved; B1/B2 fail-closed and not proposition-false; B0 recorded honestly.",

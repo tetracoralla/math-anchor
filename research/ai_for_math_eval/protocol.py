@@ -26,8 +26,9 @@ LIFECYCLE_CROSS_TASK = "cross-task-use-evidence"
 LIFECYCLE_VERIFIED = "verified-in-declared-scope"
 
 
-def load_protocol() -> dict[str, Any]:
-    document = json.loads(PROTOCOL_PATH.read_text(encoding="utf-8"))
+def validate_protocol(document: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(document, dict):
+        raise ValueError("A4 protocol must be an object")
     if document.get("kind") != PROTOCOL_KIND:
         raise ValueError(f"unexpected A4 protocol kind: {document.get('kind')!r}")
     if document.get("preRegistered") is not True:
@@ -38,11 +39,26 @@ def load_protocol() -> dict[str, Any]:
         raise ValueError("A4 protocol must forbid model calls")
     if document.get("budget", {}).get("dollarCosts") is not None:
         raise ValueError("A4 protocol must not invent dollar costs")
+    if not isinstance(document.get("tasks"), list) or not document["tasks"]:
+        raise ValueError("A4 protocol must declare tasks")
+    if not isinstance(document.get("arms"), list) or not document["arms"]:
+        raise ValueError("A4 protocol must declare arms")
     return document
 
 
-def protocol_digest() -> str:
-    payload = PROTOCOL_PATH.read_bytes()
+def load_protocol() -> dict[str, Any]:
+    document = json.loads(PROTOCOL_PATH.read_text(encoding="utf-8"))
+    return validate_protocol(document)
+
+
+def protocol_digest(protocol: dict[str, Any] | None = None) -> str:
+    document = validate_protocol(protocol) if protocol is not None else load_protocol()
+    payload = json.dumps(
+        document,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
     return "sha256:" + hashlib.sha256(payload).hexdigest()
 
 

@@ -11,6 +11,11 @@ from fractions import Fraction
 from typing import Any
 
 from math_anchor import __version__
+from math_anchor.certificate_checker import (
+    CERTIFICATE_FORMAT,
+    CHECKER_SYSTEM,
+    CHECKER_VERSION,
+)
 from math_anchor.errors import CalculatorError
 
 from research.polynomial_finite_sum_proposal.polynomials import DomainError, parse_summand
@@ -22,7 +27,7 @@ from research.polynomial_finite_sum_proposal.telescoping import (
 )
 
 from .format import APPLICATION_KIND, LIFECYCLE_CROSS_TASK, PACK_ID, PACK_VERSION
-from .loader import load_pack, require_executable
+from .loader import load_pack, require_executable, validate_pack
 
 
 class PackApplicationError(CalculatorError):
@@ -51,7 +56,13 @@ def apply_method_pack(
     include_backend_receipt: bool = False,
     require_pack_version: str | None = PACK_VERSION,
 ) -> dict[str, Any]:
-    loaded = pack if pack is not None else load_pack(pack_path)
+    if pack is not None:
+        if not isinstance(pack, dict):
+            raise PackApplicationError("E_INPUT", "pack must be a JSON object")
+        validate_pack(pack)
+        loaded = pack
+    else:
+        loaded = load_pack(pack_path)
     require_executable(loaded)
     _require_pack_version(loaded, require_pack_version)
     parsed = _parse_task(task)
@@ -257,19 +268,31 @@ def _conditional_premises(premises: list[object]) -> list[dict[str, Any]]:
 
 
 def _verification_record(pack: dict[str, Any], backend: dict[str, Any]) -> dict[str, Any]:
-    identity = backend.get("identity") or {}
+    identity = backend.get("identity") if isinstance(backend.get("identity"), dict) else {}
+    checker = identity.get("checker") if isinstance(identity.get("checker"), dict) else {}
+    runtime_id = checker.get("system") or CHECKER_SYSTEM
+    runtime_version = checker.get("version") or CHECKER_VERSION
+    declared = pack.get("verification") if isinstance(pack.get("verification"), dict) else {}
     return {
-        "obligationKind": pack["verification"]["obligationKind"],
-        "checkerId": pack["verification"]["checkerId"],
-        "checkerVersion": pack["verification"]["checkerVersion"],
-        "certificateFormat": pack["verification"]["certificateFormat"],
+        "obligationKind": "polynomial_identity",
+        "checkerId": runtime_id,
+        "checkerVersion": runtime_version,
+        "certificateFormat": CERTIFICATE_FORMAT,
         "status": identity.get("status"),
         "assuranceLevel": identity.get("assuranceLevel"),
         "certificateDigest": identity.get("certificateDigest"),
         "claimDigest": identity.get("claimDigest"),
-        "checker": identity.get("checker"),
+        "checker": identity.get("checker") or {"system": runtime_id, "version": runtime_version},
         "formalKernelChecked": False,
         "unverifiedPremisesStayConditional": True,
+        "declaredCheckerId": declared.get("checkerId"),
+        "declaredCheckerVersion": declared.get("checkerVersion"),
+        "declaredMatchesRuntime": (
+            declared.get("checkerId") == runtime_id
+            and declared.get("checkerVersion") == runtime_version
+            and declared.get("certificateFormat") == CERTIFICATE_FORMAT
+            and declared.get("obligationKind") == "polynomial_identity"
+        ),
     }
 
 

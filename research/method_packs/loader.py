@@ -4,6 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from math_anchor.certificate_checker import (
+    CERTIFICATE_FORMAT,
+    CHECKER_SYSTEM,
+    CHECKER_VERSION,
+)
 from math_anchor.errors import CalculatorError
 
 from .format import (
@@ -86,6 +91,23 @@ def validate_pack(document: dict[str, Any]) -> None:
         raise PackFormatError("E_INPUT", "verification must be an object")
     if verification.get("formalKernelChecked") is not False:
         raise PackFormatError("E_INPUT", "pack must not mark formal_kernel_checked")
+    if verification.get("obligationKind") != "polynomial_identity":
+        raise PackFormatError("E_INPUT", "pack obligationKind must be polynomial_identity")
+    if verification.get("checkerId") != CHECKER_SYSTEM:
+        raise PackFormatError(
+            "E_INPUT",
+            "pack checkerId is not the runtime stdlib polynomial checker",
+        )
+    if verification.get("checkerVersion") != CHECKER_VERSION:
+        raise PackFormatError(
+            "E_INPUT",
+            "pack checkerVersion is not the runtime checker version",
+        )
+    if verification.get("certificateFormat") != CERTIFICATE_FORMAT:
+        raise PackFormatError(
+            "E_INPUT",
+            "pack certificateFormat is not the runtime certificate format",
+        )
 
     infrastructure = document["infrastructureUsedNotExtracted"]
     if not isinstance(infrastructure, dict) or infrastructure.get("agentExtracted") is not False:

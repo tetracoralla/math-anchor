@@ -4,8 +4,16 @@ from __future__ import annotations
 
 from typing import Any
 
+from math_anchor.errors import CalculatorError
+
+from research.polynomial_finite_sum_proposal.polynomials import (
+    fraction_payload,
+    rational_from_payload,
+)
+
 from .protocol import (
     ARM_B0,
+    ARM_B1,
     ARM_B2,
     LIFECYCLE_CROSS_TASK,
     LIFECYCLE_VERIFIED,
@@ -61,12 +69,12 @@ def result_summary(result: dict[str, Any] | None, error: BaseException | None) -
         if step == "combine_with_infrastructure_telescoping":
             payload = item.get("valueEnteredLaterSteps")
             if isinstance(payload, dict):
-                entered = payload.get("exact")
+                entered = _exact_from_rational_payload(payload)
     pack = result.get("methodPack") if isinstance(result.get("methodPack"), dict) else {}
     return {
         "status": result.get("status"),
         "kind": result.get("kind"),
-        "valueExact": value.get("exact"),
+        "valueExact": _exact_from_rational_payload(value),
         "errorCode": None,
         "errorMessage": None,
         "applicability": None,
@@ -91,6 +99,15 @@ def result_summary(result: dict[str, Any] | None, error: BaseException | None) -
         "methodPackId": pack.get("id"),
         "baselineEmbedded": "baseline" in result,
     }
+
+
+def _exact_from_rational_payload(payload: object) -> str | None:
+    if not isinstance(payload, dict) or not payload:
+        return None
+    try:
+        return fraction_payload(rational_from_payload(payload))["exact"]
+    except CalculatorError:
+        return None
 
 
 def coverage_honesty(coverage: dict[str, Any] | None) -> dict[str, Any]:
@@ -277,7 +294,10 @@ def decide(cells: list[dict[str, Any]], b2_minus: dict[str, Any]) -> dict[str, A
             problems.append(f"{label}: B0 was embedded (compare_baseline leaked into the arm)")
         if not scoring.get("matchedPreRegisteredExpectation"):
             problems.append(f"{label}: did not match the pre-registered expectation")
+        if cell.get("trialsDisagree"):
+            problems.append(f"{label}: first and repeat trials disagree")
 
+    observed, observed_note = _slower_checked_path_observation(cells)
     promote = False
     if problems:
         return {
@@ -294,6 +314,8 @@ def decide(cells: list[dict[str, Any]], b2_minus: dict[str, Any]) -> dict[str, A
                 "Do not promote the pack. Do not start H1 from this result.",
             ],
             "next": "targeted fix on this vertical; keep experimental; no Host work",
+            "observedSlowerCheckedPath": observed,
+            "observedSlowerCheckedPathNote": observed_note,
         }
 
     b2_minus_same = b2_minus.get("ran") is True and b2_minus.get("valueUnchanged") is True
@@ -303,6 +325,7 @@ def decide(cells: list[dict[str, Any]], b2_minus: dict[str, Any]) -> dict[str, A
         "B1/B2 add independent checking and fail-closed domain; they are not a reliability lift on T1/cubes values.",
         "lifecycleEvidence=cross-task-use-evidence is not semantic adoption.",
         "No model calls, no token accounting, and no dollar prices.",
+        "equalBudget here is zero model calls on every arm; it does not claim equal wall-clock, memory, or dollar cost.",
         "Promotion is forbidden in this smoke even when cells are green.",
     ]
     if b2_minus_same:
@@ -327,12 +350,68 @@ def decide(cells: list[dict[str, Any]], b2_minus: dict[str, Any]) -> dict[str, A
             "Keep experimental. Do not start H1. Expand the neighborhood only if a later "
             "authorized experiment shows work B0 cannot already do on this family."
         ),
-        "observedSlowerCheckedPath": True,
-        "observedSlowerCheckedPathNote": (
-            "On this machine the checked B1/B2 path is typically slower than B0. "
-            "That is not a dollar cost and not a reason to add layers."
-        ),
+        "observedSlowerCheckedPath": observed,
+        "observedSlowerCheckedPathNote": observed_note,
     }
+
+
+def _cell_latency_samples(cell: dict[str, Any]) -> list[float]:
+    latency = cell.get("latencyMs")
+    if not isinstance(latency, dict):
+        return []
+    samples: list[float] = []
+    for key in ("first", "repeat"):
+        value = latency.get(key)
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            continue
+        samples.append(float(value))
+    return samples
+
+
+def observed_slower_checked_path(cells: list[dict[str, Any]]) -> bool | None:
+    """True/False from measured latencies; None when there is nothing to observe."""
+
+    by_task: dict[str, dict[str, float]] = {}
+    for cell in cells:
+        arm = cell.get("arm")
+        task = cell.get("task")
+        if not isinstance(arm, str) or not isinstance(task, str):
+            continue
+        if task == TASK_NEGATIVE:
+            continue
+        samples = _cell_latency_samples(cell)
+        if not samples:
+            continue
+        by_task.setdefault(task, {})[arm] = samples[-1]
+    comparisons: list[bool] = []
+    for arms in by_task.values():
+        baseline = arms.get(ARM_B0)
+        if baseline is None:
+            continue
+        for arm in (ARM_B1, ARM_B2):
+            checked = arms.get(arm)
+            if checked is None:
+                continue
+            comparisons.append(checked > baseline)
+    if not comparisons:
+        return None
+    return all(comparisons)
+
+
+def _slower_checked_path_observation(cells: list[dict[str, Any]]) -> tuple[bool | None, str]:
+    observed = observed_slower_checked_path(cells)
+    if observed is True:
+        note = (
+            "Repeat-trial in-process latency for B1/B2 was higher than B0 on every "
+            "comparable task in this report. Not an isolated cold start and not a dollar cost."
+        )
+    elif observed is False:
+        note = (
+            "Measured in-process latencies do not support claiming the checked path is slower."
+        )
+    else:
+        note = "No measured latencies; slower-checked-path is not an observation."
+    return observed, note
 
 
 def t1_replay_lifecycle_ok(cell: dict[str, Any]) -> bool:

@@ -234,12 +234,19 @@ def test_equal_budget_b1_b2_do_not_embed_baseline(report: dict) -> None:
             assert cell["summary"]["baselineEmbedded"] is False
 
 
-def test_latency_cold_hot_recorded(report: dict) -> None:
+def test_latency_first_repeat_recorded(report: dict) -> None:
     cell = _cell(report, ARM_B0, TASK_T1)
-    assert "cold" in cell["latencyMs"]
-    assert "hot" in cell["latencyMs"]
-    assert cell["latencyMs"]["cold"] >= 0
-    assert cell["latencyMs"]["hot"] >= 0
+    assert "first" in cell["latencyMs"]
+    assert "repeat" in cell["latencyMs"]
+    assert "cold" not in cell["latencyMs"]
+    assert "hot" not in cell["latencyMs"]
+    assert cell["latencyMs"]["first"] >= 0
+    assert cell["latencyMs"]["repeat"] >= 0
+    assert cell["trials"][0]["label"] == "first"
+    assert cell["trials"][1]["label"] == "repeat"
+    assert cell["trialsDisagree"] is False
+    assert report["complete"] is True
+    assert report["decision"]["observedSlowerCheckedPath"] in {True, False}
 
 
 def test_cli_writes_report_and_refuses_overwrite(tmp_path: Path, report: dict) -> None:

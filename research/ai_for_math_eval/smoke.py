@@ -34,6 +34,7 @@ from .protocol import (
     protocol_digest,
     task_by_id,
     tasks,
+    validate_protocol,
 )
 from .score import (
     coverage_honesty,
@@ -49,7 +50,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def run_smoke(*, protocol: dict[str, Any] | None = None) -> dict[str, Any]:
-    document = protocol if protocol is not None else load_protocol()
+    document = validate_protocol(protocol) if protocol is not None else load_protocol()
     registered_tasks = tasks(document)
     cells: list[dict[str, Any]] = []
     pack = load_pack()
@@ -106,12 +107,27 @@ def run_smoke(*, protocol: dict[str, Any] | None = None) -> dict[str, Any]:
         decision["targetedFix"] = True
         decision["promote"] = False
 
+    planned = [(arm_id, task["id"]) for arm_id in PRIMARY_ARMS for task in registered_tasks]
+    if b2_minus_record.get("ran") is True:
+        planned.append((ARM_B2_MINUS, TASK_CUBES))
+    actual = [(cell.get("arm"), cell.get("task")) for cell in cells]
+    complete = actual == planned
+    if not complete:
+        decision["problems"] = list(decision.get("problems") or []) + [
+            "report is missing or extra relative to planned protocol cells"
+        ]
+        decision["verdict"] = "targeted_fix"
+        decision["targetedFix"] = True
+        decision["promote"] = False
+    decision["complete"] = complete
+
     table = [_table_row(cell) for cell in cells]
     return {
         "kind": REPORT_KIND,
         "stage": "A4",
         "protocolKind": document["kind"],
-        "protocolDigest": protocol_digest(),
+        "protocolDigest": protocol_digest(document),
+        "complete": complete,
         "preRegistered": True,
         "generatedAt": datetime.now(timezone.utc).isoformat(),
         "environment": {
@@ -184,25 +200,46 @@ def write_report(path: Path, report: dict[str, Any]) -> None:
 
 
 def _run_cell(arm_id: str, task: dict[str, Any], *, pack: dict[str, Any] | None) -> dict[str, Any]:
-    timings: list[float] = []
+    trials: list[dict[str, Any]] = []
     result: dict[str, Any] | None = None
     error: BaseException | None = None
-    for _trial in range(2):
+    for index in range(2):
         started = time.perf_counter()
+        trial_result: dict[str, Any] | None = None
+        trial_error: BaseException | None = None
         try:
-            result = run_arm(arm_id, task)
-            error = None
+            trial_result = run_arm(arm_id, task)
+            trial_error = None
         except Exception as caught:
             if not is_arm_exception(caught):
                 raise
-            result = None
-            error = caught
-        timings.append((time.perf_counter() - started) * 1000.0)
+            trial_result = None
+            trial_error = caught
+        latency_ms = (time.perf_counter() - started) * 1000.0
+        trial_summary = result_summary(trial_result, trial_error)
+        trials.append(
+            {
+                "index": index,
+                "label": "first" if index == 0 else "repeat",
+                "latencyMs": round(latency_ms, 3),
+                "status": trial_summary.get("status"),
+                "errorCode": trial_summary.get("errorCode"),
+                "valueExact": trial_summary.get("valueExact"),
+            }
+        )
+        result = trial_result
+        error = trial_error
 
     coverage = _coverage_record(arm_id, task, result, error, pack=pack)
     summary = result_summary(result, error)
     honesty = coverage_honesty(coverage)
     scoring = score_cell(arm_id=arm_id, task=task, summary=summary, honesty=honesty)
+    first, repeat = trials[0], trials[1]
+    disagree = (first.get("status"), first.get("errorCode"), first.get("valueExact")) != (
+        repeat.get("status"),
+        repeat.get("errorCode"),
+        repeat.get("valueExact"),
+    )
     return {
         "arm": arm_id,
         "task": task["id"],
@@ -212,7 +249,9 @@ def _run_cell(arm_id: str, task: dict[str, Any], *, pack: dict[str, Any] | None)
         "upper": task["upper"],
         "expectedExact": task.get("expectedExact"),
         "role": task.get("role"),
-        "latencyMs": {"cold": round(timings[0], 3), "hot": round(timings[1], 3)},
+        "latencyMs": {"first": first["latencyMs"], "repeat": repeat["latencyMs"]},
+        "trials": trials,
+        "trialsDisagree": disagree,
         "summary": summary,
         "coverage": honesty,
         "scoring": scoring,

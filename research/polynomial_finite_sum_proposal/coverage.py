@@ -26,7 +26,9 @@ from .polynomials import (
     evaluate_univariate,
     fraction_payload,
     parse_antidifference,
+    parse_summand,
     polynomial_source,
+    rational_from_payload,
 )
 from .telescoping import (
     TELESCOPING_RULE_ID,
@@ -156,8 +158,11 @@ WORKFLOW_STEPS: tuple[dict[str, Any], ...] = (
         "coverage": "fixed-python-rule",
         "fixedRule": "research.polynomial_finite_sum_proposal.polynomials.parse_summand",
         "obligationId": None,
-        "covers": "Summand is a univariate QQ-polynomial with constant denominators only.",
-        "doesNotCover": "Special functions, 1/k, extra symbols, inexact floats.",
+        "covers": (
+            "Original summand is a univariate QQ-polynomial with nonzero "
+            "rational constant denominators only, checked before cancellation."
+        ),
+        "doesNotCover": "Special functions, 1/k, k/k, extra symbols, inexact floats.",
     },
     {
         "id": "integer-bounds-convention",
@@ -587,6 +592,15 @@ def verify_typed_binding(
         variable=variable,
         identity=identity,
     )
+    task_summand = view.get("summand")
+    if not isinstance(task_summand, str) or not task_summand.strip():
+        raise CoverageIntegrityError("E_INPUT", "typed binding requires the original task summand")
+    _require_right_matches_original_summand(
+        result,
+        identity=identity,
+        summand=task_summand,
+        variable=variable,
+    )
     try:
         g_at_upper_plus_one = evaluate_univariate(g_source, variable, upper + 1)
         g_at_lower = evaluate_univariate(g_source, variable, lower)
@@ -745,27 +759,59 @@ def _render_sum_claim(view: dict[str, Any]) -> str:
 
 
 def _task_view(task: dict[str, Any], result: dict[str, Any]) -> dict[str, Any]:
+    """Original task identity is immutable. Result metadata may fill gaps only."""
+
+    task = task if isinstance(task, dict) else {}
+    result = result if isinstance(result, dict) else {}
     params = result.get("params") if isinstance(result.get("params"), dict) else {}
+    observed = {
+        "summand": result.get("summand") if result.get("summand") is not None else params.get("summand"),
+        "variable": result.get("variable") if result.get("variable") is not None else params.get("variable"),
+        "lower": result.get("lower") if result.get("lower") is not None else params.get("lower"),
+        "upper": result.get("upper") if result.get("upper") is not None else params.get("upper"),
+    }
+    variable_hint = task.get("variable") or observed.get("variable") or "k"
+    if not isinstance(variable_hint, str) or not variable_hint.strip():
+        variable_hint = "k"
+    merged: dict[str, Any] = {}
+    for name in ("summand", "variable", "lower", "upper"):
+        original = task.get(name)
+        other = observed.get(name)
+        if original is not None and other is not None:
+            conflict = (
+                not _same_summand(original, other, variable_hint)
+                if name == "summand"
+                else original != other
+            )
+            if conflict:
+                raise CoverageIntegrityError(
+                    "E_INPUT",
+                    f"original task {name} conflicts with the result; refusing silent override",
+                )
+        merged[name] = original if original is not None else other
     premises = result.get("conditionalPremises")
     if not isinstance(premises, list):
         premises = task.get("premises") if isinstance(task.get("premises"), list) else []
-    variable = result.get("variable") or params.get("variable") or task.get("variable") or "k"
     return {
-        "summand": task.get("summand") or result.get("summand") or params.get("summand"),
-        "variable": variable,
-        "lower": _first_defined(result.get("lower"), params.get("lower"), task.get("lower")),
-        "upper": _first_defined(result.get("upper"), params.get("upper"), task.get("upper")),
-        "taskId": params.get("taskId") or task.get("taskId"),
+        "summand": merged.get("summand"),
+        "variable": merged.get("variable") or "k",
+        "lower": merged.get("lower"),
+        "upper": merged.get("upper"),
+        "taskId": task.get("taskId") or params.get("taskId"),
         "premises": premises,
         "antidifference": result.get("antidifference") or task.get("antidifference"),
     }
 
 
-def _first_defined(*values: object) -> object:
-    for value in values:
-        if value is not None:
-            return value
-    return None
+def _same_summand(left: object, right: object, variable: str) -> bool:
+    if not isinstance(left, str) or not isinstance(right, str):
+        return left == right
+    if normalize_expression_source(left) == normalize_expression_source(right):
+        return True
+    try:
+        return parse_summand(left, variable)[1] == parse_summand(right, variable)[1]
+    except CalculatorError:
+        return False
 
 
 def _infer_source(result: dict[str, Any]) -> str:
@@ -1069,10 +1115,10 @@ def _claim_coverage_reason(generated: list[dict[str, Any]]) -> str:
     )
 
 
-def _identity_left(result: dict[str, Any], identity: dict[str, Any]) -> str | None:
-    left = identity.get("left")
-    if isinstance(left, str) and left.strip():
-        return left
+def _identity_side(result: dict[str, Any], identity: dict[str, Any], side: str) -> str | None:
+    value = identity.get(side)
+    if isinstance(value, str) and value.strip():
+        return value
     receipt = result.get("obligationReceipt")
     if not isinstance(receipt, dict) or not isinstance(receipt.get("obligations"), list):
         return None
@@ -1080,12 +1126,61 @@ def _identity_left(result: dict[str, Any], identity: dict[str, Any]) -> str | No
         if not isinstance(entry, dict):
             continue
         claim = entry.get("claim")
-        if isinstance(claim, dict) and isinstance(claim.get("left"), str) and claim["left"].strip():
-            return claim["left"]
+        if isinstance(claim, dict) and isinstance(claim.get(side), str) and claim[side].strip():
+            return claim[side]
         detail = entry.get("detail")
-        if isinstance(detail, dict) and isinstance(detail.get("left"), str) and detail["left"].strip():
-            return detail["left"]
+        if isinstance(detail, dict) and isinstance(detail.get(side), str) and detail[side].strip():
+            return detail[side]
     return None
+
+
+def _identity_left(result: dict[str, Any], identity: dict[str, Any]) -> str | None:
+    return _identity_side(result, identity, "left")
+
+
+def _require_right_matches_original_summand(
+    result: dict[str, Any],
+    *,
+    identity: dict[str, Any],
+    summand: str,
+    variable: str,
+) -> None:
+    identity_right = identity.get("right") if isinstance(identity.get("right"), str) else None
+    receipt_right = None
+    receipt = result.get("obligationReceipt")
+    if isinstance(receipt, dict) and isinstance(receipt.get("obligations"), list):
+        for entry in receipt["obligations"]:
+            if not isinstance(entry, dict):
+                continue
+            claim = entry.get("claim")
+            if isinstance(claim, dict) and isinstance(claim.get("right"), str) and claim["right"].strip():
+                receipt_right = claim["right"]
+                break
+    if not identity_right:
+        identity_right = _identity_side(result, identity, "right")
+    if not isinstance(identity_right, str) or not identity_right.strip():
+        raise CoverageIntegrityError(
+            "E_INPUT",
+            "typed binding requires identity.right for the original task summand",
+        )
+    if not _same_summand(summand, identity_right, variable):
+        raise CoverageIntegrityError(
+            "E_INPUT",
+            "identity.right does not match the original task summand",
+            {"taskSummand": summand, "identityRight": identity_right},
+        )
+    if isinstance(receipt_right, str) and not _same_summand(summand, receipt_right, variable):
+        raise CoverageIntegrityError(
+            "E_INPUT",
+            "receipt claim.right does not match the original task summand",
+            {"taskSummand": summand, "receiptRight": receipt_right},
+        )
+    if isinstance(receipt_right, str) and not _same_summand(identity_right, receipt_right, variable):
+        raise CoverageIntegrityError(
+            "E_INPUT",
+            "identity.right disagrees with receipt claim.right",
+            {"identityRight": identity_right, "receiptRight": receipt_right},
+        )
 
 
 def _require_current_g_bound_to_checked_identity(
@@ -1176,13 +1271,10 @@ def _normalized_claim(claim: dict[str, Any]) -> dict[str, Any]:
 
 
 def _fraction_from_payload(payload: object) -> Fraction:
-    if not isinstance(payload, dict):
-        raise CoverageIntegrityError("E_INPUT", "rational payload must be an object")
-    numerator = payload.get("numerator")
-    denominator = payload.get("denominator")
-    if type(numerator) is not int or type(denominator) is not int or denominator == 0:
-        raise CoverageIntegrityError("E_INPUT", "rational payload must have integer numerator and nonzero denominator")
-    return Fraction(numerator, denominator)
+    try:
+        return rational_from_payload(payload)
+    except DomainError as error:
+        raise CoverageIntegrityError(error.code, error.message, error.details) from error
 
 
 def _require_same_rational(label: str, container: object, key: str, expected: Fraction) -> None:

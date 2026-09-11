@@ -17,11 +17,12 @@ from sympy.polys.polyerrors import CoercionFailed, PolynomialError
 from math_anchor.certificate_checker import (
     MAX_COEFFICIENT_BITS,
     MAX_POLYNOMIAL_DEGREE,
+    CertificateValidationError,
     _PolynomialParser,
 )
 from math_anchor.errors import CalculatorError
 from math_anchor.expression_source import normalize_expression_source
-from math_anchor.safe_expression import make_symbols, parse_expression
+from math_anchor.safe_expression import make_symbols
 
 
 MAX_ABS_BOUND = 1_000_000
@@ -47,31 +48,36 @@ def require_integer(name: str, value: object) -> int:
 
 
 def parse_summand(source: str, variable: str) -> tuple[str, UnivariatePolynomial, sp.Expr]:
+    """Parse a univariate QQ-polynomial, checking the original language first.
+
+    Constant nonzero rational denominators are allowed. The independent
+    certificate parser runs on the source *before* any SymPy arithmetic, so
+    ``k/k``, ``(k-1)/(k-1)``, and ``0/k`` stay out of domain instead of
+    collapsing to ``1``/``0``. The SymPy expression is rebuilt from the
+    already-checked coefficients; this helper does not change general
+    ``parse_expression`` semantics.
+    """
+
     if not isinstance(source, str) or not source.strip():
         raise DomainError("E_INPUT", "summand must be a non-empty expression string")
-    symbols = make_symbols([variable])
+    if not isinstance(variable, str) or not variable.strip():
+        raise DomainError("E_INPUT", "variable must be a non-empty string")
+    normalized = normalize_expression_source(source)
     try:
-        expression = parse_expression(source, symbols=symbols)
-    except CalculatorError as error:
-        if error.code in {"E_AST_BLOCK", "E_DOMAIN", "E_NAME", "E_SYNTAX"}:
-            raise DomainError(
-                "E_UNSUPPORTED",
-                f"summand is outside the rational-polynomial domain: {error.message}",
-            ) from error
-        raise
-    if expression.free_symbols - {symbols[variable]}:
-        extra = ", ".join(sorted(str(symbol) for symbol in expression.free_symbols - {symbols[variable]}))
+        parsed = _PolynomialParser((variable,)).parse(normalized)
+    except CertificateValidationError as error:
         raise DomainError(
             "E_UNSUPPORTED",
-            f"summand depends on extra symbols ({extra}); only a univariate polynomial in {variable} is supported",
-        )
-    if expression.has(sp.Float, sp.oo, sp.zoo, sp.nan, sp.I):
-        raise DomainError(
-            "E_UNSUPPORTED",
-            "summand must be a rational-coefficient polynomial; floats, infinities, and non-reals are unsupported",
-        )
-    polynomial = as_univariate_rational_polynomial(expression, symbols[variable])
-    return normalize_expression_source(source), polynomial, expression
+            "summand is not a rational-coefficient polynomial with constant denominators only"
+            f": {error}",
+        ) from error
+    terms: UnivariatePolynomial = {}
+    for powers, coefficient in parsed.items():
+        if coefficient:
+            terms[int(powers[0])] = coefficient
+    _bounded_univariate(terms)
+    symbols = make_symbols([variable])
+    return normalized, terms, _sympy_from_terms(terms, symbols[variable])
 
 
 def as_univariate_rational_polynomial(expression: sp.Expr, symbol: sp.Symbol) -> UnivariatePolynomial:
@@ -235,3 +241,40 @@ def fraction_payload(value: Fraction) -> dict[str, Any]:
         "numerator": int(value.numerator),
         "denominator": int(value.denominator),
     }
+
+
+def rational_from_payload(payload: object) -> Fraction:
+    """Read a rational from one canonical payload. exact must match num/den."""
+
+    if not isinstance(payload, dict):
+        raise DomainError("E_INPUT", "rational payload must be an object")
+    numerator = payload.get("numerator")
+    denominator = payload.get("denominator")
+    if type(numerator) is not int or type(denominator) is not int or denominator == 0:
+        raise DomainError(
+            "E_INPUT",
+            "rational payload must have integer numerator and nonzero denominator",
+        )
+    value = Fraction(numerator, denominator)
+    canonical = fraction_payload(value)
+    if numerator != canonical["numerator"] or denominator != canonical["denominator"]:
+        raise DomainError(
+            "E_INPUT",
+            "rational payload numerator/denominator must be the reduced canonical form",
+            {"canonical": canonical, "payload": {"numerator": numerator, "denominator": denominator}},
+        )
+    exact = payload.get("exact")
+    if exact is not None and exact != canonical["exact"]:
+        raise DomainError(
+            "E_INPUT",
+            "rational payload exact text disagrees with numerator/denominator",
+            {"canonical": canonical, "payload": payload},
+        )
+    return value
+
+
+def _sympy_from_terms(terms: UnivariatePolynomial, symbol: sp.Symbol) -> sp.Expr:
+    expression: sp.Expr = sp.Integer(0)
+    for power, coefficient in sorted(terms.items()):
+        expression += sp.Rational(coefficient.numerator, coefficient.denominator) * symbol**power
+    return expression
