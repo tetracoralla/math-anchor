@@ -1,0 +1,174 @@
+{
+  "kind": "math-anchor.research.ai-for-math-parameterized-cost-smoke-protocol.v0",
+  "stage": "parameterized-cost-smoke",
+  "title": "Equal-budget no-model cost/timing smoke for the shifted-square parameterized pack",
+  "preRegistered": true,
+  "notABenefitPercentage": true,
+  "promotionForbiddenInThisSmoke": true,
+  "model": {
+    "requested": null,
+    "observed": null,
+    "callsAllowed": false,
+    "noModelFirst": true
+  },
+  "budget": {
+    "equalBudget": true,
+    "modelCalls": 0,
+    "dollarCosts": null,
+    "dollarCostsOmittedBecause": "no real prices or fees; this smoke invents none"
+  },
+  "outOfScope": [
+    "Agent Host core changes",
+    "human calculator UI",
+    "fifth MCP tool",
+    "Skill Refinery",
+    "public Capability/Procedure promotion of the pack",
+    "H1 / method accumulation",
+    "dollar cost or savings percentage"
+  ],
+  "arms": [
+    {
+      "id": "B0",
+      "description": "Existing SymPy summation baseline. Allowed to construct a closed value. No method pack, no obligation checker.",
+      "engine": "sympy.summation",
+      "methodPack": false,
+      "usesExistingBaseline": true,
+      "mayConstruct": true
+    },
+    {
+      "id": "B1",
+      "description": "A1 polynomial finite-sum runner. Allowed to construct via gosper_sum / construct_antidifference. No extracted pack. compare_baseline is false so B0 is not embedded.",
+      "engine": "math-anchor.research.polynomial-finite-sum.v0",
+      "methodPack": false,
+      "compareBaseline": false,
+      "mayConstruct": true
+    },
+    {
+      "id": "P-pack",
+      "description": "Frozen shifted-square pack apply: instantiate saved G(k,c); reconstruction disabled. Must refuse if parametricAntidifference is stripped. compare_baseline is false.",
+      "engine": "math-anchor.research.experimental-parameterized-method-pack-application.v0",
+      "methodPack": true,
+      "packId": "math-anchor.research.method-pack.shifted-square-antidifference.v0",
+      "packVersion": "0.1.0-experimental",
+      "compareBaseline": false,
+      "reconstructionDisabled": true,
+      "mayConstruct": false
+    }
+  ],
+  "tasks": [
+    {
+      "id": "P0-replay",
+      "taskId": "P0-shifted-square-c1-0-to-4",
+      "role": "extraction-source",
+      "summand": "(k+1)^2",
+      "variable": "k",
+      "parameterC": "1",
+      "lower": 0,
+      "upper": 4,
+      "expectedExact": "55",
+      "successMeans": "exact rational 55",
+      "notes": "Extraction instance. P-pack on this task is replay, not held-out reuse."
+    },
+    {
+      "id": "P1-held-out",
+      "taskId": "P1-shifted-square-c3-2-to-7",
+      "role": "held-out",
+      "summand": "(k+3)^2",
+      "variable": "k",
+      "parameterC": "3",
+      "lower": 2,
+      "upper": 7,
+      "expectedExact": "355",
+      "successMeans": "exact rational 355; different c and bounds from P0",
+      "notes": "Not a rename of P0. Pack must instantiate saved G, not reconstruct."
+    },
+    {
+      "id": "P2-rational",
+      "taskId": "P2-shifted-square-c-half-1-to-3",
+      "role": "extra-in-family",
+      "summand": "(k+1/2)^2",
+      "variable": "k",
+      "parameterC": "1/2",
+      "lower": 1,
+      "upper": 3,
+      "expectedExact": "83/4",
+      "successMeans": "exact rational 83/4",
+      "notes": "Extra in-family rational c. Still (k+c)^2."
+    },
+    {
+      "id": "negative-harmonic",
+      "taskId": "P-reject-harmonic",
+      "role": "inapplicable",
+      "summand": "1/k",
+      "variable": "k",
+      "lower": 1,
+      "upper": 3,
+      "countedAsSolved": false,
+      "successMeans": "never counted as solved; B1/P-pack fail-closed unsupported, not a false proposition",
+      "expectedByArm": {
+        "B0": {
+          "countedAsSolved": false,
+          "mayComputeExactRational": true,
+          "notAPolynomialFiniteSumSuccess": true,
+          "notes": "SymPy summation may return the harmonic number 11/6. That is not counted as solving the negative."
+        },
+        "B1": {
+          "failClosed": true,
+          "code": "E_UNSUPPORTED",
+          "propositionFalsified": false,
+          "countedAsSolved": false
+        },
+        "P-pack": {
+          "failClosed": true,
+          "code": "E_UNSUPPORTED",
+          "applicability": "rejected",
+          "propositionFalsified": false,
+          "countedAsSolved": false
+        }
+      }
+    }
+  ],
+  "structuralProbes": {
+    "strippedPayloadMustRefuse": true,
+    "fairB1NotCrippledOnCubes": {
+      "summand": "k^3",
+      "lower": 1,
+      "upper": 20,
+      "expectedExact": "44100",
+      "notes": "Out of the shifted-square family. B0/B1 may construct; P-pack must refuse."
+    }
+  },
+  "latency": {
+    "trials": 2,
+    "labels": ["first", "repeat"],
+    "unit": "ms",
+    "note": "In-process wall time on this machine. Trial 0 is first, trial 1 is repeat. These are not isolated cold-process starts. Not a statistical benchmark. Not a dollar cost. equalBudget is zero model calls, not equal wall-clock or memory. Sequential arm order is B0 → B1 → P-pack; later cells are already warm."
+  },
+  "scoring": {
+    "success": "In-family (c,a,b): ok with the pre-registered exact rational. Negative: never solved; B1/P-pack fail-closed and not proposition-false; B0 recorded honestly.",
+    "wrongAcceptance": "ok with a value other than the pre-registered exact, or B1/P-pack ok on 1/k",
+    "applicabilityMisjudgment": "B1/P-pack reject an in-family (c,a,b), or accept 1/k, or treat 1/k as a falsified proposition",
+    "coversOriginalTaskClaim": "must stay false",
+    "callAloneIsNotAdoption": "must stay true on P-pack apply",
+    "construction": "P-pack in-family cells must record 0 gosper_sum and 0 construct_antidifference calls. B1 in-family cells must construct. The JSON gosperCalled flag is a path invariant; the wrap is the probe."
+  },
+  "decisionRule": {
+    "promote": "Forbidden in this smoke. A few integration cells are not a promotion case. Do not start H1.",
+    "targeted_fix": "Wrong in-family value, negative counted as solved, P-pack reconstructed, stripped payload succeeded, B1/B0 crippled on cubes, coversOriginalTaskClaim true, or formal_kernel_checked true.",
+    "evidence_insufficient": "Default when the harness is honest and in-family cells match. If B0 already matches and is simpler, say so. Smoke is not an overall benefit percentage. Do not invent a savings percentage."
+  },
+  "honesty": {
+    "smokeIsNotOverallBenefitPercent": true,
+    "greenHarnessTestsAreNotCompletion": true,
+    "lifecycleEvidenceIsNotSemanticAdoption": true,
+    "callAloneIsNotAdoption": true,
+    "coversOriginalTaskClaimStaysFalse": true,
+    "unsupportedIsNotACounterexample": true,
+    "formalKernelChecked": false,
+    "telescopingIsHandProvidedInfrastructure": true,
+    "noDollarCostsInvented": true,
+    "packNotPromoted": true,
+    "b0AlreadyMatchingIsNotAPackWin": true,
+    "gosperCalledJsonFlagIsNotTheProbe": true
+  }
+}
