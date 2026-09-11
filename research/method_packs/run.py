@@ -20,8 +20,14 @@ from math_anchor.errors import CalculatorError, error_payload
 
 from research.method_packs.apply import PackApplicationError, apply_method_pack
 from research.method_packs.extract import extract_from_t1
-from research.method_packs.format import DEFAULT_PACK_PATH, HELD_OUT_SECOND_TASK_ID
+from research.method_packs.format import (
+    DEFAULT_PACK_PATH,
+    HELD_OUT_SECOND_TASK_ID,
+    PARAM_HELD_OUT_TASK_ID,
+    PARAM_PACK_ID,
+)
 from research.method_packs.loader import PackFormatError, load_pack
+from research.method_packs.shifted_square_extract import extract_shifted_square
 from research.polynomial_finite_sum_proposal.coverage import (
     coverage_from_failure,
     record_coverage,
@@ -42,6 +48,16 @@ def _parser() -> argparse.ArgumentParser:
         "--output-dir",
         type=Path,
         help="Directory for evidence JSON (default: the frozen pack's evidence/)",
+    )
+
+    extract_shifted = sub.add_parser(
+        "extract-shifted-square",
+        help="Derive G(k,c) for (k+c)^2, verify scope, write evidence",
+    )
+    extract_shifted.add_argument(
+        "--output-dir",
+        type=Path,
+        help="Directory for evidence JSON (default: the shifted-square pack's evidence/)",
     )
 
     apply_cmd = sub.add_parser("apply", help="Load the pack and instantiate it on a task")
@@ -129,6 +145,26 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 0
 
+        if arguments.command == "extract-shifted-square":
+            evidence = extract_shifted_square(output_dir=arguments.output_dir)
+            _emit(
+                {
+                    "status": "ok",
+                    "kind": "math-anchor.research.experimental-parameterized-method-pack-extraction.v0",
+                    "packId": evidence["packId"],
+                    "lifecycle": evidence["lifecycle"],
+                    "heldOutSecondTaskId": PARAM_HELD_OUT_TASK_ID,
+                    "inScopePassed": evidence["inScopeVerification"]["allPassed"],
+                    "negativesRejected": evidence["domainAndNegatives"]["allRejected"],
+                    "novelty": evidence["candidate"]["novelty"]["status"],
+                    "frozenPackConsistent": evidence.get("frozenPackConsistent", False),
+                    "reconstructionDisabledOnApply": True,
+                    "whatThePackAddsVersusB1": evidence["whatThePackAddsVersusB1"],
+                },
+                output=None,
+            )
+            return 0
+
         task = _load_task(arguments.task)
         pack = load_pack(arguments.pack)
         result = apply_method_pack(
@@ -150,7 +186,22 @@ def main(argv: list[str] | None = None) -> int:
         if arguments.adoption_output is not None:
             _write_new_json(arguments.adoption_output, result["adoption"], label="adoption output")
         if arguments.coverage_output is not None:
-            coverage = record_coverage(task, result, pack=pack, source="method-pack-apply")
+            if pack.get("id") == PARAM_PACK_ID:
+                coverage = {
+                    "kind": "math-anchor.research.shifted-square-parameterized-coverage.v0",
+                    "source": "shifted-square-apply",
+                    "coversOriginalTaskClaim": False,
+                    "reconstructionDisabled": True,
+                    "gosperCalled": False,
+                    "parameterC": (result.get("params") or {}).get("parameterC"),
+                    "value": result.get("value"),
+                    "note": (
+                        "A3 polynomial-finite-sum coverage is the Gosper-pack table. "
+                        "This record only states that saved G was instantiated."
+                    ),
+                }
+            else:
+                coverage = record_coverage(task, result, pack=pack, source="method-pack-apply")
             _write_new_json(arguments.coverage_output, coverage, label="coverage output")
             result = dict(result)
             result["coverage"] = coverage

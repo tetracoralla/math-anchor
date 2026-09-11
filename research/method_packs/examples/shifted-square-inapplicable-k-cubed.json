@@ -1,0 +1,8 @@
+{
+  "taskId": "P-neg-k-cubed",
+  "summand": "k^3",
+  "variable": "k",
+  "lower": 1,
+  "upper": 5,
+  "notes": "Wrong template: not (k+c)^2. Must fail closed."
+}

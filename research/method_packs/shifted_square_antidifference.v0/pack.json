@@ -1,0 +1,177 @@
+{
+  "schemaVersion": "math-anchor.research.experimental-method-pack.v0",
+  "id": "math-anchor.research.method-pack.shifted-square-antidifference.v0",
+  "version": "0.1.0-experimental",
+  "status": "verified-in-declared-scope",
+  "publicPromotion": false,
+  "notAPublicCapability": true,
+  "notAPublicProcedure": true,
+  "humanNotePath": "human_note.md",
+  "lifecycleNote": "candidate after deriving G(k,c) from P0; verified-in-declared-scope after P0 plus empty-sum and negatives; cross-task-use-evidence is recorded by apply() on a held-out (c,a,b), not by rewriting this frozen file into a universal theorem",
+  "provenance": {
+    "extractionTaskId": "P0-shifted-square-c1-0-to-4",
+    "extractionTask": "sum_{k=0}^{4} (k+1)^2",
+    "license": "Apache-2.0 for Math Anchor research files in this pack",
+    "hiddenModelReasoningRequired": false,
+    "derivation": {
+      "method": "undetermined-coefficients-for-monomials-then-linearity",
+      "notFromGosper": true,
+      "notAgentExtractedFromCAS": true,
+      "note": "G for 1, k, and k^2 is solved over Q; G(k,c) is the linear combination for (k+c)^2. Faulhaber/Gosper already know the c=0 case. This is known-method adaptation."
+    },
+    "sourceFragments": [
+      {
+        "path": "research/method_packs/examples/shifted-square-extract-c1-0-to-4.json",
+        "role": "extraction-task-input",
+        "license": "Apache-2.0"
+      },
+      {
+        "path": "research/method_packs/shifted_square.py",
+        "symbol": "derive_parametric_antidifference",
+        "role": "parametric-G-derivation",
+        "license": "Apache-2.0"
+      },
+      {
+        "path": "src/math_anchor/certificate_checker.py",
+        "role": "independent-identity-checker",
+        "license": "Apache-2.0"
+      }
+    ],
+    "upstream": [
+      {
+        "name": "Faulhaber formula for sum k^2",
+        "role": "classical-closed-form",
+        "note": "not rediscovered here; the pack stores a parameterized specialization"
+      },
+      {
+        "name": "discrete antidifference / telescoping",
+        "role": "classical-identity",
+        "note": "G(k+1)-G(k)=p(k) implies the finite sum is G(b+1)-G(a)"
+      }
+    ]
+  },
+  "mathSemantics": {
+    "problemFamily": "inclusive finite sums of (k+c)^2 for a rational parameter c",
+    "statement": "Let c be a rational and a, b integers with b >= a - 1 and |a|, |b| <= 10^6. Let G(k,c) = k(k-1)(2k-1)/6 + c k(k-1) + c^2 k. If G(k+1,c)-G(k,c)=(k+c)^2 is independently checked as a polynomial identity in k,c over Q, then the inclusive sum from k=a to k=b of (k+c)^2 equals G(b+1,c)-G(a,c), using the hand-provided telescoping infrastructure rule. The empty sum b=a-1 is 0.",
+    "variables": {
+      "k": "commuting indeterminate / integer summation index",
+      "c": "rational shift parameter",
+      "a": "inclusive integer lower bound",
+      "b": "inclusive integer upper bound",
+      "G": "saved parametric QQ-polynomial antidifference of (k+c)^2"
+    },
+    "parametricAntidifference": {
+      "source": "k*(k - 1)*(2*k - 1)/6 + c*k*(k - 1) + (c**2)*k",
+      "indexVariable": "k",
+      "parameterVariable": "c",
+      "summandTemplate": "(k + c)**2",
+      "derivationMethod": "undetermined-coefficients-for-monomials-then-linearity",
+      "notFromGosper": true
+    },
+    "necessaryConditions": [
+      "the summand is (k+c)^2 for a rational c (leading coefficient 1)",
+      "G(k+1,c)-G(k,c)=(k+c)^2 is independently checked as a polynomial identity",
+      "after substituting this task's c, the univariate identity is re-checked",
+      "a and b are integers with b >= a - 1",
+      "degrees and coefficient sizes stay within the certificate checker limits"
+    ],
+    "unsupportedInputs": [
+      "summands outside the family (k+c)^2 (example: k^3, k^2+6k+8)",
+      "non-constant denominators (example: 1/k)",
+      "special functions (example: sin(k))",
+      "non-rational c",
+      "upper < lower - 1 (reversed bounds; not Karr's negative sum)",
+      "non-integer bounds",
+      "caller-supplied antidifference (reconstruction is disabled)",
+      "infinite sums"
+    ],
+    "generalVersusInstance": {
+      "general": "G(k+1,c)-G(k,c)=(k+c)^2 as a bivariate polynomial identity in (k,c), checked from the pack payload",
+      "instance": "after substituting a concrete rational c, G_c(k+1)-G_c(k)=(k+c)^2 is re-checked in one variable",
+      "honestBoundary": "a checked general identity plus in-domain c implies the instance if substitution is correct; the instance check is a separate program step. Checked instances are not a kernel theorem and not a proof for other templates."
+    }
+  },
+  "useInterface": {
+    "restrictedInputs": {
+      "summand": "optional expression that must match (k+c)^2",
+      "parameterC": "optional exact rational (int or integer/integer string)",
+      "variable": "identifier other than c",
+      "lower": "Python int",
+      "upper": "Python int"
+    },
+    "reconstructionOnReusePath": false,
+    "instantiationRules": [
+      {
+        "id": "match_shifted_square_template",
+        "engine": "research.method_packs.shifted_square.match_shifted_square"
+      },
+      {
+        "id": "require_rational_parameter_c",
+        "engine": "research.method_packs.shifted_square.parse_rational_parameter"
+      },
+      {
+        "id": "instantiate_saved_parametric_antidifference",
+        "engine": "research.method_packs.shifted_square.instantiate_univariate",
+        "payload": "mathSemantics.parametricAntidifference.source"
+      },
+      {
+        "id": "forbid_reconstruction_on_reuse_path",
+        "gosper": false,
+        "undeterminedCoefficients": false,
+        "callerSuppliedG": false
+      },
+      {
+        "id": "emit_polynomial_identity_obligation",
+        "kind": "polynomial_identity"
+      },
+      {
+        "id": "evaluate_endpoints_independent_parser",
+        "engine": "math_anchor.certificate_checker polynomial parser (independent of SymPy)"
+      },
+      {
+        "id": "apply_infrastructure_telescoping_rule",
+        "ruleId": "math-anchor.research.discrete-telescoping-combination.v0",
+        "extracted": false
+      }
+    ],
+    "outputs": {
+      "value": "exact rational fraction payload when identities are checked and bounds are in domain",
+      "antidifference": "instantiated G(k,c) in checker language",
+      "verification": "obligation status, checker id/version, certificate digest",
+      "chain": "retrieve → applicability → instantiate saved G → general identity → instance identity → infrastructure combination"
+    },
+    "forbiddenEvaluators": ["eval", "exec", "sympify", "parse_expr", "import of caller code"]
+  },
+  "verification": {
+    "obligationKind": "polynomial_identity",
+    "obligationIdPattern": "difference-identity",
+    "checkerId": "math-anchor-stdlib-polynomial-checker",
+    "checkerVersion": "1.0.0",
+    "certificateFormat": "math-anchor.polynomial-identity.v1",
+    "formalKernelChecked": false,
+    "unverifiedPremisesStayConditional": true,
+    "generalIdentityCheckedFromPayload": true,
+    "instanceIdentityCheckedAfterSubstitution": true,
+    "note": "Never mark formal_kernel_checked. Lean is not used. The saved G is the mathematical payload. Reconstruction is disabled on apply."
+  },
+  "infrastructureUsedNotExtracted": {
+    "id": "math-anchor.research.discrete-telescoping-combination.v0",
+    "origin": "hand-provided-infrastructure",
+    "agentExtracted": false,
+    "countsAsA2Novelty": false
+  },
+  "novelty": {
+    "status": "known-method-adaptation",
+    "autoClaimed": false,
+    "rediscovery": false,
+    "unprovenNew": false,
+    "details": "The antidifference of (k+c)^2 is a classical polynomial identity. This pack stores that parametric G so a later (c,a,b) can instantiate it without Gosper. It is not new mathematics."
+  },
+  "costAdoption": {
+    "extractionCostPlaceholder": "no model budget; local undetermined-coefficient derivation plus identity check",
+    "validationCostPlaceholder": "extraction instance, empty sum, and fail-closed negatives",
+    "adoptionRecords": "written by research/method_packs/run.py apply --pack <this pack> --adoption-output; not stored inside this frozen pack",
+    "usedByTasksAtFreeze": [],
+    "dollarCost": null
+  }
+}

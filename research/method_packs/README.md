@@ -47,8 +47,28 @@ Tests:
 .venv/bin/python -m pytest \
   tests/python/test_method_pack_proposal.py \
   tests/python/test_polynomial_finite_sum_proposal.py \
-  tests/python/test_coverage_proposal.py
+  tests/python/test_coverage_proposal.py \
+  tests/python/test_parameterized_method_pack.py
 ```
+
+## Parameterized pack (batch 2)
+
+Separate experimental id
+`math-anchor.research.method-pack.shifted-square-antidifference.v0`.
+It stores a parametric `G(k,c)` for sums of `(k+c)^2`. Apply instantiates
+that `G`; it does not call Gosper. The A2 Gosper pack above is unchanged
+and still reconstructs.
+
+```sh
+.venv/bin/python research/method_packs/run.py extract-shifted-square
+
+.venv/bin/python research/method_packs/run.py apply \
+  --pack research/method_packs/shifted_square_antidifference.v0/pack.json \
+  --task research/method_packs/examples/shifted-square-held-out-c3-2-to-7.json
+```
+
+See `docs/research/ai-for-math/parameterized-method.md` for provenance,
+the mandatory “what math is saved” claim, and honesty limits.
 
 ## Mathematical scope
 

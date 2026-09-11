@@ -1,0 +1,9 @@
+{
+  "taskId": "P1-shifted-square-c3-2-to-7",
+  "summand": "(k+3)^2",
+  "variable": "k",
+  "parameterC": "3",
+  "lower": 2,
+  "upper": 7,
+  "notes": "Held-out: different c and bounds from P0. Pack must instantiate saved G, not reconstruct."
+}

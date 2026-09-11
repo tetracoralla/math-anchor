@@ -16,8 +16,11 @@ from .format import (
     DEFAULT_PACK_PATH,
     EXECUTABLE_LIFECYCLES,
     FORBIDDEN_PACK_KEYS,
+    KNOWN_PACK_IDS,
     LIFECYCLE_CANDIDATE,
     PACK_ID,
+    PARAM_PACK_ID,
+    PARAM_REQUIRED_INSTANTIATION_RULE_IDS,
     REQUIRED_INSTANTIATION_RULE_IDS,
     SCHEMA_VERSION,
 )
@@ -71,7 +74,7 @@ def validate_pack(document: dict[str, Any]) -> None:
 
     if document["schemaVersion"] != SCHEMA_VERSION:
         raise PackFormatError("E_INPUT", "unsupported experimental method-pack schema")
-    if document["id"] != PACK_ID:
+    if document["id"] not in KNOWN_PACK_IDS:
         raise PackFormatError("E_INPUT", "unexpected method-pack id")
     if document["publicPromotion"] is not False:
         raise PackFormatError("E_INPUT", "experimental pack must not be marked public")
@@ -144,7 +147,12 @@ def validate_pack(document: dict[str, Any]) -> None:
     if not isinstance(rules, list) or not rules:
         raise PackFormatError("E_INPUT", "useInterface.instantiationRules must be a non-empty list")
     ids = _rule_ids(rules)
-    if tuple(ids) != REQUIRED_INSTANTIATION_RULE_IDS:
+    expected_rules = (
+        PARAM_REQUIRED_INSTANTIATION_RULE_IDS
+        if document["id"] == PARAM_PACK_ID
+        else REQUIRED_INSTANTIATION_RULE_IDS
+    )
+    if tuple(ids) != expected_rules:
         raise PackFormatError(
             "E_INPUT",
             "instantiation rules must be the frozen restricted allow-list; "
@@ -153,6 +161,14 @@ def validate_pack(document: dict[str, Any]) -> None:
     forbidden = use.get("forbiddenEvaluators")
     if not isinstance(forbidden, list) or "eval" not in forbidden:
         raise PackFormatError("E_INPUT", "useInterface must forbid eval and related evaluators")
+
+    if document["id"] == PARAM_PACK_ID:
+        _validate_parametric_payload(document)
+    elif "construct_antidifference_sympy_gosper" not in ids:
+        raise PackFormatError(
+            "E_INPUT",
+            "Gosper polynomial pack must keep the construction rule in its allow-list",
+        )
 
 
 def require_executable(pack: dict[str, Any]) -> None:
@@ -172,6 +188,46 @@ def _rule_ids(rules: list[object]) -> list[str]:
             raise PackFormatError("E_INPUT", "each instantiation rule must be an object with string id")
         ids.append(rule["id"])
     return ids
+
+
+def _validate_parametric_payload(document: dict[str, Any]) -> None:
+    from .shifted_square import parse_bivariate
+
+    semantics = document["mathSemantics"]
+    payload = semantics.get("parametricAntidifference")
+    if not isinstance(payload, dict):
+        raise PackFormatError(
+            "E_INPUT",
+            "shifted-square pack must carry mathSemantics.parametricAntidifference",
+        )
+    source = payload.get("source")
+    if not isinstance(source, str) or not source.strip():
+        raise PackFormatError(
+            "E_INPUT",
+            "shifted-square pack must carry a non-empty parametric G(k,c) source",
+        )
+    if payload.get("notFromGosper") is not True:
+        raise PackFormatError(
+            "E_INPUT",
+            "shifted-square pack must declare the saved G is not reconstructed by Gosper",
+        )
+    if payload.get("indexVariable") != "k" or payload.get("parameterVariable") != "c":
+        raise PackFormatError(
+            "E_INPUT",
+            "shifted-square pack must store G in variables k and c",
+        )
+    reconstruction = document["useInterface"].get("reconstructionOnReusePath")
+    if reconstruction is not False:
+        raise PackFormatError(
+            "E_INPUT",
+            "shifted-square pack must disable reconstruction on the reuse path",
+        )
+    try:
+        terms = parse_bivariate(source)
+    except CalculatorError as error:
+        raise PackFormatError("E_INPUT", f"parametric G(k,c) is not a QQ-polynomial: {error}") from error
+    if not terms:
+        raise PackFormatError("E_INPUT", "parametric G(k,c) must not be the zero polynomial")
 
 
 def _forbid_executable_keys(value: object) -> None:

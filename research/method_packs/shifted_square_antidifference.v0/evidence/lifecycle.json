@@ -1,0 +1,25 @@
+{
+  "states": [
+    "candidate",
+    "verified-in-declared-scope",
+    "cross-task-use-evidence"
+  ],
+  "candidate": {
+    "status": "candidate",
+    "from": "P0-shifted-square-c1-0-to-4",
+    "proposed": "For p(k,c)=(k+c)^2, save the parametric antidifference G(k,c) obtained by undetermined coefficients on 1, k, k^2 and linearity. Later tasks instantiate that G at a rational c without reconstructing it."
+  },
+  "verifiedInDeclaredScope": {
+    "status": "verified-in-declared-scope",
+    "inScopeCases": [
+      "P0-shifted-square-c1-0-to-4",
+      "P0-empty"
+    ],
+    "heldOutSecondTaskId": "P1-shifted-square-c3-2-to-7",
+    "heldOutNotRun": true
+  },
+  "crossTaskUseEvidence": {
+    "status": "not_recorded_by_extraction",
+    "note": "apply the frozen pack to a held-out (c,a,b); do not carry P0's numeric answer"
+  }
+}
