@@ -285,6 +285,37 @@ def test_reversed_bounds_and_parameter_mismatch_fail_closed() -> None:
     assert mismatch.value.code == "E_DOMAIN"
 
 
+def test_over_limit_and_noninteger_bounds_fail_closed() -> None:
+    """Declared |a|,|b|<=10^6 and integer-only bounds must not NameError."""
+    pack = _pack()
+    with pytest.raises(PackApplicationError, match="magnitude may be at most") as over_limit:
+        apply_method_pack(
+            {"summand": "(k+3)^2", "parameterC": 3, "lower": 1000001, "upper": 1000002},
+            pack=pack,
+            compare_baseline=False,
+        )
+    assert over_limit.value.code == "E_LIMIT"
+    assert over_limit.value.details["applicability"] == "rejected"
+    assert over_limit.value.details["reason"] == "input_outside_declared_pack_domain"
+
+    with pytest.raises(PackApplicationError, match="must be an integer") as non_int:
+        apply_method_pack(
+            {"summand": "(k+3)^2", "parameterC": 3, "lower": 1.5, "upper": 2},
+            pack=pack,
+            compare_baseline=False,
+        )
+    assert non_int.value.code == "E_DOMAIN"
+    assert non_int.value.details["applicability"] == "rejected"
+
+    with pytest.raises(PackApplicationError, match="must be an integer") as bool_bound:
+        apply_method_pack(
+            {"summand": "(k+3)^2", "parameterC": 3, "lower": True, "upper": 2},
+            pack=pack,
+            compare_baseline=False,
+        )
+    assert bool_bound.value.code == "E_DOMAIN"
+
+
 def test_caller_antidifference_is_rejected() -> None:
     with pytest.raises(PackApplicationError, match="saved G"):
         apply_method_pack(

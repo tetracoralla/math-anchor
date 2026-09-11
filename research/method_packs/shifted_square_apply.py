@@ -16,6 +16,7 @@ from math_anchor.certificate_checker import (
     CHECKER_SYSTEM,
     CHECKER_VERSION,
 )
+from math_anchor.errors import CalculatorError
 from math_anchor.obligations import OBLIGATION_SET_SCHEMA_VERSION, check_obligation_set
 
 from research.polynomial_finite_sum_proposal.baseline import sympy_finite_sum
