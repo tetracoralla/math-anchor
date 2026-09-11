@@ -106,15 +106,15 @@ Apply writes chain and adoption next to `--output` (refuses to overwrite).
 - No checker for non-constant denominators / general hypergeometric terms.
 - The binomial rewrite for hockey-stick is not verified by this pack.
 - No model, no equal-budget B0/B1/B2, no token or dollar cost (placeholders only).
-- No claim→obligation coverage table (that is A3).
+- Claim→obligation coverage is recorded in A3 (`a3-coverage.md`); obligation
+  success is still not claim coverage.
 - Structure validation of `pack.json` is not mathematical correctness.
 - A few in-scope instances are not a proof for all degrees below the checker limit.
 
-## Next minimal experiment (A3)
+## Next minimal experiment (A3, done) / A4
 
-Record, for this same domain workflow: task/source claim → generated obligation
-id; declared goal, bounds, and assumptions; which steps the fixed rules cover
-and which semantic steps they do not; typed binding of the computed value into
-later parameters; exact evidence scope. Add mutation tests (wrong certificate
-binding, forged verified, result rewritten between tools). Do not add a general
-obligation dataflow language to do that.
+A3 coverage, typed binding, and mutation tests:
+[a3-coverage.md](a3-coverage.md).
+
+A4: equal-budget B0/B1/B2 smoke on this family, B2-minus only if reuse
+appears, no dollar costs without prices.

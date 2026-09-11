@@ -25,6 +25,14 @@ No-model SymPy baseline only:
   --baseline-only --summand 'k^2' --lower 1 --upper 10
 ```
 
+Claim→obligation coverage sidecar (A3):
+
+```sh
+.venv/bin/python research/polynomial_finite_sum_proposal/run.py \
+  --task research/polynomial_finite_sum_proposal/examples/sum-k-squared-1-to-10.json \
+  --coverage-output build/polynomial-finite-sum-coverage.json
+```
+
 Wrong coefficients (must falsify, exit 1):
 
 ```sh
@@ -37,7 +45,9 @@ Reversed bounds and `1/k` must fail closed (exit 2).
 Tests:
 
 ```sh
-.venv/bin/python -m pytest tests/python/test_polynomial_finite_sum_proposal.py
+.venv/bin/python -m pytest \
+  tests/python/test_polynomial_finite_sum_proposal.py \
+  tests/python/test_coverage_proposal.py
 ```
 
 ## Mathematical scope

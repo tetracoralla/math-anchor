@@ -142,3 +142,9 @@ an explicit binomial-to-polynomial rewrite, or a different polynomial such as
 A2 chose `sum_{k=1}^{20} k^3` as the held-out task and kept `1/k` as the
 inapplicable rejection. T9 after `C(k,2)=k(k-1)/2` is an extra in-domain apply
 with the binomial rewrite left conditional. See [a2-method-pack.md](a2-method-pack.md).
+
+A3 records claim→obligation coverage for this same workflow (T1, cubes, T9
+conditional rewrite, and the negative cases). The only generated obligation
+id is `difference-identity`. Natural-language translation, the binomial
+rewrite, telescoping-as-obligation, and kernel-checked conclusions stay
+uncovered. See [a3-coverage.md](a3-coverage.md).

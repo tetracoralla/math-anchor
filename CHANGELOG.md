@@ -13,6 +13,11 @@ and Apple notarization record exist.
 - Added an experimental A2 **method pack** extracted from that T1 sample
   (`research/method_packs/`). It is not a public Capability or Procedure.
   Successful apply stamps `cross-task-use-evidence` only for a non-T1 task.
+- Added an A3 **coverage record** for that same workflow
+  (`research/polynomial_finite_sum_proposal/coverage.py`). It maps the
+  structured task claim to obligation `difference-identity`, records which
+  steps are uncovered, and binds `G(upper+1)-G(lower)` as an exact rational.
+  Obligation success is not claim coverage. Not a public Capability.
 
 ## 0.7.1 - 2026-09-06
 

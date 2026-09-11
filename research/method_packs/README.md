@@ -30,7 +30,8 @@ Apply the frozen pack to the second task `sum_{k=1}^{20} k^3`:
   --task research/method_packs/examples/sum-k-cubed-1-to-20.json \
   --output build/method-pack-sum-k-cubed.json \
   --chain-output build/method-pack-sum-k-cubed-chain.json \
-  --adoption-output build/method-pack-sum-k-cubed-adoption.json
+  --adoption-output build/method-pack-sum-k-cubed-adoption.json \
+  --coverage-output build/method-pack-sum-k-cubed-coverage.json
 ```
 
 Inapplicable input (must fail closed):
@@ -45,7 +46,8 @@ Tests:
 ```sh
 .venv/bin/python -m pytest \
   tests/python/test_method_pack_proposal.py \
-  tests/python/test_polynomial_finite_sum_proposal.py
+  tests/python/test_polynomial_finite_sum_proposal.py \
+  tests/python/test_coverage_proposal.py
 ```
 
 ## Mathematical scope
