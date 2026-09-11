@@ -107,7 +107,7 @@
       "coverage": "domain-python-binding",
       "fixedRule": "research.polynomial_finite_sum_proposal.coverage.verify_typed_binding",
       "obligationId": null,
-      "covers": "The computed exact rational is the same G(b+1)-G(a) recorded as value/downstream.",
+      "covers": "The computed exact rational is the same G(b+1)-G(a) recorded as value/downstream, and current G is the G named by the checked identity.",
       "doesNotCover": "No general obligation dataflow; dependsOn is unused."
     },
     {
@@ -159,6 +159,7 @@
       "method-pack downstream.value",
       "method-pack chain combine_with_infrastructure_telescoping.valueEnteredLaterSteps"
     ],
+    "currentGBoundToCheckedIdentity": true,
     "notAGeneralDataflowLanguage": true
   },
   "evidenceScope": {

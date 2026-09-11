@@ -22,6 +22,7 @@ if str(ROOT) not in sys.path:
 from research.method_packs.apply import PackApplicationError, apply_method_pack
 from research.method_packs.format import PACK_VERSION
 from research.method_packs.loader import load_pack
+from research.polynomial_finite_sum_proposal.baseline import sympy_finite_sum
 from research.polynomial_finite_sum_proposal.coverage import (
     COVERAGE_KIND,
     DIFFERENCE_IDENTITY_OBLIGATION_ID,
@@ -79,6 +80,7 @@ def test_frozen_workflow_coverage_matches_module() -> None:
     assert frozen["evidenceScope"]["obligationSuccessIsNotClaimCoverage"] is True
     assert frozen["evidenceScope"]["formalKernelChecked"] is False
     assert frozen["typedBindingPattern"]["formula"] == "G(upper + 1) - G(lower)"
+    assert frozen["typedBindingPattern"]["currentGBoundToCheckedIdentity"] is True
     assert frozen["typedBindingPattern"]["notAGeneralDataflowLanguage"] is True
     by_id = {step["id"]: step for step in frozen["steps"]}
     assert by_id["nl-to-structured-claim"]["coverage"] == "uncovered"
@@ -105,7 +107,9 @@ def test_t1_coverage_maps_claim_to_identity_obligation_only() -> None:
     assert coverage["honesty"]["formalKernelChecked"] is False
     assert coverage["typedBinding"]["status"] == "bound"
     assert coverage["typedBinding"]["formula"] == "G(upper + 1) - G(lower)"
+    assert coverage["typedBinding"]["currentGBoundToCheckedIdentity"] is True
     assert coverage["typedBinding"]["recomputed"]["exact"] == "385"
+    assert result["antidifference"] in result["identity"]["left"]
     assert coverage["typedBinding"]["producedBy"]["origin"] == TELESCOPING_RULE_ORIGIN
     assert coverage["typedBinding"]["hashBinding"]["doesNotBind"]
     assert "authorship" in coverage["typedBinding"]["hashBinding"]["doesNotBind"]
@@ -132,6 +136,7 @@ def test_method_pack_cubes_binds_value_into_downstream() -> None:
     assert coverage["claimCoverage"]["coversOriginalTaskClaim"] is False
     assert coverage["claimCoverage"]["procedureEstablishedFiniteSumValue"] is True
     assert coverage["typedBinding"]["status"] == "bound"
+    assert coverage["typedBinding"]["currentGBoundToCheckedIdentity"] is True
     paths = {item["path"] for item in coverage["typedBinding"]["outputs"]}
     assert "value" in paths
     assert "downstream.value" in paths
@@ -215,6 +220,7 @@ def test_mutation_catalog_detects_the_brief_negatives() -> None:
         "forged-kernel-checked",
         "stale-pack-version",
         "rewritten-result",
+        "joint-g-and-value-rewrite",
         "unsupported-as-counterexample",
         "hash-binding-is-not-combination",
     }
@@ -236,6 +242,79 @@ def test_rewritten_result_cannot_be_recorded_as_coverage() -> None:
         verify_typed_binding(tampered)
     with pytest.raises(CoverageIntegrityError):
         record_coverage({"summand": "k^2", "lower": 1, "upper": 10}, tampered)
+
+
+def test_baseline_only_coverage_does_not_synthesize_identity_obligation(tmp_path: Path) -> None:
+    result = sympy_finite_sum(summand="k^2", variable="k", lower=1, upper=10)
+    assert result["kind"] == "sympy_summation_baseline"
+    assert "identity" not in result
+    assert "obligationReceipt" not in result
+    coverage = record_coverage({"summand": "k^2", "lower": 1, "upper": 10}, result)
+    assert coverage["generatedObligations"] == []
+    assert coverage["source"] == "sympy-summation-baseline"
+    assert coverage["source"] != "unknown"
+    assert coverage["claimCoverage"]["coversOriginalTaskClaim"] is False
+    assert coverage["claimCoverage"]["procedureEstablishedFiniteSumValue"] is False
+    assert coverage["claimCoverage"]["allSubmittedObligationsChecked"] is False
+    assert coverage["evidenceScope"]["identityStatus"] is None
+    assert coverage["honesty"]["obligationSuccessIsNotClaimCoverage"] is True
+    assert coverage["honesty"]["formalKernelChecked"] is False
+    by_id = {step["id"]: step for step in coverage["steps"]}
+    assert by_id["difference-identity"]["executed"] is False
+    verify_coverage_honesty(coverage, result=result)
+
+    unknown_ok = {
+        "status": "ok",
+        "kind": "mystery-payload",
+        "value": {"exact": "1", "numerator": 1, "denominator": 1},
+    }
+    unknown_coverage = record_coverage({"summand": "k^2", "lower": 1, "upper": 10}, unknown_ok)
+    assert unknown_coverage["generatedObligations"] == []
+    assert unknown_coverage["source"] == "mystery-payload"
+    assert unknown_coverage["claimCoverage"]["coversOriginalTaskClaim"] is False
+
+    coverage_path = tmp_path / "baseline-coverage.json"
+    completed = _cli(
+        A1_RUNNER,
+        "--baseline-only",
+        "--summand",
+        "k^2",
+        "--lower",
+        "1",
+        "--upper",
+        "10",
+        "--coverage-output",
+        str(coverage_path),
+    )
+    assert completed.returncode == 0, completed.stderr + completed.stdout
+    payload = json.loads(completed.stdout)
+    stored = json.loads(coverage_path.read_text(encoding="utf-8"))
+    assert payload["kind"] == "sympy_summation_baseline"
+    assert payload["coverage"]["generatedObligations"] == []
+    assert stored["generatedObligations"] == []
+    assert stored["source"] == "sympy-summation-baseline"
+    assert stored["claimCoverage"]["coversOriginalTaskClaim"] is False
+    assert stored["claimCoverage"]["procedureEstablishedFiniteSumValue"] is False
+
+
+def test_joint_g_and_value_rewrite_fails_closed() -> None:
+    result = run_polynomial_finite_sum(summand="k^2", lower=1, upper=10)
+    tampered = deepcopy(result)
+    tampered["antidifference"] = "0"
+    tampered["value"] = {"exact": "0", "numerator": 0, "denominator": 1}
+    tampered["endpoints"] = {
+        "gAtUpperPlusOne": {"exact": "0", "numerator": 0, "denominator": 1},
+        "gAtLower": {"exact": "0", "numerator": 0, "denominator": 1},
+    }
+    with pytest.raises(CoverageIntegrityError, match="inconsistent with the checked identity"):
+        verify_typed_binding(tampered)
+    with pytest.raises(CoverageIntegrityError, match="inconsistent with the checked identity"):
+        record_coverage({"summand": "k^2", "lower": 1, "upper": 10}, tampered)
+    value_only = deepcopy(result)
+    value_only["value"] = {"exact": "0", "numerator": 0, "denominator": 1}
+    with pytest.raises(CoverageIntegrityError, match="rewritten"):
+        verify_typed_binding(value_only)
+    verify_typed_binding(result)
 
 
 def test_stale_pack_version_is_rejected_without_running_the_sum() -> None:

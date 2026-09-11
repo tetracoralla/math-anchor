@@ -21,7 +21,13 @@ from math_anchor.certificate_checker import (
 from math_anchor.errors import CalculatorError
 from math_anchor.expression_source import normalize_expression_source
 
-from .polynomials import DomainError, evaluate_univariate, fraction_payload
+from .polynomials import (
+    DomainError,
+    evaluate_univariate,
+    fraction_payload,
+    parse_antidifference,
+    polynomial_source,
+)
 from .telescoping import (
     TELESCOPING_RULE_ID,
     TELESCOPING_RULE_ORIGIN,
@@ -117,6 +123,7 @@ def static_workflow_coverage() -> dict[str, Any]:
                 "method-pack downstream.value",
                 "method-pack chain combine_with_infrastructure_telescoping.valueEnteredLaterSteps",
             ],
+            "currentGBoundToCheckedIdentity": True,
             "notAGeneralDataflowLanguage": True,
         },
         "evidenceScope": {
@@ -204,7 +211,10 @@ WORKFLOW_STEPS: tuple[dict[str, Any], ...] = (
         "coverage": "domain-python-binding",
         "fixedRule": "research.polynomial_finite_sum_proposal.coverage.verify_typed_binding",
         "obligationId": None,
-        "covers": "The computed exact rational is the same G(b+1)-G(a) recorded as value/downstream.",
+        "covers": (
+            "The computed exact rational is the same G(b+1)-G(a) recorded as "
+            "value/downstream, and current G is the G named by the checked identity."
+        ),
         "doesNotCover": "No general obligation dataflow; dependsOn is unused.",
     },
     {
@@ -251,7 +261,7 @@ def record_coverage(
     identity = result.get("identity") if isinstance(result.get("identity"), dict) else {}
     receipt = result.get("obligationReceipt") if isinstance(result.get("obligationReceipt"), dict) else {}
     status = _status(result, error)
-    generated = _generated_obligations(result, identity, receipt, status)
+    generated = _generated_obligations(identity, receipt)
     steps = _instantiate_steps(view, result, generated, status, error)
     procedure_established = _procedure_established(status, generated, steps, result)
     typed = _typed_binding(view, result, procedure_established)
@@ -304,13 +314,7 @@ def record_coverage(
             "allSubmittedObligationsChecked": _all_obligations_checked(generated),
             "coversOriginalTaskClaim": False,
             "procedureEstablishedFiniteSumValue": procedure_established,
-            "reason": (
-                "The only generated obligation is the difference identity. "
-                "Natural-language translation, binomial rewrite, telescoping "
-                "combination (infrastructure), and the kernel-checked conclusion "
-                "are not covered by that obligation. Obligation success is not "
-                "claim coverage."
-            ),
+            "reason": _claim_coverage_reason(generated),
         },
         "evidenceScope": {
             "identityScope": identity.get("scope") or "polynomial_identity_over_rationals",
@@ -545,7 +549,12 @@ def verify_typed_binding(
     *,
     task: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Recompute G(b+1)-G(a) and require recorded value/downstream copies to match."""
+    """Recompute G(b+1)-G(a) and require recorded value/downstream copies to match.
+
+    Current G must be the antidifference named by the checked identity
+    statement. A joint rewrite of G and value that leaves a stale
+    ``identity.status=checked`` fail-closes.
+    """
 
     view = _task_view(task or {}, result)
     identity = result.get("identity") if isinstance(result.get("identity"), dict) else {}
@@ -572,6 +581,12 @@ def verify_typed_binding(
             "E_DOMAIN",
             "reversed bounds are unsupported; raw endpoint subtraction is not a covered finite sum",
         )
+    _require_current_g_bound_to_checked_identity(
+        result,
+        g_source=g_source,
+        variable=variable,
+        identity=identity,
+    )
     try:
         g_at_upper_plus_one = evaluate_univariate(g_source, variable, upper + 1)
         g_at_lower = evaluate_univariate(g_source, variable, lower)
@@ -624,6 +639,7 @@ def verify_typed_binding(
         "formula": "G(upper + 1) - G(lower)",
         "recomputed": fraction_payload(recomputed),
         "matchesRecordedValue": True,
+        "currentGBoundToCheckedIdentity": True,
         "combinationRuleId": TELESCOPING_RULE_ID,
         "combinationRuleOrigin": TELESCOPING_RULE_ORIGIN,
         "agentExtracted": False,
@@ -683,6 +699,11 @@ def verify_coverage_honesty(
         binding = coverage.get("typedBinding") if isinstance(coverage.get("typedBinding"), dict) else {}
         if binding.get("status") != "bound":
             raise CoverageIntegrityError("E_INPUT", "established finite-sum value must carry a typed binding")
+        if binding.get("currentGBoundToCheckedIdentity") is not True:
+            raise CoverageIntegrityError(
+                "E_INPUT",
+                "established finite-sum value must bind current G to the checked identity",
+            )
         if result is not None and result.get("status") == "ok":
             verify_typed_binding(result, task=coverage.get("taskClaim"))
     nl_step = _step(coverage, "nl-to-structured-claim")
@@ -753,6 +774,10 @@ def _infer_source(result: dict[str, Any]) -> str:
         return "method-pack-apply"
     if kind == "math-anchor.research.polynomial-finite-sum.v0":
         return "polynomial-finite-sum-runner"
+    if kind == "sympy_summation_baseline":
+        return "sympy-summation-baseline"
+    if isinstance(kind, str) and kind:
+        return kind
     return "unknown"
 
 
@@ -796,10 +821,8 @@ def _outcome_record(status: str, error: BaseException | None) -> dict[str, Any]:
 
 
 def _generated_obligations(
-    result: dict[str, Any],
     identity: dict[str, Any],
     receipt: dict[str, Any],
-    status: str,
 ) -> list[dict[str, Any]]:
     entries = receipt.get("obligations") if isinstance(receipt.get("obligations"), list) else []
     generated: list[dict[str, Any]] = []
@@ -835,17 +858,6 @@ def _generated_obligations(
                 "certificateDigest": identity.get("certificateDigest"),
                 "left": identity.get("left"),
                 "right": identity.get("right"),
-                "covers": "G(k+1)-G(k)=p(k) as rational polynomials with constant denominators",
-                "doesNotCover": list(IDENTITY_DOES_NOT_COVER),
-            }
-        )
-        return generated
-    if status in {"ok", "falsified"}:
-        generated.append(
-            {
-                "id": DIFFERENCE_IDENTITY_OBLIGATION_ID,
-                "kind": DIFFERENCE_IDENTITY_KIND,
-                "status": status,
                 "covers": "G(k+1)-G(k)=p(k) as rational polynomials with constant denominators",
                 "doesNotCover": list(IDENTITY_DOES_NOT_COVER),
             }
@@ -1036,8 +1048,83 @@ def _typed_binding(
         "outputs": outputs,
         "recomputed": recomputed,
         "hashBinding": hash_binding,
+        "currentGBoundToCheckedIdentity": True,
         "notAGeneralDataflowLanguage": True,
     }
+
+
+def _claim_coverage_reason(generated: list[dict[str, Any]]) -> str:
+    if generated:
+        return (
+            "The only generated obligation is the difference identity. "
+            "Natural-language translation, binomial rewrite, telescoping "
+            "combination (infrastructure), and the kernel-checked conclusion "
+            "are not covered by that obligation. Obligation success is not "
+            "claim coverage."
+        )
+    return (
+        "No difference-identity obligation was submitted: this result has "
+        "neither an obligation receipt nor an identity object. "
+        "Obligation success is not claim coverage."
+    )
+
+
+def _identity_left(result: dict[str, Any], identity: dict[str, Any]) -> str | None:
+    left = identity.get("left")
+    if isinstance(left, str) and left.strip():
+        return left
+    receipt = result.get("obligationReceipt")
+    if not isinstance(receipt, dict) or not isinstance(receipt.get("obligations"), list):
+        return None
+    for entry in receipt["obligations"]:
+        if not isinstance(entry, dict):
+            continue
+        claim = entry.get("claim")
+        if isinstance(claim, dict) and isinstance(claim.get("left"), str) and claim["left"].strip():
+            return claim["left"]
+        detail = entry.get("detail")
+        if isinstance(detail, dict) and isinstance(detail.get("left"), str) and detail["left"].strip():
+            return detail["left"]
+    return None
+
+
+def _require_current_g_bound_to_checked_identity(
+    result: dict[str, Any],
+    *,
+    g_source: str,
+    variable: str,
+    identity: dict[str, Any],
+) -> None:
+    """Fail closed if current G is not the G named by the checked identity."""
+
+    left = _identity_left(result, identity)
+    if not isinstance(left, str) or not left.strip():
+        raise CoverageIntegrityError(
+            "E_INPUT",
+            "typed binding requires a checked identity statement that mentions current G",
+        )
+    try:
+        g_terms = parse_antidifference(g_source, variable)
+    except DomainError as error:
+        raise CoverageIntegrityError(error.code, error.message) from error
+    canonical_g = polynomial_source(g_terms, variable)
+    expected_left = (
+        f"({polynomial_source(g_terms, variable, shifted=True)}) - ({canonical_g})"
+    )
+    left_norm = normalize_expression_source(left)
+    expected_norm = normalize_expression_source(expected_left)
+    mentions_current_g = f"({canonical_g})" in left or canonical_g in left
+    if not mentions_current_g or left_norm != expected_norm:
+        raise CoverageIntegrityError(
+            "E_RUNTIME",
+            "current G is inconsistent with the checked identity statement",
+            {
+                "antidifference": g_source,
+                "canonicalG": canonical_g,
+                "identityLeft": left,
+                "expectedLeft": expected_left,
+            },
+        )
 
 
 def _all_obligations_checked(generated: list[dict[str, Any]]) -> bool:

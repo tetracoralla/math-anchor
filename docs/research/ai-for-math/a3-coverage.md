@@ -73,7 +73,7 @@ copy of the full receipt.
 | `G(k+1)-G(k)=p(k)` | obligation `difference-identity` | That identity, as rational polynomials, `exact_symbolic` |
 | Endpoint evaluation | independent checker parser | Exact rationals `G(upper+1)` and `G(lower)` |
 | `G(upper+1)-G(lower)` | hand-provided infrastructure `math-anchor.research.discrete-telescoping-combination.v0` | Finite-sum **value** after the identity is checked and bounds are in domain |
-| Typed binding of that value | domain Python (`verify_typed_binding`) | Recorded `value` / `downstream` match independent recomputation |
+| Typed binding of that value | domain Python (`verify_typed_binding`) | Recorded `value` / `downstream` match independent recomputation; current `G` must be the `G` named by the checked identity |
 
 On T1 (`sum_{k=1}^{10} k^2`) and the held-out cubes task, the identity
 obligation is checked, the procedure can establish the finite-sum **value**,
@@ -127,11 +127,22 @@ hash-binding proofs. The hash-only path never calls
 | Forged `formalKernelChecked` | Coverage refuses to record it |
 | Stale / unexpected pack version | Apply `stale_or_unexpected_pack_version` |
 | Result rewritten (`value` or chain `valueEnteredLaterSteps`) | Typed binding `E_RUNTIME` |
+| Joint rewrite of `G` and `value` leaving stale `identity.status=checked` | Typed binding `E_RUNTIME`; current `G` must match `identity.left` |
 | `unsupported` treated as a counterexample | Explicitly classified as **not** proposition-false |
+
+`--baseline-only` / baseline results with no receipt and no identity object
+emit `generatedObligations=[]`. They do not synthesize a phantom
+`difference-identity`. `coversOriginalTaskClaim` stays false.
 
 ## Honesty
 
 - Success of submitted obligations ≠ coverage of the original task claim.
+- A coverage sidecar without a receipt and without an identity object does
+  not invent a `difference-identity` obligation. Baseline `kind` stays
+  `sympy_summation_baseline`; source is not `unknown`.
+- Typed binding binds current `G` to the checked identity statement
+  (`identity.left` must be `G(k+1)-G(k)` for that `G`) before recording an
+  established finite-sum value. Value-only rewrites remain rejected.
 - Hash consistency binds content, not authorship or math truth, and does not
   apply the telescoping rule.
 - `formal_kernel_checked` remains false unless Lean checks the whole

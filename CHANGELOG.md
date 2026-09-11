@@ -17,7 +17,10 @@ and Apple notarization record exist.
   (`research/polynomial_finite_sum_proposal/coverage.py`). It maps the
   structured task claim to obligation `difference-identity`, records which
   steps are uncovered, and binds `G(upper+1)-G(lower)` as an exact rational.
-  Obligation success is not claim coverage. Not a public Capability.
+  Obligation success is not claim coverage. Baseline-only results do not
+  synthesize a phantom identity obligation. Typed binding fail-closes if
+  current `G` does not match the checked identity statement. Not a public
+  Capability.
 
 ## 0.7.1 - 2026-09-06
 

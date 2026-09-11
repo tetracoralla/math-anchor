@@ -457,6 +457,55 @@ def mutation_rewritten_result() -> dict[str, Any]:
     )
 
 
+def mutation_joint_g_and_value_rewrite() -> dict[str, Any]:
+    """A joint rewrite of G and value must not inherit a stale checked identity."""
+
+    result = run_polynomial_finite_sum(summand="k^2", lower=1, upper=10)
+    tampered = deepcopy(result)
+    tampered["antidifference"] = "0"
+    tampered["value"] = {"exact": "0", "numerator": 0, "denominator": 1}
+    tampered["endpoints"] = {
+        "gAtUpperPlusOne": {"exact": "0", "numerator": 0, "denominator": 1},
+        "gAtLower": {"exact": "0", "numerator": 0, "denominator": 1},
+    }
+    joint_failed = False
+    try:
+        verify_typed_binding(tampered)
+    except CoverageIntegrityError as error:
+        joint_failed = "inconsistent with the checked identity" in error.message
+    record_failed = False
+    try:
+        record_coverage(T1_TASK, tampered)
+    except CoverageIntegrityError:
+        record_failed = True
+    value_only = deepcopy(result)
+    value_only["value"] = {"exact": "0", "numerator": 0, "denominator": 1}
+    value_only_failed = False
+    try:
+        verify_typed_binding(value_only)
+    except CoverageIntegrityError as error:
+        value_only_failed = "rewritten" in error.message
+    honest_bound = False
+    try:
+        honest_bound = verify_typed_binding(result).get("currentGBoundToCheckedIdentity") is True
+    except CoverageIntegrityError:
+        honest_bound = False
+    detected = joint_failed and record_failed and value_only_failed and honest_bound
+    return _verdict(
+        "joint-g-and-value-rewrite",
+        detected=detected,
+        expected="typed-binding-rejects-stale-identity-after-joint-G-and-value-rewrite",
+        observed=(
+            f"joint_failed={joint_failed}; record_failed={record_failed}; "
+            f"value_only_failed={value_only_failed}; honest_bound={honest_bound}"
+        ),
+        notes=(
+            "identity.status remains checked and identity.left still names the "
+            "original G. Binding must not treat G=0, value=0 as an established sum."
+        ),
+    )
+
+
 def mutation_unsupported_as_counterexample() -> dict[str, Any]:
     harmonic = mutation_wrong_domain()
     try:
@@ -518,6 +567,7 @@ MUTATIONS = (
     mutation_forged_kernel_checked,
     mutation_stale_pack_version,
     mutation_rewritten_result,
+    mutation_joint_g_and_value_rewrite,
     mutation_unsupported_as_counterexample,
     mutation_hash_binding_is_not_combination,
 )
