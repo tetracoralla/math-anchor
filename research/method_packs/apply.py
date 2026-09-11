@@ -1,7 +1,10 @@
 """Retrieve an experimental method pack and instantiate it on a new task.
 
-The pack JSON is declarative. Execution reuses the A1 polynomial finite-sum
-procedure; it does not eval pack text or import caller code. The hand-provided
+The pack JSON is declarative. It does not eval pack text or import caller
+code. Gosper packs still reuse the A1 polynomial finite-sum procedure
+(construction via gosper_sum / construct_antidifference). The shifted-square
+pack (PARAM_PACK_ID) instantiates the saved parametric G and must not
+reconstruct; reconstruction is disabled on that path. The hand-provided
 telescoping combination rule remains infrastructure, not pack novelty.
 """
 

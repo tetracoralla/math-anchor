@@ -218,6 +218,6 @@
     "name": "math-anchor",
     "version": "0.7.1"
   },
-  "whatThePackAddsVersusB1": "这个方法包相对不带包的 B1 流程，额外保存了参数化反差分 G(k,c)=k(k-1)(2k-1)/6 + c k(k-1) + c^2 k，以及可检查的二元恒等式 G(k+1,c)-G(k,c)=(k+c)^2。未来对未见过的有理数 c 与整数边界，apply 代入该 G 并做望远镜组合，不必再运行 Gosper / 待定系数构造。",
+  "whatThePackAddsVersusB1": "相对不带包的 B1，这个包额外保存了参数化反差分 G(k,c)=k(k-1)(2k-1)/6 + c k(k-1) + c^2 k，以及可检查的二元恒等式 G(k+1,c)-G(k,c)=(k+c)^2。对未见过的有理数 c 与整数边界，apply 代入该 G、检查适用条件、再查实例恒等式并做望远镜组合，不必再对每个 (c,a,b) 运行 Gosper 或待定系数构造。身份检查仍会做；省下的是构造，不是证明义务。",
   "frozenPackConsistent": true
 }

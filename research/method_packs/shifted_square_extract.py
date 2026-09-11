@@ -43,6 +43,24 @@ from .shifted_square import (
 from .shifted_square_apply import apply_shifted_square_pack
 
 
+# Canonical answer (Chinese). Same paragraph as human_note.md /
+# parameterized-method.md, without markdown backticks. Applicability and the
+# instance identity remain checks on apply; what was saved is construction,
+# not the proof obligation.
+WHAT_THE_PACK_ADDS_VERSUS_B1 = (
+    "相对不带包的 B1，这个包额外保存了参数化反差分 "
+    "G(k,c)=k(k-1)(2k-1)/6 + c k(k-1) + c^2 k，以及可检查的二元恒等式 "
+    "G(k+1,c)-G(k,c)=(k+c)^2。对未见过的有理数 c 与整数边界，apply "
+    "代入该 G、检查适用条件、再查实例恒等式并做望远镜组合，不必再对每个 "
+    "(c,a,b) 运行 Gosper 或待定系数构造。身份检查仍会做；省下的是构造，"
+    "不是证明义务。"
+)
+
+MANDATORY_QUESTION_ZH = (
+    "这个方法包相对不带包的 B1 流程，额外保存了什么数学信息；未来哪一步工作可以因此不再重复？"
+)
+
+
 EXTRACTION_TASK = {
     "taskId": PARAM_EXTRACTION_TASK_ID,
     "summand": "(k+1)^2",
@@ -200,12 +218,7 @@ def extract_shifted_square(*, output_dir: Path | None = None) -> dict[str, Any]:
         "inScopeVerification": in_scope,
         "lifecycle": lifecycle,
         "runtime": {"name": "math-anchor", "version": __version__},
-        "whatThePackAddsVersusB1": (
-            "这个方法包相对不带包的 B1 流程，额外保存了参数化反差分 "
-            "G(k,c)=k(k-1)(2k-1)/6 + c k(k-1) + c^2 k，以及可检查的二元恒等式 "
-            "G(k+1,c)-G(k,c)=(k+c)^2。未来对未见过的有理数 c 与整数边界，"
-            "apply 代入该 G 并做望远镜组合，不必再运行 Gosper / 待定系数构造。"
-        ),
+        "whatThePackAddsVersusB1": WHAT_THE_PACK_ADDS_VERSUS_B1,
     }
 
     target = Path(output_dir) if output_dir is not None else DEFAULT_PARAM_PACK_DIR / "evidence"

@@ -36,7 +36,11 @@ from research.method_packs.shifted_square import (
     match_shifted_square,
     monomial_antidifference,
 )
-from research.method_packs.shifted_square_extract import extract_shifted_square
+from research.method_packs.shifted_square_extract import (
+    MANDATORY_QUESTION_ZH,
+    WHAT_THE_PACK_ADDS_VERSUS_B1,
+    extract_shifted_square,
+)
 from research.polynomial_finite_sum_proposal.runner import run_polynomial_finite_sum
 from research.polynomial_finite_sum_proposal.telescoping import TELESCOPING_RULE_ID
 
@@ -352,7 +356,11 @@ def test_extraction_holds_out_second_task(tmp_path: Path) -> None:
     assert evidence["fairB1Baseline"]["agreesWithPackApply"] is True
     assert "gosper" in evidence["fairB1Baseline"]["constructor"]
     assert PARAM_HELD_OUT_TASK_ID not in json.dumps(evidence["inScopeVerification"]["cases"])
-    assert "这个方法包相对不带包的 B1 流程" in evidence["whatThePackAddsVersusB1"]
+    assert evidence["whatThePackAddsVersusB1"] == WHAT_THE_PACK_ADDS_VERSUS_B1
+    assert "检查适用条件" in evidence["whatThePackAddsVersusB1"]
+    assert "再查实例恒等式" in evidence["whatThePackAddsVersusB1"]
+    assert "身份检查仍会做" in evidence["whatThePackAddsVersusB1"]
+    assert "省下的是构造，不是证明义务" in evidence["whatThePackAddsVersusB1"]
     assert (tmp_path / "extraction_bundle.json").is_file()
 
 
@@ -407,9 +415,6 @@ def test_match_shifted_square_template() -> None:
 
 
 def test_docs_keep_the_mandatory_sentence() -> None:
-    sentence = (
-        "这个方法包相对不带包的 B1 流程，额外保存了什么数学信息；未来哪一步工作可以因此不再重复？"
-    )
     docs = (
         ROOT / "docs" / "research" / "ai-for-math" / "parameterized-method.md"
     ).read_text(encoding="utf-8")
@@ -420,6 +425,28 @@ def test_docs_keep_the_mandatory_sentence() -> None:
         / "shifted_square_antidifference.v0"
         / "human_note.md"
     ).read_text(encoding="utf-8")
-    assert sentence in docs
-    assert sentence in note
+    frozen = json.loads(
+        (PARAM_PACK_PATH.parent / "evidence" / "extraction_bundle.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert MANDATORY_QUESTION_ZH in docs
+    assert MANDATORY_QUESTION_ZH in note
+    for text in (docs, note):
+        assert "检查适用条件" in text
+        assert "再查实例恒等式" in text
+        assert "身份检查仍会做" in text
+        assert "省下的是构造" in text
+        assert "不是证明义务" in text
+    assert frozen["whatThePackAddsVersusB1"] == WHAT_THE_PACK_ADDS_VERSUS_B1
     assert "不必再" in docs and "Gosper" in docs
+
+
+def test_dispatcher_docstring_covers_both_pack_families() -> None:
+    from research.method_packs import apply as apply_mod
+
+    doc = apply_mod.__doc__ or ""
+    assert "Gosper packs still reuse the A1" in doc
+    assert "PARAM_PACK_ID" in doc
+    assert "must not" in doc and "reconstruct" in doc
+    assert "Execution reuses the A1 polynomial finite-sum procedure" not in doc
