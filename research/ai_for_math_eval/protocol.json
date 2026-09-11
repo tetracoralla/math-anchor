@@ -1,0 +1,166 @@
+{
+  "kind": "math-anchor.research.ai-for-math-a4-smoke-protocol.v0",
+  "stage": "A4",
+  "title": "Equal-budget no-model smoke for the polynomial finite-sum vertical",
+  "preRegistered": true,
+  "notABenefitPercentage": true,
+  "promotionForbiddenInThisSmoke": true,
+  "model": {
+    "requested": null,
+    "observed": null,
+    "callsAllowed": false,
+    "noModelFirst": true
+  },
+  "budget": {
+    "equalBudget": true,
+    "modelCalls": 0,
+    "dollarCosts": null,
+    "dollarCostsOmittedBecause": "no real prices or fees; this smoke invents none"
+  },
+  "outOfScope": [
+    "Agent Host core changes",
+    "human calculator UI",
+    "fifth MCP tool",
+    "Skill Refinery",
+    "general obligation dataflow language",
+    "public Capability/Procedure promotion of the pack"
+  ],
+  "arms": [
+    {
+      "id": "B0",
+      "description": "Existing SymPy summation baseline only. No Math Anchor method pack, no obligation checker, no A1 telescoping combination.",
+      "engine": "sympy.summation",
+      "methodPack": false,
+      "usesExistingBaseline": true,
+      "gosperSumNote": "gosper_sum is the untrusted B1/B2 constructor, not this baseline. B0 asks SymPy for the definite-sum value."
+    },
+    {
+      "id": "B1",
+      "description": "A1 polynomial finite-sum runner: Gosper/summation construction, independent identity check, hand-provided telescoping. No extracted method pack. compare_baseline is false so B0 is not embedded.",
+      "engine": "math-anchor.research.polynomial-finite-sum.v0",
+      "methodPack": false,
+      "compareBaseline": false
+    },
+    {
+      "id": "B2",
+      "description": "Frozen A2 pack apply path on the A1 backend. compare_baseline is false.",
+      "engine": "math-anchor.research.experimental-method-pack-application.v0",
+      "methodPack": true,
+      "packId": "math-anchor.research.method-pack.polynomial-antidifference-gosper.v0",
+      "packVersion": "0.1.0-experimental",
+      "compareBaseline": false
+    },
+    {
+      "id": "B2-minus",
+      "description": "Held-out cubes without the pack, only if B2 shows a reuse signal. Same execution as B1 on that task (equal-budget drop-library).",
+      "conditional": true,
+      "methodPack": false,
+      "onlyIfReuseSignalOn": "held-out-cubes"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "T1",
+      "taskId": "T1",
+      "role": "extraction-source",
+      "summand": "k^2",
+      "variable": "k",
+      "lower": 1,
+      "upper": 10,
+      "expectedExact": "385",
+      "successMeans": "exact rational 385",
+      "notes": "A1 example / A2 extraction source. B2 on this task is a replay, not held-out reuse."
+    },
+    {
+      "id": "held-out-cubes",
+      "taskId": "A2-second-sum-k-cubed-1-to-20",
+      "role": "held-out-reuse",
+      "summand": "k^3",
+      "variable": "k",
+      "lower": 1,
+      "upper": 20,
+      "expectedExact": "44100",
+      "successMeans": "exact rational 44100; different degree, bounds, and value from T1",
+      "notes": "Not a rename of T1. T1 G and 385 must not be inputs."
+    },
+    {
+      "id": "negative-harmonic",
+      "taskId": "A2-reject-harmonic",
+      "role": "inapplicable",
+      "summand": "1/k",
+      "variable": "k",
+      "lower": 1,
+      "upper": 3,
+      "countedAsSolved": false,
+      "successMeans": "never counted as solved; B1/B2 fail-closed unsupported, not a false proposition",
+      "expectedByArm": {
+        "B0": {
+          "countedAsSolved": false,
+          "mayComputeExactRational": true,
+          "notAPolynomialFiniteSumSuccess": true,
+          "notes": "SymPy summation may return the harmonic number 11/6. That is not Math Anchor solving a polynomial finite-sum and is not counted as the negative being solved."
+        },
+        "B1": {
+          "failClosed": true,
+          "code": "E_UNSUPPORTED",
+          "propositionFalsified": false,
+          "countedAsSolved": false
+        },
+        "B2": {
+          "failClosed": true,
+          "code": "E_UNSUPPORTED",
+          "applicability": "rejected",
+          "propositionFalsified": false,
+          "countedAsSolved": false
+        },
+        "B2-minus": {
+          "failClosed": true,
+          "countedAsSolved": false,
+          "notes": "B2-minus is not scheduled on this task."
+        }
+      }
+    }
+  ],
+  "reuseSignalRequires": [
+    "retrieve_named_pack",
+    "instantiate_declared_params",
+    "independent_identity_check",
+    "value_entered_later_step",
+    "lifecycleEvidence=cross-task-use-evidence",
+    "extractionTaskIdNotReusedAsAnswer",
+    "callAloneIsNotAdoption",
+    "coversOriginalTaskClaim stays false"
+  ],
+  "reuseSignalIsNotSemanticAdoption": true,
+  "latency": {
+    "trials": 2,
+    "labels": ["cold", "hot"],
+    "unit": "ms",
+    "note": "In-process wall time on this machine. First trial of a cell is labeled cold, second hot. Not a statistical benchmark. Not a dollar cost."
+  },
+  "scoring": {
+    "success": "In-domain: ok with the pre-registered exact rational. Negative: never solved; B1/B2 fail-closed and not proposition-false; B0 recorded honestly.",
+    "wrongAcceptance": "ok with a value other than the pre-registered exact, or B1/B2 ok on 1/k",
+    "applicabilityMisjudgment": "B1/B2 reject T1 or cubes, or accept 1/k, or treat 1/k as a falsified proposition",
+    "coversOriginalTaskClaim": "must stay false",
+    "callAloneIsNotAdoption": "must stay true on B2 apply",
+    "lifecycleEvidenceHonesty": "cross-task-use-evidence only on held-out cubes B2; T1 replay stays verified-in-declared-scope; neither is semantic adoption"
+  },
+  "decisionRule": {
+    "promote": "Forbidden in this smoke. A few integration cells are not a promotion case.",
+    "targeted_fix": "Wrong in-domain value, negative counted as solved, coversOriginalTaskClaim true, or formal_kernel_checked true.",
+    "evidence_insufficient": "Default when the harness is honest and in-domain cells match. Smoke is not an overall benefit percentage. Correct-but-slower vs B0 is not a promotion case."
+  },
+  "honesty": {
+    "smokeIsNotOverallBenefitPercent": true,
+    "greenHarnessTestsAreNotA4Completion": true,
+    "lifecycleEvidenceIsNotSemanticAdoption": true,
+    "callAloneIsNotAdoption": true,
+    "coversOriginalTaskClaimStaysFalse": true,
+    "unsupportedIsNotACounterexample": true,
+    "formalKernelChecked": false,
+    "telescopingIsHandProvidedInfrastructure": true,
+    "noDollarCostsInvented": true,
+    "packNotPromoted": true
+  }
+}
