@@ -154,9 +154,9 @@ def apply_method_pack(
         result["antidifference"] = backend.get("antidifference")
         result["constructor"] = backend.get("constructor")
 
-    if include_backend_receipt:
-        result["obligationReceipt"] = backend.get("obligationReceipt")
-    elif backend.get("identity"):
+    # Compact identity is the verification association. The full receipt is an
+    # optional evidence presentation and must not replace that association.
+    if isinstance(backend.get("identity"), dict):
         result["identity"] = {
             key: backend["identity"][key]
             for key in (
@@ -170,6 +170,8 @@ def apply_method_pack(
             )
             if key in backend["identity"]
         }
+    if include_backend_receipt:
+        result["obligationReceipt"] = backend.get("obligationReceipt")
     return result
 
 

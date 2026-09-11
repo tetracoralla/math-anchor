@@ -137,6 +137,12 @@ def main(argv: list[str] | None = None) -> int:
             compare_baseline=not arguments.no_baseline,
             include_backend_receipt=arguments.include_receipt or arguments.receipt_output is not None,
         )
+        coverage = None
+        if arguments.coverage_output is not None:
+            # Coverage must see the verification association before any evidence
+            # presentation strip. Sidecar receipt is not deletion of evidence.
+            coverage = record_coverage(task, result, pack=pack, source="method-pack-apply")
+            _write_new_json(arguments.coverage_output, coverage, label="coverage output")
         if arguments.receipt_output is not None:
             receipt = result.get("obligationReceipt")
             if not isinstance(receipt, dict):
@@ -149,9 +155,7 @@ def main(argv: list[str] | None = None) -> int:
             _write_new_json(arguments.chain_output, result["chain"], label="chain output")
         if arguments.adoption_output is not None:
             _write_new_json(arguments.adoption_output, result["adoption"], label="adoption output")
-        if arguments.coverage_output is not None:
-            coverage = record_coverage(task, result, pack=pack, source="method-pack-apply")
-            _write_new_json(arguments.coverage_output, coverage, label="coverage output")
+        if coverage is not None:
             result = dict(result)
             result["coverage"] = coverage
         _emit(result, output=arguments.output)

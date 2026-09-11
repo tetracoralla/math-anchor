@@ -8,6 +8,7 @@ obligation is not coverage of the original finite-sum claim.
 from __future__ import annotations
 
 from fractions import Fraction
+import hashlib
 import json
 from pathlib import Path
 from typing import Any
@@ -23,12 +24,14 @@ from math_anchor.expression_source import normalize_expression_source
 
 from .polynomials import (
     DomainError,
+    checker_polynomials_equal,
     evaluate_univariate,
     fraction_payload,
     parse_antidifference,
     parse_summand,
     polynomial_source,
     rational_from_payload,
+    rebuilt_difference_claim,
 )
 from .telescoping import (
     TELESCOPING_RULE_ID,
@@ -556,18 +559,20 @@ def verify_typed_binding(
 ) -> dict[str, Any]:
     """Recompute G(b+1)-G(a) and require recorded value/downstream copies to match.
 
-    Current G must be the antidifference named by the checked identity
-    statement. A joint rewrite of G and value that leaves a stale
-    ``identity.status=checked`` fail-closes.
+    Current G and the original task summand are the proposition. Compact
+    ``identity.status=checked`` and a stale obligation receipt are not
+    enough: the current G(k+1)-G(k)=p(k) is rebuilt and checked in the
+    independent checker language, then bound to real receipt fields
+    (claimDigest, detail.identity). Receipts have no claim.left/right.
     """
 
     view = _task_view(task or {}, result)
     identity = result.get("identity") if isinstance(result.get("identity"), dict) else {}
     identity_status = identity.get("status")
     if identity_status is None:
-        receipt = result.get("obligationReceipt")
-        if isinstance(receipt, dict) and isinstance(receipt.get("obligations"), list) and receipt["obligations"]:
-            identity_status = receipt["obligations"][0].get("status")
+        entries = _receipt_obligation_entries(result)
+        if entries:
+            identity_status = entries[0].get("status")
     if result.get("status") != "ok" or identity_status != "checked":
         raise CoverageIntegrityError(
             "E_INPUT",
@@ -586,20 +591,15 @@ def verify_typed_binding(
             "E_DOMAIN",
             "reversed bounds are unsupported; raw endpoint subtraction is not a covered finite sum",
         )
-    _require_current_g_bound_to_checked_identity(
-        result,
-        g_source=g_source,
-        variable=variable,
-        identity=identity,
-    )
     task_summand = view.get("summand")
     if not isinstance(task_summand, str) or not task_summand.strip():
         raise CoverageIntegrityError("E_INPUT", "typed binding requires the original task summand")
-    _require_right_matches_original_summand(
+    _require_current_proposition_independently_checked(
         result,
-        identity=identity,
-        summand=task_summand,
+        g_source=g_source,
         variable=variable,
+        summand=task_summand,
+        identity=identity,
     )
     try:
         g_at_upper_plus_one = evaluate_univariate(g_source, variable, upper + 1)
@@ -1013,13 +1013,18 @@ def _typed_binding(
     result: dict[str, Any],
     procedure_established: bool,
 ) -> dict[str, Any]:
+    identity_obj = result.get("identity") if isinstance(result.get("identity"), dict) else {}
+    receipt_entries = _receipt_obligation_entries(result)
+    receipt_detail = (
+        receipt_entries[0].get("detail")
+        if receipt_entries and isinstance(receipt_entries[0].get("detail"), dict)
+        else {}
+    )
     hash_binding = {
-        "claimDigest": (result.get("identity") or {}).get("claimDigest")
-        if isinstance(result.get("identity"), dict)
-        else None,
-        "certificateDigest": (result.get("identity") or {}).get("certificateDigest")
-        if isinstance(result.get("identity"), dict)
-        else None,
+        "claimDigest": identity_obj.get("claimDigest")
+        or (receipt_entries[0].get("claimDigest") if receipt_entries else None),
+        "certificateDigest": identity_obj.get("certificateDigest")
+        or receipt_detail.get("certificateDigest"),
         "binds": "byte-identity of the polynomial_identity claim JSON and of the certificate content",
         "doesNotBind": [
             "authorship",
@@ -1115,50 +1120,35 @@ def _claim_coverage_reason(generated: list[dict[str, Any]]) -> str:
     )
 
 
-def _identity_side(result: dict[str, Any], identity: dict[str, Any], side: str) -> str | None:
-    value = identity.get(side)
-    if isinstance(value, str) and value.strip():
-        return value
+def _receipt_obligation_entries(result: dict[str, Any]) -> list[dict[str, Any]]:
     receipt = result.get("obligationReceipt")
     if not isinstance(receipt, dict) or not isinstance(receipt.get("obligations"), list):
-        return None
-    for entry in receipt["obligations"]:
-        if not isinstance(entry, dict):
-            continue
-        claim = entry.get("claim")
-        if isinstance(claim, dict) and isinstance(claim.get(side), str) and claim[side].strip():
-            return claim[side]
-        detail = entry.get("detail")
-        if isinstance(detail, dict) and isinstance(detail.get(side), str) and detail[side].strip():
-            return detail[side]
-    return None
+        return []
+    return [entry for entry in receipt["obligations"] if isinstance(entry, dict)]
 
 
-def _identity_left(result: dict[str, Any], identity: dict[str, Any]) -> str | None:
-    return _identity_side(result, identity, "left")
+def _claim_digest(claim: dict[str, Any]) -> str:
+    payload = json.dumps(
+        claim,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    ).encode("utf-8")
+    return "sha256:" + hashlib.sha256(payload).hexdigest()
 
 
 def _require_right_matches_original_summand(
-    result: dict[str, Any],
     *,
     identity: dict[str, Any],
     summand: str,
     variable: str,
+    rebuilt_right: str,
 ) -> None:
     identity_right = identity.get("right") if isinstance(identity.get("right"), str) else None
-    receipt_right = None
-    receipt = result.get("obligationReceipt")
-    if isinstance(receipt, dict) and isinstance(receipt.get("obligations"), list):
-        for entry in receipt["obligations"]:
-            if not isinstance(entry, dict):
-                continue
-            claim = entry.get("claim")
-            if isinstance(claim, dict) and isinstance(claim.get("right"), str) and claim["right"].strip():
-                receipt_right = claim["right"]
-                break
-    if not identity_right:
-        identity_right = _identity_side(result, identity, "right")
-    if not isinstance(identity_right, str) or not identity_right.strip():
+    if identity_right is None:
+        return
+    if not identity_right.strip():
         raise CoverageIntegrityError(
             "E_INPUT",
             "typed binding requires identity.right for the original task summand",
@@ -1169,35 +1159,23 @@ def _require_right_matches_original_summand(
             "identity.right does not match the original task summand",
             {"taskSummand": summand, "identityRight": identity_right},
         )
-    if isinstance(receipt_right, str) and not _same_summand(summand, receipt_right, variable):
+    if not _same_summand(rebuilt_right, identity_right, variable):
         raise CoverageIntegrityError(
             "E_INPUT",
-            "receipt claim.right does not match the original task summand",
-            {"taskSummand": summand, "receiptRight": receipt_right},
-        )
-    if isinstance(receipt_right, str) and not _same_summand(identity_right, receipt_right, variable):
-        raise CoverageIntegrityError(
-            "E_INPUT",
-            "identity.right disagrees with receipt claim.right",
-            {"identityRight": identity_right, "receiptRight": receipt_right},
+            "identity.right does not match the rebuilt original-task summand",
+            {"rebuiltRight": rebuilt_right, "identityRight": identity_right},
         )
 
 
-def _require_current_g_bound_to_checked_identity(
-    result: dict[str, Any],
+def _require_compact_left_names_current_g(
     *,
     g_source: str,
     variable: str,
     identity: dict[str, Any],
 ) -> None:
-    """Fail closed if current G is not the G named by the checked identity."""
-
-    left = _identity_left(result, identity)
+    left = identity.get("left") if isinstance(identity.get("left"), str) else None
     if not isinstance(left, str) or not left.strip():
-        raise CoverageIntegrityError(
-            "E_INPUT",
-            "typed binding requires a checked identity statement that mentions current G",
-        )
+        return
     try:
         g_terms = parse_antidifference(g_source, variable)
     except DomainError as error:
@@ -1220,6 +1198,87 @@ def _require_current_g_bound_to_checked_identity(
                 "expectedLeft": expected_left,
             },
         )
+
+
+def _require_current_proposition_independently_checked(
+    result: dict[str, Any],
+    *,
+    g_source: str,
+    variable: str,
+    summand: str,
+    identity: dict[str, Any],
+) -> dict[str, Any]:
+    """Rebuild G(k+1)-G(k)=p(k) from current G and the original task, then check it."""
+
+    try:
+        rebuilt = rebuilt_difference_claim(g_source, summand, variable)
+    except DomainError as error:
+        raise CoverageIntegrityError(error.code, error.message) from error
+    rebuilt_claim = {
+        "left": rebuilt["left"],
+        "right": rebuilt["right"],
+        "variables": list(rebuilt["variables"]),
+    }
+    expected_digest = _claim_digest(rebuilt_claim)
+
+    _require_compact_left_names_current_g(
+        g_source=g_source,
+        variable=variable,
+        identity=identity,
+    )
+    if not checker_polynomials_equal(rebuilt["left"], rebuilt["right"], variable):
+        raise CoverageIntegrityError(
+            "E_RUNTIME",
+            "current G does not satisfy G(k+1)-G(k)=p(k) for the original task summand",
+            {
+                "antidifference": g_source,
+                "summand": summand,
+                "rebuiltLeft": rebuilt["left"],
+                "rebuiltRight": rebuilt["right"],
+            },
+        )
+    _require_right_matches_original_summand(
+        identity=identity,
+        summand=summand,
+        variable=variable,
+        rebuilt_right=rebuilt["right"],
+    )
+
+    stored_digest = identity.get("claimDigest")
+    if isinstance(stored_digest, str) and stored_digest != expected_digest:
+        raise CoverageIntegrityError(
+            "E_RUNTIME",
+            "compact identity claimDigest does not bind to the current proposition",
+            {
+                "identityClaimDigest": stored_digest,
+                "currentClaimDigest": expected_digest,
+            },
+        )
+
+    for entry in _receipt_obligation_entries(result):
+        receipt_digest = entry.get("claimDigest")
+        if receipt_digest != expected_digest:
+            raise CoverageIntegrityError(
+                "E_RUNTIME",
+                "obligation receipt claimDigest does not bind to the current proposition",
+                {
+                    "receiptClaimDigest": receipt_digest,
+                    "currentClaimDigest": expected_digest,
+                },
+            )
+        if entry.get("status") != "checked":
+            raise CoverageIntegrityError(
+                "E_INPUT",
+                "obligation receipt does not record a checked identity for the current proposition",
+            )
+        detail = entry.get("detail") if isinstance(entry.get("detail"), dict) else {}
+        # Real receipts have no claim.left/right; detail.identity is the checker boolean.
+        if detail.get("identity") is not True:
+            raise CoverageIntegrityError(
+                "E_RUNTIME",
+                "obligation receipt detail.identity does not certify the current proposition",
+            )
+    return rebuilt_claim
 
 
 def _all_obligations_checked(generated: list[dict[str, Any]]) -> bool:
