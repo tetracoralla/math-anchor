@@ -20,6 +20,7 @@ if str(ROOT) not in sys.path:
 from research.method_packs.apply import PackApplicationError, apply_method_pack
 from research.method_packs.extract import IN_SCOPE_CASES, extract_from_t1
 from research.method_packs.format import (
+    EXTRACTION_TASK_ID,
     HELD_OUT_SECOND_TASK_ID,
     LIFECYCLE_CANDIDATE,
     LIFECYCLE_CROSS_TASK,
@@ -28,6 +29,7 @@ from research.method_packs.format import (
     PACK_ID,
 )
 from research.method_packs.loader import PackFormatError, load_pack, validate_pack
+from research.polynomial_finite_sum_proposal.polynomials import DomainError
 from research.polynomial_finite_sum_proposal.runner import run_polynomial_finite_sum
 from research.polynomial_finite_sum_proposal.telescoping import (
     TELESCOPING_RULE_ID,
@@ -135,6 +137,48 @@ def test_second_task_sum_of_cubes_reuses_pack() -> None:
     assert "formal_kernel_checked" not in json.dumps(result) or result["formalKernelChecked"] is False
 
 
+def test_t1_replay_does_not_mint_cross_task_lifecycle() -> None:
+    replay = apply_method_pack({"summand": "k^2", "lower": 1, "upper": 10})
+    assert replay["status"] == "ok"
+    assert replay["value"]["exact"] == "385"
+    assert replay["adoption"]["used"] is True
+    assert replay["adoption"]["lifecycleEvidence"] == LIFECYCLE_VERIFIED
+    assert replay["adoption"]["lifecycleEvidence"] != LIFECYCLE_CROSS_TASK
+    assert replay["adoption"]["extractionTaskIdNotReusedAsAnswer"] is False
+    assert replay["chain"][2]["sourceSolutionCarried"] is False
+
+    labeled = apply_method_pack(
+        {
+            "taskId": EXTRACTION_TASK_ID,
+            "summand": "k^2",
+            "lower": 1,
+            "upper": 10,
+        }
+    )
+    assert labeled["adoption"]["lifecycleEvidence"] != LIFECYCLE_CROSS_TASK
+    assert labeled["adoption"]["extractionTaskIdNotReusedAsAnswer"] is False
+
+    equivalent = apply_method_pack(
+        {
+            "taskId": "alias-not-extraction-id",
+            "summand": "k**2",
+            "lower": 1,
+            "upper": 10,
+        }
+    )
+    assert equivalent["status"] == "ok"
+    assert equivalent["value"]["exact"] == "385"
+    assert equivalent["adoption"]["lifecycleEvidence"] != LIFECYCLE_CROSS_TASK
+    assert equivalent["adoption"]["extractionTaskIdNotReusedAsAnswer"] is False
+
+
+def test_missing_task_id_is_not_a_reuse_claim() -> None:
+    result = apply_method_pack({"summand": "k^3", "lower": 1, "upper": 20})
+    assert result["status"] == "ok"
+    assert result["adoption"]["lifecycleEvidence"] == LIFECYCLE_CROSS_TASK
+    assert result["adoption"]["extractionTaskIdNotReusedAsAnswer"] is False
+
+
 def test_wrong_antidifference_on_second_task_is_falsified() -> None:
     result = apply_method_pack(
         {
@@ -152,6 +196,8 @@ def test_wrong_antidifference_on_second_task_is_falsified() -> None:
     assert result["formalKernelChecked"] is False
     assert result["verification"]["status"] == "falsified"
     assert result["chain"][-1]["step"] == "verify_difference_identity"
+    assert result["chain"][2]["sourceSolutionCarried"] is True
+    assert result["adoption"]["lifecycleEvidence"] != LIFECYCLE_CROSS_TASK
 
 
 def test_reversed_bounds_are_inapplicable() -> None:
@@ -228,6 +274,8 @@ def test_hockey_stick_after_explicit_rewrite_stays_conditional() -> None:
     assert result["conditionalPremises"][0]["status"] == "conditional"
     assert result["conditionalPremises"][0]["verifiedByPack"] is False
     assert result["params"]["summand"] == "k*(k-1)/2"
+    assert result["adoption"]["lifecycleEvidence"] == LIFECYCLE_CROSS_TASK
+    assert result["adoption"]["extractionTaskIdNotReusedAsAnswer"] is True
 
 
 def test_self_certified_premise_is_rejected() -> None:
@@ -246,6 +294,31 @@ def test_self_certified_premise_is_rejected() -> None:
                 ],
             }
         )
+
+
+def test_runtime_domain_error_is_not_inapplicable(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    def fail(**_kwargs: object) -> dict[str, object]:
+        raise DomainError(
+            "E_RUNTIME",
+            "checked telescoping value disagrees with the SymPy summation baseline",
+        )
+
+    monkeypatch.setattr("research.method_packs.apply.run_polynomial_finite_sum", fail)
+    with pytest.raises(PackApplicationError, match="baseline") as caught:
+        apply_method_pack({"summand": "k^3", "lower": 1, "upper": 20})
+    assert caught.value.code == "E_RUNTIME"
+    assert caught.value.details.get("applicability") != "rejected"
+    assert caught.value.details.get("reason") == "runtime_inconsistency"
+
+    from research.method_packs.run import main
+
+    assert main(["apply", "--task", str(EXAMPLES / "sum-k-cubed-1-to-20.json")]) == 2
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["status"] == "error"
+    assert payload["error"]["code"] == "E_RUNTIME"
 
 
 def test_method_pack_python_does_not_call_dynamic_evaluators() -> None:

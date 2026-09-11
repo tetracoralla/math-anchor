@@ -7,12 +7,13 @@ telescoping combination rule remains infrastructure, not pack novelty.
 
 from __future__ import annotations
 
+from fractions import Fraction
 from typing import Any
 
 from math_anchor import __version__
 from math_anchor.errors import CalculatorError
 
-from research.polynomial_finite_sum_proposal.polynomials import DomainError
+from research.polynomial_finite_sum_proposal.polynomials import DomainError, parse_summand
 from research.polynomial_finite_sum_proposal.runner import run_polynomial_finite_sum
 from research.polynomial_finite_sum_proposal.telescoping import (
     TELESCOPING_RULE_ID,
@@ -65,17 +66,24 @@ def apply_method_pack(
             else compare_baseline,
         )
     except DomainError as error:
-        raise PackApplicationError(
-            error.code,
-            error.message,
-            {
-                "applicability": "rejected",
-                "methodPackId": loaded["id"],
-                "reason": "input_outside_declared_pack_domain",
-                "unsupportedInputs": loaded["mathSemantics"]["unsupportedInputs"],
-                "phase": "input",
-            },
-        ) from error
+        details: dict[str, Any] = {"methodPackId": loaded["id"]}
+        if error.code == "E_RUNTIME":
+            details.update(
+                {
+                    "reason": "runtime_inconsistency",
+                    "phase": "execution",
+                }
+            )
+        else:
+            details.update(
+                {
+                    "applicability": "rejected",
+                    "reason": "input_outside_declared_pack_domain",
+                    "unsupportedInputs": loaded["mathSemantics"]["unsupportedInputs"],
+                    "phase": "input",
+                }
+            )
+        raise PackApplicationError(error.code, error.message, details) from error
 
     chain = _chain(loaded, parsed, backend)
     verification = _verification_record(loaded, backend)
@@ -269,7 +277,7 @@ def _chain(
             "step": "instantiate",
             "rules": [rule["id"] for rule in pack["useInterface"]["instantiationRules"]],
             "untrustedCode": False,
-            "sourceSolutionCarried": False,
+            "sourceSolutionCarried": parsed["antidifference"] is not None,
         },
         {
             "step": "construct_antidifference",
@@ -306,12 +314,13 @@ def _adoption_record(
     premises: list[dict[str, Any]],
 ) -> dict[str, Any]:
     used = backend.get("status") == "ok"
+    same_task = _is_extraction_task(pack, parsed)
     return {
         "methodId": pack["id"],
         "methodVersion": pack["version"],
         "taskId": parsed["taskId"],
         "used": used,
-        "lifecycleEvidence": LIFECYCLE_CROSS_TASK if used else pack["status"],
+        "lifecycleEvidence": LIFECYCLE_CROSS_TASK if used and not same_task else pack["status"],
         "semanticAdoptionRequires": [
             "retrieve_named_pack",
             "instantiate_declared_params",
@@ -320,6 +329,46 @@ def _adoption_record(
         ],
         "callAloneIsNotAdoption": True,
         "conditionalPremises": premises,
-        "extractionTaskIdNotReusedAsAnswer": pack["provenance"]["extractionTaskId"] != parsed["taskId"],
+        "extractionTaskIdNotReusedAsAnswer": _extraction_task_id_not_reused(pack, parsed),
         "packId": PACK_ID,
     }
+
+
+def _nonempty_task_id(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    stripped = value.strip()
+    return stripped or None
+
+
+def _as_int(value: object) -> int | None:
+    if isinstance(value, bool) or type(value) is not int:
+        return None
+    return value
+
+
+def _inputs_match_extraction_task(parsed: dict[str, Any]) -> bool:
+    if _as_int(parsed["lower"]) != 1 or _as_int(parsed["upper"]) != 10:
+        return False
+    try:
+        _source, terms, _expression = parse_summand(parsed["summand"], parsed["variable"])
+    except CalculatorError:
+        return False
+    return terms == {2: Fraction(1)}
+
+
+def _is_extraction_task(pack: dict[str, Any], parsed: dict[str, Any]) -> bool:
+    task_id = _nonempty_task_id(parsed["taskId"])
+    extraction_id = pack["provenance"]["extractionTaskId"]
+    if task_id is not None and task_id == extraction_id:
+        return True
+    return _inputs_match_extraction_task(parsed)
+
+
+def _extraction_task_id_not_reused(pack: dict[str, Any], parsed: dict[str, Any]) -> bool:
+    task_id = _nonempty_task_id(parsed["taskId"])
+    if task_id is None:
+        return False
+    if _inputs_match_extraction_task(parsed):
+        return False
+    return task_id != pack["provenance"]["extractionTaskId"]

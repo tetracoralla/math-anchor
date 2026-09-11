@@ -70,4 +70,7 @@ rewrite stays **conditional**.
 | --- | --- |
 | candidate | proposed from T1 in `extract.py` |
 | verified-in-declared-scope | frozen `pack.json` after T1/T3/T4 plus negatives |
-| cross-task-use-evidence | adoption record from `apply` on the held-out task |
+| cross-task-use-evidence | adoption record from `apply` on a non-T1 task |
+
+Replaying T1 (`k^2` on 1..10, or `taskId` equal to `provenance.extractionTaskId`)
+does not mint `cross-task-use-evidence`.

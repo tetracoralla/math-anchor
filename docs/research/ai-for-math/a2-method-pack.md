@@ -72,7 +72,10 @@ it.
 | --- | --- |
 | candidate | proposed in `research/method_packs/extract.py` from T1 |
 | verified-in-declared-scope | frozen `pack.json` after T1/T3/T4 plus negatives |
-| cross-task-use-evidence | adoption record from `apply` on the held-out cubes task |
+| cross-task-use-evidence | adoption record from `apply` on a task that is not T1 (`k^2` on 1..10 / extraction `taskId`) |
+
+Replaying T1 through `apply` keeps `lifecycleEvidence` at pack status
+(`verified-in-declared-scope`). It does not mint cross-task evidence.
 
 ## Commands and artifacts
 

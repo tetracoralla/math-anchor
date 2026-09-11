@@ -12,6 +12,7 @@ and Apple notarization record exist.
   not a fifth MCP tool, and not a supported domain module.
 - Added an experimental A2 **method pack** extracted from that T1 sample
   (`research/method_packs/`). It is not a public Capability or Procedure.
+  Successful apply stamps `cross-task-use-evidence` only for a non-T1 task.
 
 ## 0.7.1 - 2026-09-06
 
