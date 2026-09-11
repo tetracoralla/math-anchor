@@ -80,13 +80,17 @@ No dollar costs are emitted.
 
 ## Results (this machine, in-process)
 
-Latencies are sequential in-process wall times in arm order B0 → B1 → B2.
-The first trial of a cell is labeled cold, the second hot. **B1 T1 cold
-includes first obligation-checker warmup; later B2 cells are already warm.**
-Millisecond figures are from `build/a4-smoke-report.json` on this machine and
-move between runs. This is not a statistical benchmark and not a dollar cost.
+The table below is the **pre-F1–F5** smoke at reviewed HEAD
+`5217679e6c84eb366e3bda487b3db42614c1e414`. It is historical evidence, not the
+post-fix report. After F1–F5 the harness labels the two in-process trials
+`first` / `repeat` (they were never isolated cold processes). A new report must
+be generated after the fix commits; do not reuse these millisecond figures.
 
-| Arm | Task | Status | Value / code | Counted as solved | Wrong accept | Applicability misjudgment | `coversOriginalTaskClaim` | Lifecycle | Reuse signal | semantic adoption | cold ms | hot ms |
+Latencies are sequential in-process wall times in arm order B0 → B1 → B2.
+**B1 T1 first trial includes obligation-checker warmup; later B2 cells are
+already warm.** This is not a statistical benchmark and not a dollar cost.
+
+| Arm | Task | Status | Value / code | Counted as solved | Wrong accept | Applicability misjudgment | `coversOriginalTaskClaim` | Lifecycle | Reuse signal | semantic adoption | first ms (was labeled cold) | repeat ms (was labeled hot) |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | B0 | T1 | ok | 385 | yes | no | no | false | — | no | **false** | 22.1 | 1.3 |
 | B0 | cubes | ok | 44100 | yes | no | no | false | — | no | **false** | 2.3 | 1.5 |
