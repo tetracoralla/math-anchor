@@ -26,6 +26,10 @@ LIFECYCLE_CROSS_TASK = "cross-task-use-evidence"
 LIFECYCLE_VERIFIED = "verified-in-declared-scope"
 
 
+def _supported_protocol_document() -> dict[str, Any]:
+    return json.loads(PROTOCOL_PATH.read_text(encoding="utf-8"))
+
+
 def validate_protocol(document: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(document, dict):
         raise ValueError("A4 protocol must be an object")
@@ -43,6 +47,23 @@ def validate_protocol(document: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("A4 protocol must declare tasks")
     if not isinstance(document.get("arms"), list) or not document["arms"]:
         raise ValueError("A4 protocol must declare arms")
+    supported = _supported_protocol_document()
+    if document.get("arms") != supported.get("arms"):
+        raise ValueError(
+            "A4 smoke only supports the pre-registered B0/B1/B2 "
+            "(+ conditional B2-minus) arm plan"
+        )
+    if document.get("latency") != supported.get("latency"):
+        raise ValueError(
+            "A4 smoke only supports the pre-registered two-trial first/repeat latency plan"
+        )
+    primary = [
+        str(arm.get("id"))
+        for arm in document["arms"]
+        if isinstance(arm, dict) and not arm.get("conditional")
+    ]
+    if tuple(primary) != PRIMARY_ARMS:
+        raise ValueError("A4 protocol primary arms must be B0, B1, B2")
     return document
 
 

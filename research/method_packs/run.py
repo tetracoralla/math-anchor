@@ -173,19 +173,10 @@ def main(argv: list[str] | None = None) -> int:
             compare_baseline=not arguments.no_baseline,
             include_backend_receipt=arguments.include_receipt or arguments.receipt_output is not None,
         )
-        if arguments.receipt_output is not None:
-            receipt = result.get("obligationReceipt")
-            if not isinstance(receipt, dict):
-                raise CalculatorError("E_INPUT", "this result has no obligation receipt to write")
-            _write_new_json(arguments.receipt_output, receipt, label="receipt output")
-            if not arguments.include_receipt:
-                result = dict(result)
-                result.pop("obligationReceipt", None)
-        if arguments.chain_output is not None:
-            _write_new_json(arguments.chain_output, result["chain"], label="chain output")
-        if arguments.adoption_output is not None:
-            _write_new_json(arguments.adoption_output, result["adoption"], label="adoption output")
+        coverage = None
         if arguments.coverage_output is not None:
+            # Coverage must see the verification association before any evidence
+            # presentation strip. Sidecar receipt is not deletion of evidence.
             if pack.get("id") == PARAM_PACK_ID:
                 coverage = {
                     "kind": "math-anchor.research.shifted-square-parameterized-coverage.v0",
@@ -203,6 +194,19 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 coverage = record_coverage(task, result, pack=pack, source="method-pack-apply")
             _write_new_json(arguments.coverage_output, coverage, label="coverage output")
+        if arguments.receipt_output is not None:
+            receipt = result.get("obligationReceipt")
+            if not isinstance(receipt, dict):
+                raise CalculatorError("E_INPUT", "this result has no obligation receipt to write")
+            _write_new_json(arguments.receipt_output, receipt, label="receipt output")
+            if not arguments.include_receipt:
+                result = dict(result)
+                result.pop("obligationReceipt", None)
+        if arguments.chain_output is not None:
+            _write_new_json(arguments.chain_output, result["chain"], label="chain output")
+        if arguments.adoption_output is not None:
+            _write_new_json(arguments.adoption_output, result["adoption"], label="adoption output")
+        if coverage is not None:
             result = dict(result)
             result["coverage"] = coverage
         _emit(result, output=arguments.output)

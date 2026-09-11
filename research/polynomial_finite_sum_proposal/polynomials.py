@@ -217,6 +217,32 @@ def difference_identity_sources(
     }
 
 
+def rebuilt_difference_claim(g_source: str, summand: str, variable: str) -> dict[str, Any]:
+    """Rebuild G(k+1)-G(k)=p(k) from current G and the original task summand."""
+
+    g_terms = parse_antidifference(g_source, variable)
+    _source, p_terms, _expression = parse_summand(summand, variable)
+    sources = difference_identity_sources(g_terms, p_terms, variable)
+    return {
+        "left": sources["left"],
+        "right": sources["right"],
+        "variables": [variable],
+        "antidifference": sources["antidifference"],
+    }
+
+
+def checker_polynomials_equal(left: str, right: str, variable: str) -> bool:
+    """True iff left and right are the same rational polynomial in the checker language."""
+
+    parser = _PolynomialParser((variable,))
+    try:
+        left_terms = parser.parse(normalize_expression_source(left))
+        right_terms = parser.parse(normalize_expression_source(right))
+    except CertificateValidationError:
+        return False
+    return left_terms == right_terms
+
+
 def evaluate_univariate(source: str, variable: str, value: int) -> Fraction:
     """Evaluate a checker-language univariate polynomial at an integer.
 
