@@ -53,6 +53,24 @@ L2 F1–F5 (this batch, still Draft; parameterized method content is not done):
 The A4 table in `docs/research/ai-for-math/a4-smoke.md` is SHA `5217679` evidence.
 Post-fix smoke is a new report (`/tmp/a4-smoke-after-f1f5.json` in the fix notes), not that table.
 
+## Parameterized method pack (batch 2; stacked on #13, do not merge)
+
+Branch: `chore/ai-for-math-parameterized-method` (cut from F1–F5 tip `89490a1`).
+Does not reopen F1–F5. Separate draft PR; depends on #13.
+
+Local commits:
+
+- `14fcc32` Add experimental parameterized shifted-square method pack.
+- `2d51e4c` Document parameterized method-pack provenance, domain, and reuse.
+
+```sh
+.venv/bin/python research/method_packs/run.py extract-shifted-square
+.venv/bin/python research/method_packs/run.py apply \
+  --pack research/method_packs/shifted_square_antidifference.v0/pack.json \
+  --task research/method_packs/examples/shifted-square-held-out-c3-2-to-7.json
+.venv/bin/python -m pytest tests/python/test_parameterized_method_pack.py
+```
+
 ```sh
 git checkout chore/ai-for-math-a4-smoke
 git log --oneline -12
