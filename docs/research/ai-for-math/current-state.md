@@ -167,5 +167,8 @@ A second experimental pack
 `math-anchor.research.method-pack.shifted-square-antidifference.v0` stores a
 parametric `G(k,c)` for `(k+c)^2`. Apply instantiates that payload with
 reconstruction disabled. B1/SymPy may still construct; they are not crippled.
-This is not a public Capability and not a measured cost win. See
+An equal-budget no-model timing smoke exists
+([parameterized-cost-smoke.md](parameterized-cost-smoke.md)): B0 already
+matches the in-family numbers. That is not a public Capability and not a
+dollar or promotion claim. See
 [parameterized-method.md](parameterized-method.md).

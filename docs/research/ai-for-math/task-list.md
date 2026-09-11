@@ -164,6 +164,10 @@ with the binomial rewrite left conditional. See [a2-method-pack.md](a2-method-pa
 Negatives: `k^3`, `k^2+6k+8`, `1/k`, reversed bounds. See
 [parameterized-method.md](parameterized-method.md).
 
+Equal-budget no-model timing smoke of B0 / B1 / P-pack on P0, P1 (`355`), P2,
+and `1/k`: [parameterized-cost-smoke.md](parameterized-cost-smoke.md). Not a
+benefit percentage.
+
 A3 records claim→obligation coverage for this same workflow (T1, cubes, T9
 conditional rewrite, and the negative cases). The only generated obligation
 id is `difference-identity`. Natural-language translation, the binomial

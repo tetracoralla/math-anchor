@@ -12,6 +12,7 @@ Capability/Procedure, and do not add a fifth MCP tool.
 - [a3-coverage.md](a3-coverage.md) — claim→obligation coverage, typed binding, mutation tests.
 - [a4-smoke.md](a4-smoke.md) — equal-budget B0/B1/B2 smoke; not a benefit percentage.
 - [parameterized-method.md](parameterized-method.md) — saved `G(k,c)` for `(k+c)^2`; apply without Gosper.
+- [parameterized-cost-smoke.md](parameterized-cost-smoke.md) — equal-budget B0/B1/P-pack timing; not a benefit percentage.
 
 A1 vertical:
 
@@ -48,4 +49,11 @@ Parameterized shifted-square pack (held-out `c=3`, reconstruction disabled):
 .venv/bin/python research/method_packs/run.py apply \
   --pack research/method_packs/shifted_square_antidifference.v0/pack.json \
   --task research/method_packs/examples/shifted-square-held-out-c3-2-to-7.json
+```
+
+Parameterized equal-budget cost/timing smoke (no model; report under gitignored `build/`):
+
+```sh
+.venv/bin/python research/parameterized_cost_eval/run.py \
+  --output build/parameterized-cost-smoke-report.json
 ```

@@ -125,6 +125,9 @@ P1 is not a rename of P0.
   --task research/method_packs/examples/shifted-square-inapplicable-k-cubed.json
 
 .venv/bin/python -m pytest tests/python/test_parameterized_method_pack.py
+
+.venv/bin/python research/parameterized_cost_eval/run.py \
+  --output build/parameterized-cost-smoke-report.json
 ```
 
 ## Honesty limits
@@ -135,7 +138,8 @@ P1 is not a rename of P0.
   when only a number is required.
 - No model. No dollar cost. No Host/UI/MCP change. Not a public Capability.
 - `cross-task-use-evidence` is not semantic adoption.
-- Next cost experiment is only now well-posed: compare B1 (may construct)
-  against this apply path (must not construct) on a pre-registered list of
-  `(c,a,b)` with reconstruction disabled on the pack arm. Do not invent
-  savings before that run.
+- Equal-budget no-model cost/timing smoke:
+  [parameterized-cost-smoke.md](parameterized-cost-smoke.md). B0 already
+  matches the in-family numbers and is simpler when only a value is required.
+  P-pack skipped Gosper construction on this machine; identity checks still
+  ran. That is not a dollar saving and not a promotion case. Do not start H1.
