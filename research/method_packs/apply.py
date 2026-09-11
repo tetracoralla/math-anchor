@@ -21,7 +21,7 @@ from research.polynomial_finite_sum_proposal.telescoping import (
     rule_metadata,
 )
 
-from .format import APPLICATION_KIND, LIFECYCLE_CROSS_TASK, PACK_ID
+from .format import APPLICATION_KIND, LIFECYCLE_CROSS_TASK, PACK_ID, PACK_VERSION
 from .loader import load_pack, require_executable
 
 
@@ -49,9 +49,11 @@ def apply_method_pack(
     pack_path: object | None = None,
     compare_baseline: bool = True,
     include_backend_receipt: bool = False,
+    require_pack_version: str | None = PACK_VERSION,
 ) -> dict[str, Any]:
     loaded = pack if pack is not None else load_pack(pack_path)
     require_executable(loaded)
+    _require_pack_version(loaded, require_pack_version)
     parsed = _parse_task(task)
     premises = _conditional_premises(parsed["premises"])
     try:
@@ -158,6 +160,27 @@ def apply_method_pack(
             if key in backend["identity"]
         }
     return result
+
+
+def _require_pack_version(loaded: dict[str, Any], required: str | None) -> None:
+    if required is None:
+        return
+    actual = loaded.get("version")
+    if actual != required:
+        raise PackApplicationError(
+            "E_INPUT",
+            (
+                f"method-pack version {actual!r} is stale or unexpected; "
+                f"required {required!r}"
+            ),
+            {
+                "reason": "stale_or_unexpected_pack_version",
+                "methodPackId": loaded.get("id"),
+                "packVersion": actual,
+                "requiredVersion": required,
+                "phase": "input",
+            },
+        )
 
 
 def _parse_task(task: dict[str, Any]) -> dict[str, Any]:

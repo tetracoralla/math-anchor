@@ -1,0 +1,185 @@
+{
+  "kind": "math-anchor.research.polynomial-finite-sum-coverage.v0",
+  "workflow": "rational-polynomial-finite-sum",
+  "proposalId": "math-anchor.research.polynomial-finite-sum.v0",
+  "methodPackId": "math-anchor.research.method-pack.polynomial-antidifference-gosper.v0",
+  "notAWorkflowDsl": true,
+  "notAFifthMcpTool": true,
+  "taskToObligation": {
+    "sourceClaimForm": "structured-task-json (summand, variable, lower, upper)",
+    "naturalLanguageToClaim": "uncovered",
+    "generatedObligationIds": [
+      "difference-identity"
+    ],
+    "generatedObligationKind": "polynomial_identity",
+    "mappingNote": "The domain runner emits one polynomial_identity obligation for G(k+1)-G(k)=p(k). That mapping is recorded here; it is not a compiler from prose, and checking that obligation does not cover the original finite-sum claim."
+  },
+  "declaredGoal": "Exact inclusive finite sum of a univariate rational-coefficient polynomial p(k) on integer bounds, via a checked discrete antidifference.",
+  "bounds": {
+    "inclusive": true,
+    "integerIndex": true,
+    "magnitudeLimit": 1000000,
+    "emptySum": "upper == lower - 1 yields 0",
+    "reversedBounds": "unsupported when upper < lower - 1 (not Karr reversal)",
+    "coveredByDifferenceIdentityObligation": false
+  },
+  "assumptions": {
+    "setId": "discrete-sum-domain",
+    "interpretation": "bound_not_evaluated",
+    "text": [
+      "the summation variable is a commuting indeterminate over the rationals",
+      "the summation index ranges over integers"
+    ],
+    "note": "Assumption prose is hash-bound and not evaluated. Integer-index semantics are not proved by the polynomial-identity checker."
+  },
+  "steps": [
+    {
+      "id": "nl-to-structured-claim",
+      "coverage": "uncovered",
+      "fixedRule": null,
+      "obligationId": null,
+      "covers": null,
+      "doesNotCover": "Caller prose or a natural-language task statement.",
+      "note": "Inputs are already structured JSON. There is no NL→claim compiler."
+    },
+    {
+      "id": "parse-univariate-qq-polynomial",
+      "coverage": "fixed-python-rule",
+      "fixedRule": "research.polynomial_finite_sum_proposal.polynomials.parse_summand",
+      "obligationId": null,
+      "covers": "Summand is a univariate QQ-polynomial with constant denominators only.",
+      "doesNotCover": "Special functions, 1/k, extra symbols, inexact floats."
+    },
+    {
+      "id": "integer-bounds-convention",
+      "coverage": "fixed-python-rule",
+      "fixedRule": "require_integer + reversed-bound DomainError + combination-rule gate",
+      "obligationId": null,
+      "covers": "Inclusive integer bounds; empty sum; reject upper < lower - 1.",
+      "doesNotCover": "The difference-identity obligation does not mention bounds.",
+      "note": "Deleting this step leaves a checked identity that does not establish a finite sum."
+    },
+    {
+      "id": "construct-antidifference",
+      "coverage": "untrusted-construction",
+      "fixedRule": "sympy.concrete.gosper.gosper_sum (summation fallback)",
+      "obligationId": null,
+      "covers": null,
+      "doesNotCover": "Construction is not a proof that G(k+1)-G(k)=p(k)."
+    },
+    {
+      "id": "difference-identity",
+      "coverage": "obligation",
+      "fixedRule": "math_anchor.obligations polynomial_identity + stdlib certificate checker",
+      "obligationId": "difference-identity",
+      "kind": "polynomial_identity",
+      "covers": "G(k+1)-G(k)=p(k) as rational polynomials with constant denominators.",
+      "doesNotCover": [
+        "natural-language-to-claim translation",
+        "integer bound convention and empty/reversed sums",
+        "construction of G (Gosper is untrusted construction)",
+        "the finite-sum combination G(b+1)-G(a)",
+        "binomial or other caller rewrites",
+        "the whole conclusion as a Lean kernel theorem",
+        "universal quantification over all degrees in the checker limit"
+      ]
+    },
+    {
+      "id": "evaluate-endpoints",
+      "coverage": "fixed-python-rule",
+      "fixedRule": "certificate_checker polynomial parser at integer points",
+      "obligationId": null,
+      "covers": "Exact rational values G(upper+1) and G(lower) in the checker language.",
+      "doesNotCover": "Not a kernel check; not the combination step."
+    },
+    {
+      "id": "telescoping-combination",
+      "coverage": "hand-provided-infrastructure",
+      "fixedRule": "math-anchor.research.discrete-telescoping-combination.v0",
+      "obligationId": null,
+      "agentExtracted": false,
+      "covers": "Given a checked difference identity and in-domain integer bounds, the inclusive sum equals G(upper+1)-G(lower).",
+      "doesNotCover": "Not an obligation. Not Agent-extracted A2 novelty. Not Lean.",
+      "note": "Combination-rule tests live in test_polynomial_finite_sum_proposal.py, separate from hash binding."
+    },
+    {
+      "id": "typed-binding-into-later-parameters",
+      "coverage": "domain-python-binding",
+      "fixedRule": "research.polynomial_finite_sum_proposal.coverage.verify_typed_binding",
+      "obligationId": null,
+      "covers": "The computed exact rational is the same G(b+1)-G(a) recorded as value/downstream.",
+      "doesNotCover": "No general obligation dataflow; dependsOn is unused."
+    },
+    {
+      "id": "binomial-rewrite",
+      "coverage": "uncovered-conditional-premise",
+      "fixedRule": null,
+      "obligationId": null,
+      "covers": null,
+      "doesNotCover": "C(k,r) identities such as C(k,2)=k(k-1)/2. Hockey-stick stays conditional."
+    },
+    {
+      "id": "whole-finite-sum-kernel",
+      "coverage": "uncovered",
+      "fixedRule": null,
+      "obligationId": null,
+      "formalKernelChecked": false,
+      "covers": null,
+      "doesNotCover": "The finite-sum conclusion is never marked formal_kernel_checked."
+    },
+    {
+      "id": "universal-quantification",
+      "coverage": "uncovered",
+      "fixedRule": null,
+      "obligationId": null,
+      "covers": null,
+      "doesNotCover": "Checked instances are not a proof for every polynomial below the degree limit."
+    }
+  ],
+  "typedBindingPattern": {
+    "name": "finite-sum-value",
+    "formula": "G(upper + 1) - G(lower)",
+    "type": {
+      "kind": "exact_rational",
+      "python": "fractions.Fraction",
+      "payloadFields": [
+        "exact",
+        "numerator",
+        "denominator"
+      ]
+    },
+    "producedBy": {
+      "ruleId": "math-anchor.research.discrete-telescoping-combination.v0",
+      "origin": "hand-provided-infrastructure",
+      "agentExtracted": false,
+      "notAnObligation": true
+    },
+    "entersLaterParameters": [
+      "result.value (compute surface)",
+      "method-pack downstream.value",
+      "method-pack chain combine_with_infrastructure_telescoping.valueEnteredLaterSteps"
+    ],
+    "notAGeneralDataflowLanguage": true
+  },
+  "evidenceScope": {
+    "identityScope": "polynomial_identity_over_rationals",
+    "identityAssurance": "exact_symbolic",
+    "formalKernelChecked": false,
+    "instancesAreNotUniversalProof": true,
+    "structureValidationIsNotMathematicalCorrectness": true,
+    "hashBindsContentNotAuthorshipOrTruth": true,
+    "obligationSuccessIsNotClaimCoverage": true,
+    "unsupportedIsNotACounterexample": true,
+    "telescopingIsHandProvidedInfrastructure": true
+  },
+  "honesty": {
+    "obligationSuccessIsNotClaimCoverage": true,
+    "hashBindsContentNotAuthorshipOrTruth": true,
+    "formalKernelChecked": false,
+    "telescopingIsHandProvidedInfrastructure": true,
+    "instancesAreNotUniversalProof": true,
+    "unsupportedIsNotACounterexample": true,
+    "structureValidationIsNotMathematicalCorrectness": true,
+    "packJsonIsNotAnInterpreter": true
+  }
+}

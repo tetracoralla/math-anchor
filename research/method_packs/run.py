@@ -22,6 +22,10 @@ from research.method_packs.apply import PackApplicationError, apply_method_pack
 from research.method_packs.extract import extract_from_t1
 from research.method_packs.format import DEFAULT_PACK_PATH, HELD_OUT_SECOND_TASK_ID
 from research.method_packs.loader import PackFormatError, load_pack
+from research.polynomial_finite_sum_proposal.coverage import (
+    coverage_from_failure,
+    record_coverage,
+)
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -66,6 +70,11 @@ def _parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Skip the SymPy baseline comparison",
     )
+    apply_cmd.add_argument(
+        "--coverage-output",
+        type=Path,
+        help="Write the claim→obligation coverage record to a new file",
+    )
     return parser
 
 
@@ -100,6 +109,7 @@ def _emit(value: dict[str, Any], *, output: Path | None) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     arguments = _parser().parse_args(argv)
+    task: dict[str, Any] | None = None
     try:
         if arguments.command == "extract":
             evidence = extract_from_t1(output_dir=arguments.output_dir)
@@ -139,6 +149,11 @@ def main(argv: list[str] | None = None) -> int:
             _write_new_json(arguments.chain_output, result["chain"], label="chain output")
         if arguments.adoption_output is not None:
             _write_new_json(arguments.adoption_output, result["adoption"], label="adoption output")
+        if arguments.coverage_output is not None:
+            coverage = record_coverage(task, result, pack=pack, source="method-pack-apply")
+            _write_new_json(arguments.coverage_output, coverage, label="coverage output")
+            result = dict(result)
+            result["coverage"] = coverage
         _emit(result, output=arguments.output)
     except (PackFormatError, PackApplicationError, CalculatorError) as error:
         payload: dict[str, Any] = {
@@ -148,6 +163,12 @@ def main(argv: list[str] | None = None) -> int:
         if isinstance(error, PackApplicationError) and error.details:
             payload["reason"] = error.details.get("reason", "pack_application_failed")
             payload["methodPack"] = {"id": error.details.get("methodPackId")}
+        if getattr(arguments, "coverage_output", None) is not None:
+            failed_task = task if isinstance(task, dict) else {}
+            coverage = coverage_from_failure(failed_task, error)
+            if not arguments.coverage_output.exists():
+                _write_new_json(arguments.coverage_output, coverage, label="coverage output")
+            payload["coverage"] = coverage
         _emit(payload, output=getattr(arguments, "output", None))
         return 2
 

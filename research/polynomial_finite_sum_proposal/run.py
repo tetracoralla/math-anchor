@@ -21,6 +21,10 @@ from math_anchor.errors import CalculatorError, error_payload
 
 from research.polynomial_finite_sum_proposal.baseline import sympy_finite_sum
 from research.polynomial_finite_sum_proposal.polynomials import DomainError
+from research.polynomial_finite_sum_proposal.coverage import (
+    coverage_from_failure,
+    record_coverage,
+)
 from research.polynomial_finite_sum_proposal.runner import (
     run_from_task,
     run_polynomial_finite_sum,
@@ -64,6 +68,11 @@ def _parser() -> argparse.ArgumentParser:
         type=Path,
         help="Write the full result JSON to a new file in addition to stdout",
     )
+    parser.add_argument(
+        "--coverage-output",
+        type=Path,
+        help="Write the claim→obligation coverage record to a new file",
+    )
     return parser
 
 
@@ -96,8 +105,45 @@ def _emit(value: dict[str, Any], *, output: Path | None) -> None:
         _write_new_json(output, value, label="result output")
 
 
+def _task_from_arguments(arguments: argparse.Namespace, loaded: dict[str, Any] | None) -> dict[str, Any]:
+    if loaded is not None:
+        return loaded
+    return {
+        "summand": arguments.summand,
+        "variable": arguments.variable,
+        "lower": arguments.lower,
+        "upper": arguments.upper,
+        **(
+            {"antidifference": arguments.antidifference}
+            if arguments.antidifference is not None
+            else {}
+        ),
+    }
+
+
+def _attach_coverage(
+    arguments: argparse.Namespace,
+    task: dict[str, Any],
+    result: dict[str, Any],
+    *,
+    error: BaseException | None = None,
+) -> dict[str, Any]:
+    if arguments.coverage_output is None:
+        return result
+    coverage = (
+        coverage_from_failure(task, error)
+        if error is not None
+        else record_coverage(task, result)
+    )
+    _write_new_json(arguments.coverage_output, coverage, label="coverage output")
+    attached = dict(result)
+    attached["coverage"] = coverage
+    return attached
+
+
 def main(argv: list[str] | None = None) -> int:
     arguments = _parser().parse_args(argv)
+    task: dict[str, Any] | None = None
     try:
         if arguments.task:
             task = _load_task(arguments.task)
@@ -116,6 +162,7 @@ def main(argv: list[str] | None = None) -> int:
                     "E_INPUT",
                     "provide --task or all of --summand, --lower, and --upper",
                 )
+            task = _task_from_arguments(arguments, None)
             if arguments.baseline_only:
                 result = sympy_finite_sum(
                     summand=arguments.summand,
@@ -137,12 +184,14 @@ def main(argv: list[str] | None = None) -> int:
             if not isinstance(receipt, dict):
                 raise CalculatorError("E_INPUT", "this result has no obligation receipt to write")
             _write_new_json(arguments.receipt_output, receipt, label="receipt output")
+        result = _attach_coverage(arguments, task or {}, result)
         _emit(result, output=arguments.output)
     except (DomainError, TelescopingRuleError, CalculatorError) as error:
         payload = {
             "status": "error",
             "error": error_payload(error.code, error.message),
         }
+        payload = _attach_coverage(arguments, task or _task_from_arguments(arguments, None), payload, error=error)
         _emit(payload, output=arguments.output)
         return 2
 
