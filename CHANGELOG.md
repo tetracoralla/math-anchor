@@ -21,6 +21,11 @@ and Apple notarization record exist.
   synthesize a phantom identity obligation. Typed binding fail-closes if
   current `G` does not match the checked identity statement. Not a public
   Capability.
+- Added an A4 **equal-budget no-model smoke** (`research/ai_for_math_eval/`)
+  for B0 (SymPy baseline) / B1 (A1 runner) / B2 (frozen pack apply) on
+  pre-registered T1, held-out cubes, and `1/k`. Integration signal only:
+  not a benefit percentage, not a pack promotion, not a Host/UI/MCP change.
+  `lifecycleEvidence` is not semantic adoption. No dollar costs.
 
 ## 0.7.1 - 2026-09-06
 

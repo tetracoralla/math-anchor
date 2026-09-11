@@ -105,16 +105,17 @@ Apply writes chain and adoption next to `--output` (refuses to overwrite).
 - No Lean kernel check of the finite-sum conclusion.
 - No checker for non-constant denominators / general hypergeometric terms.
 - The binomial rewrite for hockey-stick is not verified by this pack.
-- No model, no equal-budget B0/B1/B2, no token or dollar cost (placeholders only).
+- No model and no dollar cost. Equal-budget no-model smoke is in
+  [a4-smoke.md](a4-smoke.md); it is not a benefit percentage.
 - Claim→obligation coverage is recorded in A3 (`a3-coverage.md`); obligation
   success is still not claim coverage.
 - Structure validation of `pack.json` is not mathematical correctness.
 - A few in-scope instances are not a proof for all degrees below the checker limit.
 
-## Next minimal experiment (A3, done) / A4
+## Next minimal experiment (A3 done / A4 smoke)
 
 A3 coverage, typed binding, and mutation tests:
 [a3-coverage.md](a3-coverage.md).
 
-A4: equal-budget B0/B1/B2 smoke on this family, B2-minus only if reuse
-appears, no dollar costs without prices.
+A4 equal-budget no-model smoke: [a4-smoke.md](a4-smoke.md). Decision from
+that smoke: evidence insufficient — do not promote. Keep experimental.

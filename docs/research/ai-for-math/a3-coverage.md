@@ -150,8 +150,9 @@ emit `generatedObligations=[]`. They do not synthesize a phantom
 - Telescoping remains hand-provided infrastructure, not extracted novelty.
 - Pack JSON is still not an interpreter: engines are not dispatched.
 - Structure validation is still not mathematical correctness.
-- `apply().adoption.lifecycleEvidence` is still not semantic adoption; A4
-  still needs B2-minus.
+- `apply().adoption.lifecycleEvidence` is still not semantic adoption. A4
+  ran B2-minus on held-out cubes because a reuse *signal* appeared; that is
+  still not semantic adoption ([a4-smoke.md](a4-smoke.md)).
 
 ## Gaps (not covered)
 
@@ -161,21 +162,14 @@ emit `generatedObligations=[]`. They do not synthesize a phantom
   one value.
 - Hockey-stick binomial rewrite still unverified.
 - No checker for non-constant denominators / general hypergeometric terms.
-- No model, no equal-budget B0/B1/B2, no token or dollar cost.
+- No model and no dollar cost. Equal-budget no-model smoke is in
+  [a4-smoke.md](a4-smoke.md); it is not a benefit percentage.
 - Loader still admits only this one pack id.
 - Pack `engine` strings remain documentation, not dispatch.
 
-## Next minimal experiment (A4)
+## Next minimal experiment (after A4)
 
-Equal-budget **smoke**, no model first, on this same family:
-
-- **B0:** harness + SymPy/`gosper_sum` only.
-- **B1:** Math Anchor polynomial-finite-sum runner, no method pack.
-- **B2:** B1 plus the frozen Gosper pack.
-- **B2-minus:** only if B2 shows a reuse signal; remove the pack on the
-  held-out cubes task.
-
-Pre-register task split (T1 vs held-out cubes vs inapplicable `1/k`),
-correctness rule, and that call-alone is not adoption. Do not compute dollar
-costs without prices. Do not promote the pack. If the checked path is only
-slower, keep it experimental.
+A4 no-model smoke: [a4-smoke.md](a4-smoke.md). Decision from that smoke:
+**evidence insufficient — do not promote.** Keep experimental. Do not start
+H1. Expand the neighborhood only if a later authorized experiment shows work
+B0 cannot already do on this family.
