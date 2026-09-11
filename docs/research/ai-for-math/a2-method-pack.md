@@ -119,3 +119,7 @@ A3 coverage, typed binding, and mutation tests:
 
 A4 equal-budget no-model smoke: [a4-smoke.md](a4-smoke.md). Decision from
 that smoke: evidence insufficient — do not promote. Keep experimental.
+
+The A2 Gosper pack still reconstructs `G` on every task. A later parameterized
+experiment stores `G(k,c)` for `(k+c)^2` so apply need not call Gosper:
+[parameterized-method.md](parameterized-method.md).
