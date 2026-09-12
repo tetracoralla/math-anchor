@@ -1,0 +1,28 @@
+{
+  "id": "math-anchor.research.method-pack.polynomial-antidifference-gosper.v0",
+  "extractionTaskId": "T1",
+  "proposedRule": "From a univariate QQ-polynomial summand p(k), construct an antidifference G via SymPy Gosper (summation fallback), independently check G(k+1)-G(k)=p(k) as a polynomial identity, then combine integer endpoints with the hand-provided telescoping infrastructure rule.",
+  "observedFromT1": {
+    "summand": "k**2",
+    "constructor": "sympy.concrete.gosper.gosper_sum",
+    "antidifference": "(1/3)*k**3 - (1/2)*k**2 + (1/6)*k",
+    "identityStatus": "checked",
+    "value": {
+      "exact": "385",
+      "numerator": 385,
+      "denominator": 1
+    }
+  },
+  "notExtracted": {
+    "id": "math-anchor.research.discrete-telescoping-combination.v0",
+    "origin": "hand-provided-infrastructure",
+    "agentExtracted": false,
+    "reason": "hand-provided combination rule is A1 infrastructure, not A2 novelty"
+  },
+  "novelty": {
+    "status": "known-method-adaptation",
+    "autoClaimed": false,
+    "note": "Gosper, Faulhaber for p(k)=k^m, SymPy gosper_sum/summation, and the Math Anchor polynomial certificate checker already exist. This pack adapts them into a reusable experimental interface."
+  },
+  "hiddenModelReasoning": false
+}

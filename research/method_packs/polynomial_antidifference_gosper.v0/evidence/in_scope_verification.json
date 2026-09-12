@@ -1,0 +1,38 @@
+{
+  "cases": [
+    {
+      "id": "T1",
+      "summand": "k^2",
+      "lower": 1,
+      "upper": 10,
+      "expected": "385",
+      "got": "385",
+      "identity": "checked",
+      "passed": true
+    },
+    {
+      "id": "T3-empty",
+      "summand": "k^2",
+      "lower": 5,
+      "upper": 4,
+      "expected": "0",
+      "got": "0",
+      "identity": "checked",
+      "passed": true
+    },
+    {
+      "id": "T4-rational",
+      "summand": "(2*k + 1)/3",
+      "lower": 0,
+      "upper": 2,
+      "expected": "3",
+      "got": "3",
+      "identity": "checked",
+      "passed": true
+    }
+  ],
+  "allPassed": true,
+  "heldOutSecondTaskId": "A2-second-sum-k-cubed-1-to-20",
+  "heldOutExcluded": true,
+  "notAUniversalProof": true
+}

@@ -128,6 +128,14 @@ mathematical domains:
    audit pack from selected source material and publish a coverage table that
    keeps external theorem steps explicitly unchecked.
 
+A first in-tree research vertical for rational-polynomial finite sums lives in
+`research/polynomial_finite_sum_proposal/` with notes under
+`docs/research/ai-for-math/`. It is a proposal runner, not a productized domain
+pack: construction reuses SymPy Gosper/summation, identity checking reuses the
+existing polynomial certificate path, and the telescoping combination rule is
+hand-provided infrastructure. An experimental A2 method pack extracted from that
+T1 sample lives in `research/method_packs/` and is not a public Capability.
+
 Promotion to a high-frequency or research-utility claim requires current
 comparative results, not a green provider suite. The working stop conditions
 remain: detect at least 80% of supported seeded errors, materially reduce

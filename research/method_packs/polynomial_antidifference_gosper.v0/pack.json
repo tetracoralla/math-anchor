@@ -1,0 +1,155 @@
+{
+  "schemaVersion": "math-anchor.research.experimental-method-pack.v0",
+  "id": "math-anchor.research.method-pack.polynomial-antidifference-gosper.v0",
+  "version": "0.1.0-experimental",
+  "status": "verified-in-declared-scope",
+  "publicPromotion": false,
+  "notAPublicCapability": true,
+  "notAPublicProcedure": true,
+  "humanNotePath": "human_note.md",
+  "lifecycleNote": "candidate after T1 proposal; verified-in-declared-scope after T1/T3/T4 plus negatives; cross-task-use-evidence is recorded by apply() on a held-out task, not by rewriting this frozen file into a universal theorem",
+  "provenance": {
+    "extractionTaskId": "T1",
+    "extractionTask": "sum_{k=1}^{10} k^2",
+    "license": "Apache-2.0 for Math Anchor research files in this pack; BSD-3-Clause for SymPy construction",
+    "hiddenModelReasoningRequired": false,
+    "sourceFragments": [
+      {
+        "path": "research/polynomial_finite_sum_proposal/examples/sum-k-squared-1-to-10.json",
+        "role": "extraction-task-input",
+        "license": "Apache-2.0"
+      },
+      {
+        "path": "research/polynomial_finite_sum_proposal/polynomials.py",
+        "symbol": "construct_antidifference",
+        "role": "construction-adapter",
+        "license": "Apache-2.0"
+      },
+      {
+        "path": "research/polynomial_finite_sum_proposal/runner.py",
+        "symbol": "run_polynomial_finite_sum",
+        "role": "checked-procedure-backend",
+        "license": "Apache-2.0"
+      },
+      {
+        "path": "src/math_anchor/certificate_checker.py",
+        "role": "independent-identity-checker",
+        "license": "Apache-2.0"
+      }
+    ],
+    "upstream": [
+      {
+        "name": "sympy.concrete.gosper.gosper_sum",
+        "version": "1.14.0",
+        "license": "BSD-3-Clause",
+        "role": "antidifference-construction",
+        "url": "https://docs.sympy.org/latest/modules/concrete.html"
+      },
+      {
+        "name": "Gosper 1978 / Petkovšek–Wilf–Zeilberger A=B",
+        "role": "classical-algorithm",
+        "note": "not rediscovered here; reused through SymPy"
+      }
+    ]
+  },
+  "mathSemantics": {
+    "problemFamily": "inclusive finite sums of a univariate rational-coefficient polynomial",
+    "statement": "Let p be a univariate polynomial in k with rational coefficients and constant denominators only, and let a, b be integers with b >= a - 1 and |a|, |b| <= 10^6. Construct G in the same class such that G(k+1) - G(k) = p(k) as polynomials. If that identity is independently checked, the inclusive sum from k = a to k = b of p(k) equals G(b+1) - G(a), using the hand-provided telescoping infrastructure rule. The empty sum b = a - 1 is 0.",
+    "variables": {
+      "p": "univariate polynomial in the summation index; coefficients in Q; constant denominators only",
+      "k": "commuting indeterminate / integer summation index",
+      "a": "inclusive integer lower bound",
+      "b": "inclusive integer upper bound",
+      "G": "univariate QQ-polynomial antidifference of p"
+    },
+    "necessaryConditions": [
+      "p is a univariate QQ-polynomial in the summation variable",
+      "G(k+1)-G(k)=p(k) is independently checked as a polynomial identity",
+      "a and b are integers with b >= a - 1",
+      "degrees and coefficient sizes stay within the certificate checker limits"
+    ],
+    "unsupportedInputs": [
+      "non-constant denominators (example: 1/k)",
+      "special functions (example: sin(k))",
+      "extra parameters or free symbols besides the summation index",
+      "upper < lower - 1 (reversed bounds; not Karr's negative sum)",
+      "non-integer bounds",
+      "infinite sums",
+      "hypergeometric terms the polynomial checker cannot verify"
+    ]
+  },
+  "useInterface": {
+    "restrictedInputs": {
+      "summand": "expression string in the Math Anchor safe_expression polynomial subset",
+      "variable": "identifier",
+      "lower": "Python int",
+      "upper": "Python int",
+      "antidifference": "optional candidate G in the same language; omitted means construct via Gosper"
+    },
+    "instantiationRules": [
+      {
+        "id": "parse_summand_safe_expression",
+        "engine": "math_anchor.safe_expression.parse_expression"
+      },
+      {
+        "id": "require_univariate_qq_polynomial_constant_denominators",
+        "engine": "research.polynomial_finite_sum_proposal.polynomials.as_univariate_rational_polynomial"
+      },
+      {
+        "id": "construct_antidifference_sympy_gosper",
+        "engine": "sympy.concrete.gosper.gosper_sum",
+        "fallback": "sympy.summation"
+      },
+      {
+        "id": "emit_polynomial_identity_obligation",
+        "kind": "polynomial_identity"
+      },
+      {
+        "id": "evaluate_endpoints_independent_parser",
+        "engine": "math_anchor.certificate_checker polynomial parser (independent of SymPy)"
+      },
+      {
+        "id": "apply_infrastructure_telescoping_rule",
+        "ruleId": "math-anchor.research.discrete-telescoping-combination.v0",
+        "extracted": false
+      }
+    ],
+    "outputs": {
+      "value": "exact rational fraction payload when the identity is checked and bounds are in domain",
+      "antidifference": "G in checker language",
+      "verification": "obligation status, checker id/version, certificate digest",
+      "chain": "retrieve → params → verification → infrastructure combination"
+    },
+    "forbiddenEvaluators": ["eval", "exec", "sympify", "parse_expr", "import of caller code"]
+  },
+  "verification": {
+    "obligationKind": "polynomial_identity",
+    "obligationIdPattern": "difference-identity",
+    "checkerId": "math-anchor-stdlib-polynomial-checker",
+    "checkerVersion": "1.0.0",
+    "certificateFormat": "math-anchor.polynomial-identity.v1",
+    "formalKernelChecked": false,
+    "unverifiedPremisesStayConditional": true,
+    "note": "Never mark formal_kernel_checked. Lean is not used. A few in-scope instances are not a proof for every polynomial."
+  },
+  "infrastructureUsedNotExtracted": {
+    "id": "math-anchor.research.discrete-telescoping-combination.v0",
+    "origin": "hand-provided-infrastructure",
+    "agentExtracted": false,
+    "countsAsA2Novelty": false
+  },
+  "novelty": {
+    "status": "known-method-adaptation",
+    "autoClaimed": false,
+    "rediscovery": false,
+    "unprovenNew": false,
+    "details": "Gosper's algorithm and Faulhaber's formula for polynomial powers are classical. SymPy already constructs G and sums the value. Math Anchor already checks rational polynomial identities with constant denominators. This pack is an experimental retrieve/instantiate wrapper around that existing chain. The telescoping combination rule is A1 infrastructure and is not Agent-extracted novelty."
+  },
+  "costAdoption": {
+    "extractionCostPlaceholder": "no model budget; local T1 replay plus identity check",
+    "validationCostPlaceholder": "in-scope T1/T3/T4 instances and fail-closed negatives",
+    "adoptionRecords": "written by research/method_packs/run.py apply --adoption-output; not stored inside this frozen pack",
+    "usedByTasksAtFreeze": [],
+    "dollarCost": null
+  }
+}

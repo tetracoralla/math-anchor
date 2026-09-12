@@ -1,0 +1,36 @@
+{
+  "libraries": [
+    {
+      "name": "sympy.concrete.gosper.gosper_sum",
+      "version": "1.14.0",
+      "present": true,
+      "sample": "k*(k - 1)*(2*k - 1)/6",
+      "decision": "reuse-for-construction-do-not-reimplement"
+    },
+    {
+      "name": "sympy.summation",
+      "version": "1.14.0",
+      "sample": "385",
+      "decision": "baseline-value-only-not-a-certificate"
+    },
+    {
+      "name": "math_anchor.certificate_checker",
+      "format": "math-anchor.polynomial-identity.v1",
+      "system": "math-anchor-stdlib-polynomial-checker",
+      "version": "1.0.0",
+      "decision": "reuse-for-independent-identity-check"
+    },
+    {
+      "name": "Faulhaber formula for sum k^m",
+      "decision": "classical-closed-forms-not-claimed-as-new"
+    },
+    {
+      "name": "math-anchor.research.discrete-telescoping-combination.v0",
+      "origin": "hand-provided-infrastructure",
+      "decision": "infrastructure-not-agent-extracted"
+    }
+  ],
+  "noveltyStatus": "known-method-adaptation",
+  "newMathematicsClaimed": false,
+  "layerValueIfAny": "checked evidence pipeline and a retrieve/instantiate interface; SymPy already computes the number"
+}

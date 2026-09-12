@@ -1,0 +1,26 @@
+{
+  "states": [
+    "candidate",
+    "verified-in-declared-scope",
+    "cross-task-use-evidence"
+  ],
+  "candidate": {
+    "status": "candidate",
+    "from": "T1",
+    "proposed": "From a univariate QQ-polynomial summand p(k), construct an antidifference G via SymPy Gosper (summation fallback), independently check G(k+1)-G(k)=p(k) as a polynomial identity, then combine integer endpoints with the hand-provided telescoping infrastructure rule."
+  },
+  "verifiedInDeclaredScope": {
+    "status": "verified-in-declared-scope",
+    "inScopeCases": [
+      "T1",
+      "T3-empty",
+      "T4-rational"
+    ],
+    "heldOutSecondTaskId": "A2-second-sum-k-cubed-1-to-20",
+    "heldOutNotRun": true
+  },
+  "crossTaskUseEvidence": {
+    "status": "not_recorded_by_extraction",
+    "note": "apply the frozen pack to a held-out task; do not carry T1's G or 385"
+  }
+}

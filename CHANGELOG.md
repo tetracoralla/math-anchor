@@ -7,6 +7,26 @@ and Apple notarization record exist.
 
 ## Unreleased
 
+- Added an in-tree **research proposal** for rational-polynomial finite sums
+  (`research/polynomial_finite_sum_proposal/`). It is not a public operation,
+  not a fifth MCP tool, and not a supported domain module.
+- Added an experimental A2 **method pack** extracted from that T1 sample
+  (`research/method_packs/`). It is not a public Capability or Procedure.
+  Successful apply stamps `cross-task-use-evidence` only for a non-T1 task.
+- Added an A3 **coverage record** for that same workflow
+  (`research/polynomial_finite_sum_proposal/coverage.py`). It maps the
+  structured task claim to obligation `difference-identity`, records which
+  steps are uncovered, and binds `G(upper+1)-G(lower)` as an exact rational.
+  Obligation success is not claim coverage. Baseline-only results do not
+  synthesize a phantom identity obligation. Typed binding fail-closes if
+  current `G` does not match the checked identity statement. Not a public
+  Capability.
+- Added an A4 **equal-budget no-model smoke** (`research/ai_for_math_eval/`)
+  for B0 (SymPy baseline) / B1 (A1 runner) / B2 (frozen pack apply) on
+  pre-registered T1, held-out cubes, and `1/k`. Integration signal only:
+  not a benefit percentage, not a pack promotion, not a Host/UI/MCP change.
+  `lifecycleEvidence` is not semantic adoption. No dollar costs.
+
 ## 0.7.1 - 2026-09-06
 
 - Declare bounded, metadata-only MCP outcome and batch failure counts so Host
