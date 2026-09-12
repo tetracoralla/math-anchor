@@ -1,0 +1,9 @@
+{
+  "taskId": "P2-shifted-square-c-half-1-to-3",
+  "summand": "(k+1/2)^2",
+  "variable": "k",
+  "parameterC": "1/2",
+  "lower": 1,
+  "upper": 3,
+  "notes": "Extra held-out rational c, different from the integer extraction instance."
+}

@@ -1,0 +1,8 @@
+{
+  "taskId": "P-neg-harmonic",
+  "summand": "1/k",
+  "variable": "k",
+  "lower": 1,
+  "upper": 3,
+  "notes": "Out of domain: non-constant denominator. Must fail closed."
+}

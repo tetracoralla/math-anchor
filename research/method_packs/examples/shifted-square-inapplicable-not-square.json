@@ -1,0 +1,8 @@
+{
+  "taskId": "P-neg-not-perfect-square",
+  "summand": "k^2 + 6*k + 8",
+  "variable": "k",
+  "lower": 1,
+  "upper": 3,
+  "notes": "Quadratic but not (k+c)^2 for rational c (would need constant 9 if c=3). Must fail closed."
+}

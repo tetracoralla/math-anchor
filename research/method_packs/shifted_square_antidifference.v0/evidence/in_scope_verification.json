@@ -1,0 +1,31 @@
+{
+  "cases": [
+    {
+      "id": "P0-shifted-square-c1-0-to-4",
+      "summand": "(k+1)^2",
+      "lower": 0,
+      "upper": 4,
+      "expected": "55",
+      "got": "55",
+      "identity": "checked",
+      "gosperCalled": false,
+      "passed": true
+    },
+    {
+      "id": "P0-empty",
+      "summand": "(k+1)^2",
+      "lower": 5,
+      "upper": 4,
+      "expected": "0",
+      "got": "0",
+      "identity": "checked",
+      "gosperCalled": false,
+      "passed": true
+    }
+  ],
+  "allPassed": true,
+  "heldOutSecondTaskId": "P1-shifted-square-c3-2-to-7",
+  "heldOutExcluded": true,
+  "notAUniversalProof": true,
+  "reconstructionDisabled": true
+}

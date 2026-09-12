@@ -1,0 +1,9 @@
+{
+  "taskId": "P0-shifted-square-c1-0-to-4",
+  "summand": "(k+1)^2",
+  "variable": "k",
+  "parameterC": "1",
+  "lower": 0,
+  "upper": 4,
+  "notes": "Extraction instance for the shifted-square parametric pack. Not the held-out task."
+}

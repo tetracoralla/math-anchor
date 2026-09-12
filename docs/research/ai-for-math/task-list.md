@@ -143,6 +143,31 @@ A2 chose `sum_{k=1}^{20} k^3` as the held-out task and kept `1/k` as the
 inapplicable rejection. T9 after `C(k,2)=k(k-1)/2` is an extra in-domain apply
 with the binomial rewrite left conditional. See [a2-method-pack.md](a2-method-pack.md).
 
+## Parameterized family (batch 2; not a public Capability)
+
+### P0. Extraction instance: shifted square `c=1`
+
+- **Source:** same finite-sum convention as T1; `(k+1)^2` is still a `QQ`
+  polynomial. `G(k,c)` is derived by undetermined coefficients plus linearity
+  (known-method adaptation of Faulhaber / discrete antidifferences).
+- **Goal:** `sum_{k=0}^{4} (k+1)^2`.
+- **Acceptance:** exact `55`; saved parametric `G` instantiated, not Gosper.
+- **A2 Gosper pack:** would reconstruct. This family uses
+  `shifted-square-antidifference.v0` instead.
+
+### P1. Held-out: different `c` and bounds
+
+- **Goal:** `sum_{k=2}^{7} (k+3)^2`.
+- **Acceptance:** exact `355`. Reconstruction disabled on the pack path.
+- **Not a rename of P0.** Extra rational instance: `c=1/2` on `1..3` (`83/4`).
+
+Negatives: `k^3`, `k^2+6k+8`, `1/k`, reversed bounds. See
+[parameterized-method.md](parameterized-method.md).
+
+Equal-budget no-model timing smoke of B0 / B1 / P-pack on P0, P1 (`355`), P2,
+and `1/k`: [parameterized-cost-smoke.md](parameterized-cost-smoke.md). Not a
+benefit percentage.
+
 A3 records claim→obligation coverage for this same workflow (T1, cubes, T9
 conditional rewrite, and the negative cases). The only generated obligation
 id is `difference-identity`. Natural-language translation, the binomial

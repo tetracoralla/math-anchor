@@ -53,6 +53,37 @@ L2 F1–F5 (this batch, still Draft; parameterized method content is not done):
 The A4 table in `docs/research/ai-for-math/a4-smoke.md` is SHA `5217679` evidence.
 Post-fix smoke is a new report (`/tmp/a4-smoke-after-f1f5.json` in the fix notes), not that table.
 
+## Parameterized method pack (batch 2; stacked on #13, do not merge)
+
+Branch: `chore/ai-for-math-parameterized-method` (cut from F1–F5 tip `89490a1`).
+Does not reopen F1–F5. Separate **Draft** PR #14; depends on Draft PR #13.
+**Awaiting local L2. Do not merge. Do not undraft-to-merge. Do not promote. Do not start H1.**
+
+Local commits:
+
+- `14fcc32` Add experimental parameterized shifted-square method pack.
+- `2d51e4c` Document parameterized method-pack provenance, domain, and reuse.
+- `bca6e39` Record local parameterized-method commit SHAs in PUSH_NOTES.
+- `736ce2c` Fix shifted-square apply domain fail-closed for bound errors.
+- `71adc8d` Align apply dispatcher docs and extraction claim with both pack paths.
+- `c4dbccd` Add equal-budget no-model cost/timing smoke for the shifted-square pack.
+- `29c12d5` Document parameterized cost-smoke results and honesty limits.
+
+Cost-smoke results table in `docs/research/ai-for-math/parameterized-cost-smoke.md`
+is git `c4dbccd` evidence (this-machine in-process first/repeat). B0 already
+matches; not a benefit percentage. Draft PR #14 only; awaiting local L2.
+
+```sh
+.venv/bin/python research/method_packs/run.py extract-shifted-square
+.venv/bin/python research/method_packs/run.py apply \
+  --pack research/method_packs/shifted_square_antidifference.v0/pack.json \
+  --task research/method_packs/examples/shifted-square-held-out-c3-2-to-7.json
+.venv/bin/python -m pytest tests/python/test_parameterized_method_pack.py \
+  tests/python/test_parameterized_cost_smoke.py
+.venv/bin/python research/parameterized_cost_eval/run.py \
+  --output build/parameterized-cost-smoke-report.json
+```
+
 ```sh
 git checkout chore/ai-for-math-a4-smoke
 git log --oneline -12

@@ -1,0 +1,56 @@
+{
+  "id": "math-anchor.research.method-pack.shifted-square-antidifference.v0",
+  "extractionTaskId": "P0-shifted-square-c1-0-to-4",
+  "proposedRule": "For p(k,c)=(k+c)^2, save the parametric antidifference G(k,c) obtained by undetermined coefficients on 1, k, k^2 and linearity. Later tasks instantiate that G at a rational c without reconstructing it.",
+  "derivation": {
+    "method": "undetermined-coefficients-for-monomials-then-linearity",
+    "notFromGosper": true,
+    "monomialAntidifferences": {
+      "1": {
+        "1": "1"
+      },
+      "k": {
+        "1": "-1/2",
+        "2": "1/2"
+      },
+      "k^2": {
+        "1": "1/6",
+        "2": "-1/2",
+        "3": "1/3"
+      }
+    },
+    "combination": "G(k,c) = G_{k^2}(k) + 2 c G_k(k) + c^2 G_1(k)",
+    "canonicalSource": "k*(k - 1)*(2*k - 1)/6 + c*k*(k - 1) + (c**2)*k",
+    "canonicalMatchesDerivation": true
+  },
+  "generalIdentity": {
+    "left": "((1/3)*k**3 + k**2*c + (1/2)*k**2 + k*c**2 + k*c + (1/6)*k + c**2) - ((1/3)*k**3 + k**2*c - (1/2)*k**2 + k*c**2 - k*c + (1/6)*k)",
+    "right": "(k + c)**2",
+    "variables": [
+      "k",
+      "c"
+    ],
+    "checkedOnApply": true,
+    "note": "The general bivariate identity is checked from the pack payload. A checked instance is not a kernel theorem and is not a proof for other templates."
+  },
+  "instantiationAtExtractionC": {
+    "c": "1",
+    "G": {
+      "3": "1/3",
+      "2": "1/2",
+      "1": "1/6"
+    }
+  },
+  "notExtracted": {
+    "id": "math-anchor.research.discrete-telescoping-combination.v0",
+    "origin": "hand-provided-infrastructure",
+    "agentExtracted": false,
+    "reason": "hand-provided combination rule is A1 infrastructure, not pack novelty"
+  },
+  "novelty": {
+    "status": "known-method-adaptation",
+    "autoClaimed": false,
+    "note": "Faulhaber's formula for sum k^2, discrete antidifferences of polynomials, and Gosper already exist. This pack stores one parametric G so later (c,a,b) tasks need not reconstruct it."
+  },
+  "hiddenModelReasoning": false
+}

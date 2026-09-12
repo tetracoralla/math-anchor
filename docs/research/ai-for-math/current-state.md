@@ -160,3 +160,15 @@ If an Agent is later attached:
 
 Certificate coefficients and full receipts should stay outside the main context
 (`failures_only` / local files). A1 already does that without a model.
+
+## Parameterized pack (batch 2; experimental)
+
+A second experimental pack
+`math-anchor.research.method-pack.shifted-square-antidifference.v0` stores a
+parametric `G(k,c)` for `(k+c)^2`. Apply instantiates that payload with
+reconstruction disabled. B1/SymPy may still construct; they are not crippled.
+An equal-budget no-model timing smoke exists
+([parameterized-cost-smoke.md](parameterized-cost-smoke.md)): B0 already
+matches the in-family numbers. That is not a public Capability and not a
+dollar or promotion claim. See
+[parameterized-method.md](parameterized-method.md).

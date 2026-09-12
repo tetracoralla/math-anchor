@@ -1,7 +1,10 @@
 """Retrieve an experimental method pack and instantiate it on a new task.
 
-The pack JSON is declarative. Execution reuses the A1 polynomial finite-sum
-procedure; it does not eval pack text or import caller code. The hand-provided
+The pack JSON is declarative. It does not eval pack text or import caller
+code. Gosper packs still reuse the A1 polynomial finite-sum procedure
+(construction via gosper_sum / construct_antidifference). The shifted-square
+pack (PARAM_PACK_ID) instantiates the saved parametric G and must not
+reconstruct; reconstruction is disabled on that path. The hand-provided
 telescoping combination rule remains infrastructure, not pack novelty.
 """
 
@@ -26,7 +29,14 @@ from research.polynomial_finite_sum_proposal.telescoping import (
     rule_metadata,
 )
 
-from .format import APPLICATION_KIND, LIFECYCLE_CROSS_TASK, PACK_ID, PACK_VERSION
+from .format import (
+    APPLICATION_KIND,
+    LIFECYCLE_CROSS_TASK,
+    PACK_ID,
+    PACK_VERSION,
+    PARAM_PACK_ID,
+    PARAM_PACK_VERSION,
+)
 from .loader import load_pack, require_executable, validate_pack
 
 
@@ -64,6 +74,19 @@ def apply_method_pack(
     else:
         loaded = load_pack(pack_path)
     require_executable(loaded)
+    if loaded.get("id") == PARAM_PACK_ID:
+        from .shifted_square_apply import apply_shifted_square_pack
+
+        required = require_pack_version
+        if required in (None, PACK_VERSION):
+            required = PARAM_PACK_VERSION
+        return apply_shifted_square_pack(
+            task,
+            pack=loaded,
+            compare_baseline=compare_baseline,
+            include_backend_receipt=include_backend_receipt,
+            require_pack_version=required,
+        )
     _require_pack_version(loaded, require_pack_version)
     parsed = _parse_task(task)
     premises = _conditional_premises(parsed["premises"])

@@ -1,0 +1,55 @@
+{
+  "note": "Wrong template and out-of-domain inputs must fail closed. Rejection is not a counterexample to the saved identity.",
+  "cases": [
+    {
+      "id": "wrong-template-k-cubed",
+      "summand": "k^3",
+      "variable": "k",
+      "lower": 1,
+      "upper": 5,
+      "expectCode": "E_UNSUPPORTED",
+      "happened": "rejected",
+      "code": "E_UNSUPPORTED",
+      "message": "summand is not in the shifted-square family (k+c)^2 with leading coefficient 1",
+      "passed": true
+    },
+    {
+      "id": "wrong-template-not-perfect-square",
+      "summand": "k^2 + 6*k + 8",
+      "variable": "k",
+      "lower": 1,
+      "upper": 3,
+      "expectCode": "E_UNSUPPORTED",
+      "happened": "rejected",
+      "code": "E_UNSUPPORTED",
+      "message": "summand quadratic is not a perfect square of (k+c) for rational c",
+      "passed": true
+    },
+    {
+      "id": "harmonic",
+      "summand": "1/k",
+      "variable": "k",
+      "lower": 1,
+      "upper": 3,
+      "expectCode": "E_UNSUPPORTED",
+      "happened": "rejected",
+      "code": "E_UNSUPPORTED",
+      "message": "summand is not a rational-coefficient polynomial with constant denominators only: polynomial division requires a nonzero rational constant",
+      "passed": true
+    },
+    {
+      "id": "reversed-bounds",
+      "summand": "(k+1)^2",
+      "variable": "k",
+      "parameterC": "1",
+      "lower": 5,
+      "upper": 1,
+      "expectCode": "E_DOMAIN",
+      "happened": "rejected",
+      "code": "E_DOMAIN",
+      "message": "reversed bounds with upper < lower - 1 are unsupported; empty sums are only the case upper == lower - 1",
+      "passed": true
+    }
+  ],
+  "allRejected": true
+}

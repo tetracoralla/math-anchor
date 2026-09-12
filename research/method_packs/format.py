@@ -34,6 +34,26 @@ REQUIRED_INSTANTIATION_RULE_IDS = (
     "apply_infrastructure_telescoping_rule",
 )
 
+PARAM_PACK_ID = "math-anchor.research.method-pack.shifted-square-antidifference.v0"
+PARAM_PACK_VERSION = "0.1.0-experimental"
+PARAM_APPLICATION_KIND = (
+    "math-anchor.research.experimental-parameterized-method-pack-application.v0"
+)
+PARAM_EXTRACTION_TASK_ID = "P0-shifted-square-c1-0-to-4"
+PARAM_HELD_OUT_TASK_ID = "P1-shifted-square-c3-2-to-7"
+
+PARAM_REQUIRED_INSTANTIATION_RULE_IDS = (
+    "match_shifted_square_template",
+    "require_rational_parameter_c",
+    "instantiate_saved_parametric_antidifference",
+    "forbid_reconstruction_on_reuse_path",
+    "emit_polynomial_identity_obligation",
+    "evaluate_endpoints_independent_parser",
+    "apply_infrastructure_telescoping_rule",
+)
+
+KNOWN_PACK_IDS = frozenset({PACK_ID, PARAM_PACK_ID})
+
 FORBIDDEN_PACK_KEYS = frozenset(
     {
         "eval",
@@ -51,4 +71,6 @@ FORBIDDEN_PACK_KEYS = frozenset(
 PACKS_ROOT = Path(__file__).resolve().parent
 DEFAULT_PACK_DIR = PACKS_ROOT / "polynomial_antidifference_gosper.v0"
 DEFAULT_PACK_PATH = DEFAULT_PACK_DIR / "pack.json"
+DEFAULT_PARAM_PACK_DIR = PACKS_ROOT / "shifted_square_antidifference.v0"
+DEFAULT_PARAM_PACK_PATH = DEFAULT_PARAM_PACK_DIR / "pack.json"
 REPO_ROOT = PACKS_ROOT.parents[1]
