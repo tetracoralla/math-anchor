@@ -169,6 +169,10 @@ parametric `G(k,c)` for `(k+c)^2`. Apply instantiates that payload with
 reconstruction disabled. B1/SymPy may still construct; they are not crippled.
 An equal-budget no-model timing smoke exists
 ([parameterized-cost-smoke.md](parameterized-cost-smoke.md)): B0 already
-matches the in-family numbers. That is not a public Capability and not a
-dollar or promotion claim. See
+matches the in-family numbers. A later equal-budget smoke against a cached
+parametric template and an exact QQ evaluator
+([reuse-benefit.md](reuse-benefit.md)) found **no net utility** versus those
+strong baselines. Trustworthiness and reuse behavior still hold in the
+declared domain; they are not collapsed into one success flag. That is not a
+public Capability and not a dollar or promotion claim. See
 [parameterized-method.md](parameterized-method.md).

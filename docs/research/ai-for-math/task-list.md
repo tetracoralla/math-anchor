@@ -164,9 +164,24 @@ with the binomial rewrite left conditional. See [a2-method-pack.md](a2-method-pa
 Negatives: `k^3`, `k^2+6k+8`, `1/k`, reversed bounds. See
 [parameterized-method.md](parameterized-method.md).
 
+### P3. Held-out negative shift
+
+- **Goal:** `sum_{k=-1}^{5} (k-2)^2`.
+- **Acceptance:** exact `28`. Different `c` sign and bounds that cross zero.
+
+### P4. Empty sum in the same family
+
+- **Goal:** `sum_{k=3}^{2} (k+5)^2`.
+- **Acceptance:** exact `0`.
+
 Equal-budget no-model timing smoke of B0 / B1 / P-pack on P0, P1 (`355`), P2,
 and `1/k`: [parameterized-cost-smoke.md](parameterized-cost-smoke.md). Not a
 benefit percentage.
+
+Equal-budget reuse-benefit smoke adds B_template (cached `G`) and B_codegen
+(exact QQ evaluator), plus P3/P4 and reversed bounds as a never-solved
+convention contrast: [reuse-benefit.md](reuse-benefit.md). Three judgments
+stay separate. Not a benefit percentage.
 
 A3 records claim→obligation coverage for this same workflow (T1, cubes, T9
 conditional rewrite, and the negative cases). The only generated obligation
