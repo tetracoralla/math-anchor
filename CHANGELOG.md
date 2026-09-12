@@ -26,6 +26,12 @@ and Apple notarization record exist.
   pre-registered T1, held-out cubes, and `1/k`. Integration signal only:
   not a benefit percentage, not a pack promotion, not a Host/UI/MCP change.
   `lifecycleEvidence` is not semantic adoption. No dollar costs.
+- Added a research **reuse-benefit smoke** (`research/reuse_benefit_eval/`)
+  that compares the frozen shifted-square pack with B0, B1, a fair cached
+  parametric template, and an exact QQ coefficient-table evaluator. Three
+  judgments stay separate (trustworthiness / behavior / utility). Utility
+  versus those strong baselines is no net benefit on this family. Not a
+  public Capability, not a benefit percentage, not a Host/UI/MCP change.
 
 ## 0.7.1 - 2026-09-06
 
