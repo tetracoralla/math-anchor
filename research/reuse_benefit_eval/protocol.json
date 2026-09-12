@@ -1,0 +1,316 @@
+{
+  "kind": "math-anchor.research.ai-for-math-reuse-benefit-protocol.v0",
+  "stage": "reuse-benefit",
+  "title": "Real reuse vs strong CAS cache/template/codegen baselines for the shifted-square pack",
+  "preRegistered": true,
+  "notABenefitPercentage": true,
+  "promotionForbiddenInThisSmoke": true,
+  "judgmentsAreSeparate": true,
+  "model": {
+    "requested": null,
+    "observed": null,
+    "callsAllowed": false,
+    "noModelFirst": true
+  },
+  "budget": {
+    "equalBudget": true,
+    "modelCalls": 0,
+    "dollarCosts": null,
+    "dollarCostsOmittedBecause": "no real prices or fees; this smoke invents none"
+  },
+  "outOfScope": [
+    "Agent Host core changes",
+    "human calculator UI",
+    "fifth MCP tool",
+    "Skill Refinery",
+    "public Capability/Procedure promotion of the pack",
+    "H1 / method accumulation",
+    "dollar cost or savings percentage",
+    "claiming uniqueness from faster-than-cold-Gosper alone",
+    "expanding into many sum families"
+  ],
+  "workload": {
+    "family": "inclusive finite sums of (k+c)^2 for rational c and integer bounds",
+    "repeatedWork": [
+      "construct a polynomial antidifference G for this (c,a,b)",
+      "check G(k+1)-G(k)=(k+c)^2",
+      "evaluate G(b+1)-G(a)",
+      "decide applicability / domain"
+    ],
+    "whatThePackSaves": "parametric G(k,c)=k(k-1)(2k-1)/6 + c k(k-1) + c^2 k and the bivariate identity G(k+1,c)-G(k,c)=(k+c)^2",
+    "whatThePackDoesNotSave": [
+      "applicability / template matching",
+      "instance identity check after substituting this task's c",
+      "telescoping combination G(b+1)-G(a)",
+      "obligation receipts as coverage of the original prose task"
+    ],
+    "notClaimed": [
+      "new mathematics",
+      "unique closed form versus SymPy",
+      "dollar savings",
+      "semantic adoption from lifecycleEvidence"
+    ]
+  },
+  "mandatoryClaimZh": "相对强基线，这个包额外保存了什么；哪一步因此不必再做；是否仍有净收益。",
+  "mandatoryClaimAnswerZh": "相对 B0（每次 SymPy summation）与 B_template/B_codegen（同一条缓存的参数化反差分做模板代入或 QQ 系数表求值），这个包额外保存的仍是 G(k,c) 与可检查的二元恒等式；因此不必再对每个 (c,a,b) 构造 G。但 B_template 已经同样跳过构造并得到相同有理数；包路径仍做适用性与恒等式检查，本机耗时并不更低。相对这些强基线，本实验未见净收益。相对冷启动 Gosper（B1）更快不能单独证明 Math Anchor 的差异化。",
+  "arms": [
+    {
+      "id": "B0",
+      "description": "Existing SymPy summation baseline. Direct CAS each time. Allowed to construct a closed value. No method pack, no obligation checker.",
+      "engine": "sympy.summation",
+      "methodPack": false,
+      "usesExistingBaseline": true,
+      "mayConstruct": true,
+      "mayCache": false
+    },
+    {
+      "id": "B1",
+      "description": "A1 polynomial finite-sum runner. Allowed to construct via gosper_sum / construct_antidifference. No extracted pack. compare_baseline is false so B0 is not embedded.",
+      "engine": "math-anchor.research.polynomial-finite-sum.v0",
+      "methodPack": false,
+      "compareBaseline": false,
+      "mayConstruct": true,
+      "mayCache": false
+    },
+    {
+      "id": "B_template",
+      "description": "Fair SymPy-side cache of the same parametric G(k,c). Prep stores the formula; each task instantiates c and evaluates G(b+1)-G(a) in exact rationals. No independent certificate checker. Not crippled: reversed bounds follow Karr like B0.",
+      "engine": "sympy.Expr.subs on cached G(k,c)",
+      "methodPack": false,
+      "mayConstruct": false,
+      "mayCache": true,
+      "fairTemplateInstantiation": true,
+      "reconstructionDisabled": false,
+      "independentChecker": false,
+      "karrReversedBoundsAccepted": true
+    },
+    {
+      "id": "B_codegen",
+      "description": "Exact QQ coefficient-table evaluator of S(c,a,b)=G(b+1,c)-G(a,c), generated once by sympy.Poly. Not float. C autowrap/codegen and pycode/exec are skipped (float types, eval/exec forbidden, compiler deps).",
+      "engine": "sympy.Poly QQ coefficient table + fractions.Fraction",
+      "methodPack": false,
+      "mayConstruct": false,
+      "mayCache": true,
+      "exactNotFloat": true,
+      "independentChecker": false,
+      "karrReversedBoundsAccepted": true
+    },
+    {
+      "id": "P-pack",
+      "description": "Frozen shifted-square pack apply: instantiate saved G(k,c); reconstruction disabled. Must refuse if parametricAntidifference is stripped. compare_baseline is false. Mechanism test only: this arm is not allowed to reconstruct. Baselines are not similarly crippled.",
+      "engine": "math-anchor.research.experimental-parameterized-method-pack-application.v0",
+      "methodPack": true,
+      "packId": "math-anchor.research.method-pack.shifted-square-antidifference.v0",
+      "packVersion": "0.1.0-experimental",
+      "compareBaseline": false,
+      "reconstructionDisabled": true,
+      "mayConstruct": false,
+      "independentChecker": true
+    }
+  ],
+  "tasks": [
+    {
+      "id": "P0-replay",
+      "taskId": "P0-shifted-square-c1-0-to-4",
+      "role": "extraction-source",
+      "summand": "(k+1)^2",
+      "variable": "k",
+      "parameterC": "1",
+      "lower": 0,
+      "upper": 4,
+      "expectedExact": "55",
+      "successMeans": "exact rational 55",
+      "notes": "Extraction instance. P-pack on this task is replay, not held-out reuse."
+    },
+    {
+      "id": "P1-held-out",
+      "taskId": "P1-shifted-square-c3-2-to-7",
+      "role": "held-out",
+      "summand": "(k+3)^2",
+      "variable": "k",
+      "parameterC": "3",
+      "lower": 2,
+      "upper": 7,
+      "expectedExact": "355",
+      "successMeans": "exact rational 355; different c and bounds from P0",
+      "notes": "Not a rename of P0. Pack must instantiate saved G, not reconstruct."
+    },
+    {
+      "id": "P2-rational",
+      "taskId": "P2-shifted-square-c-half-1-to-3",
+      "role": "held-out",
+      "summand": "(k+1/2)^2",
+      "variable": "k",
+      "parameterC": "1/2",
+      "lower": 1,
+      "upper": 3,
+      "expectedExact": "83/4",
+      "successMeans": "exact rational 83/4",
+      "notes": "Held-out rational c. Still (k+c)^2."
+    },
+    {
+      "id": "P3-held-out-negative-c",
+      "taskId": "P3-shifted-square-c-minus2-m1-to-5",
+      "role": "held-out",
+      "summand": "(k-2)^2",
+      "variable": "k",
+      "parameterC": "-2",
+      "lower": -1,
+      "upper": 5,
+      "expectedExact": "28",
+      "successMeans": "exact rational 28; negative c and bounds that cross zero",
+      "notes": "Not a rename of P0/P1. Repeated construction would run again on B1; pack/template/codegen must reuse G."
+    },
+    {
+      "id": "P4-empty",
+      "taskId": "P4-shifted-square-empty-c5-3-to-2",
+      "role": "in-family-empty",
+      "summand": "(k+5)^2",
+      "variable": "k",
+      "parameterC": "5",
+      "lower": 3,
+      "upper": 2,
+      "expectedExact": "0",
+      "successMeans": "exact 0; empty sum upper == lower - 1",
+      "notes": "Convention cell. Still in the declared family."
+    },
+    {
+      "id": "negative-harmonic",
+      "taskId": "P-reject-harmonic",
+      "role": "inapplicable",
+      "summand": "1/k",
+      "variable": "k",
+      "lower": 1,
+      "upper": 3,
+      "countedAsSolved": false,
+      "successMeans": "never counted as solved; family arms fail-closed unsupported, not a false proposition",
+      "expectedByArm": {
+        "B0": {
+          "countedAsSolved": false,
+          "mayComputeExactRational": true,
+          "notAPolynomialFiniteSumSuccess": true,
+          "notes": "SymPy summation may return the harmonic number 11/6. That is not counted as solving the negative."
+        },
+        "B1": {
+          "failClosed": true,
+          "code": "E_UNSUPPORTED",
+          "propositionFalsified": false,
+          "countedAsSolved": false
+        },
+        "B_template": {
+          "failClosed": true,
+          "code": "E_UNSUPPORTED",
+          "countedAsSolved": false,
+          "notes": "Family template does not apply to 1/k."
+        },
+        "B_codegen": {
+          "failClosed": true,
+          "code": "E_UNSUPPORTED",
+          "countedAsSolved": false,
+          "notes": "Family evaluator does not apply to 1/k."
+        },
+        "P-pack": {
+          "failClosed": true,
+          "code": "E_UNSUPPORTED",
+          "applicability": "rejected",
+          "propositionFalsified": false,
+          "countedAsSolved": false
+        }
+      }
+    },
+    {
+      "id": "negative-reversed",
+      "taskId": "P-reject-reversed",
+      "role": "convention-contrast",
+      "summand": "(k+1)^2",
+      "variable": "k",
+      "parameterC": "1",
+      "lower": 5,
+      "upper": 1,
+      "countedAsSolved": false,
+      "successMeans": "never counted as solved. This proposal rejects reversed bounds. Fair CAS template/codegen/B0 may emit the Karr value -50; that is not a family success.",
+      "expectedByArm": {
+        "B0": {
+          "countedAsSolved": false,
+          "mayComputeKarr": true,
+          "expectedExactIfComputed": "-50",
+          "notes": "SymPy Karr reversal. Not counted as solved."
+        },
+        "B1": {
+          "failClosed": true,
+          "code": "E_DOMAIN",
+          "countedAsSolved": false
+        },
+        "B_template": {
+          "countedAsSolved": false,
+          "mayComputeKarr": true,
+          "expectedExactIfComputed": "-50",
+          "notes": "Uncrippled template evaluates G(upper+1)-G(lower) even when reversed."
+        },
+        "B_codegen": {
+          "countedAsSolved": false,
+          "mayComputeKarr": true,
+          "expectedExactIfComputed": "-50",
+          "notes": "Uncrippled generated evaluator evaluates S(c,a,b) even when reversed."
+        },
+        "P-pack": {
+          "failClosed": true,
+          "code": "E_DOMAIN",
+          "applicability": "rejected",
+          "countedAsSolved": false
+        }
+      }
+    }
+  ],
+  "structuralProbes": {
+    "strippedPayloadMustRefuse": true,
+    "wrongSavedGMustFailClosed": true,
+    "cCodegenMustNotBeUsedIfFloating": true,
+    "fairB0B1NotCrippledOnCubes": {
+      "summand": "k^3",
+      "lower": 1,
+      "upper": 20,
+      "expectedExact": "44100",
+      "notes": "Out of the shifted-square family. B0/B1 may construct; family template/codegen/P-pack must refuse. This probe is not a timed comparison cell."
+    }
+  },
+  "latency": {
+    "trials": 2,
+    "labels": ["first", "repeat"],
+    "unit": "ms",
+    "note": "In-process wall time on this machine. Trial 0 is first, trial 1 is repeat. These are not isolated cold-process starts. Not a statistical benchmark. Not a dollar cost. equalBudget is zero model calls, not equal wall-clock or memory. Sequential arm order is B0 → B1 → B_template → B_codegen → P-pack; later cells are already warm. Family prep for B_template/B_codegen is timed separately and is not folded into a savings percentage."
+  },
+  "scoring": {
+    "success": "In-family (c,a,b): ok with the pre-registered exact rational. Negatives: never solved.",
+    "wrongAcceptance": "ok with a value other than the pre-registered exact on an in-family task, or B1/P-pack ok on 1/k or reversed bounds",
+    "applicabilityMisjudgment": "B1/P-pack/B_template/B_codegen reject an in-family (c,a,b), or B1/P-pack accept 1/k, or treat 1/k as a falsified proposition",
+    "coversOriginalTaskClaim": "must stay false",
+    "callAloneIsNotAdoption": "must stay true on P-pack apply",
+    "construction": "P-pack, B_template, and B_codegen in-family cells must record 0 gosper_sum and 0 construct_antidifference calls. B1 in-family cells must construct. The JSON gosperCalled flag is a path invariant; the wrap is the probe.",
+    "judgments": "trustworthiness, behavior, and utility are recorded separately and must not be collapsed into one success flag"
+  },
+  "decisionRule": {
+    "promote": "Forbidden in this smoke. A few integration cells are not a promotion case. Do not start H1. Faster-than-cold-Gosper is not uniqueness.",
+    "targeted_fix": "Wrong in-family value, negative counted as solved, P-pack reconstructed, stripped payload succeeded, wrong G emitted a sum, B1/B0 crippled on cubes, B_codegen used float, coversOriginalTaskClaim true, or formal_kernel_checked true.",
+    "evidence_insufficient": "Default for promotion when the harness is honest. If B_template already matches P on in-family values, utility is no net benefit versus that strong baseline. Smoke is not an overall benefit percentage. Do not invent a savings percentage."
+  },
+  "honesty": {
+    "smokeIsNotOverallBenefitPercent": true,
+    "greenHarnessTestsAreNotCompletion": true,
+    "lifecycleEvidenceIsNotSemanticAdoption": true,
+    "callAloneIsNotAdoption": true,
+    "coversOriginalTaskClaimStaysFalse": true,
+    "unsupportedIsNotACounterexample": true,
+    "formalKernelChecked": false,
+    "telescopingIsHandProvidedInfrastructure": true,
+    "noDollarCostsInvented": true,
+    "packNotPromoted": true,
+    "b0AlreadyMatchingIsNotAPackWin": true,
+    "bTemplateAlreadyMatchingIsNotAPackWin": true,
+    "fasterThanColdGosperIsNotUniqueness": true,
+    "gosperCalledJsonFlagIsNotTheProbe": true,
+    "judgmentsAreNotOneSuccessFlag": true,
+    "benefitComparisonDoesNotCrippleBaselines": true,
+    "mechanismTestMayDisableReconstructionOnPackOnly": true
+  }
+}
