@@ -89,6 +89,39 @@ git checkout chore/ai-for-math-a4-smoke
 git log --oneline -12
 ```
 
+## Trust / fail-closed vs fair template (Draft; do not merge)
+
+Branch: `chore/ai-for-math-trust-failclosed` (cut from `main` `fde6a6b`).
+Separate **Draft** PR #16: https://github.com/tetracoralla/math-anchor/pull/16
+**Keep Draft. Do not merge. Do not promote. Do not start H1.**
+Promotion decision stays `evidence_insufficient`. Experiment verdict is
+`differentiation_observed`. Latency is not the primary claim.
+Awaiting owner archive decision after nits (2026-09-14). Not a standing ban.
+
+Local commits:
+
+- `13ebce1` Add trust/fail-closed research harness vs a fair template.
+- `c86f9a7` Record trust/fail-closed this-machine results and local commit SHA.
+- `4ea3f88` Record Draft PR #16 URL and tip SHA at open.
+- `71a442a` Distinguish policy silent-accept from arithmetic silent-wrong.
+
+Judgment table values in `docs/research/ai-for-math/trust-failclosed.md` are
+git `13ebce1` evidence (this-machine in-process, one observed trial).
+Scoring vocabulary (silent-wrong vs silent-accept-out-of-declared-domain)
+is the nits commit `71a442a`. Millisecond snapshot stays `13ebce1`.
+This notes commit records that SHA. Open tip is `git rev-parse HEAD` / PR
+`headRefOid` after this commit (not `c86f9a7`, not `4ea3f88`).
+Wrong/swapped saved G: P-pack fail-closed, B_template arithmetic silent-wrong.
+Reversed bounds and over-limit: P-pack fail-closed, B_template policy
+silent-accept (`wrongAcceptance` false). Out-of-family `k^3` / `1/k` and
+parameter mismatch: both fail-closed. Not a benefit percentage.
+
+```sh
+.venv/bin/python research/trust_failclosed_eval/run.py \
+  --output build/trust-failclosed-report.json
+.venv/bin/python -m pytest tests/python/test_trust_failclosed.py
+```
+
 ## Reuse-benefit vs strong baselines (Draft PR #15; do not merge)
 
 Branch: `chore/ai-for-math-reuse-benefit` (cut from `main` `3d01d02`).

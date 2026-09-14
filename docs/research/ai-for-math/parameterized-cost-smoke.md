@@ -166,4 +166,5 @@ Keep experimental. **Do not start H1.** Do not promote the pack.
 
 The follow-up with strong cache/template/codegen baselines and three separate
 judgments is [reuse-benefit.md](reuse-benefit.md). It does **not** promote the
-pack. B_template already matches P-pack on this family.
+pack. B_template already matches P-pack on this family. Trust/fail-closed vs
+that fair template is [trust-failclosed.md](trust-failclosed.md).

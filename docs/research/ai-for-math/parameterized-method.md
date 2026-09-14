@@ -144,4 +144,6 @@ P1 is not a rename of P0.
   P-pack skipped Gosper construction on this machine; identity checks still
   ran. That is not a dollar saving and not a promotion case. Do not start H1.
   Strong-baseline follow-up (B_template / B_codegen, three judgments):
-  [reuse-benefit.md](reuse-benefit.md).
+  [reuse-benefit.md](reuse-benefit.md). Trust/fail-closed vs that fair
+  template (not a latency bake-off):
+  [trust-failclosed.md](trust-failclosed.md).

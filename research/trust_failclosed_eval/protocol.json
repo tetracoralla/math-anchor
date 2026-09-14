@@ -1,0 +1,385 @@
+{
+  "kind": "math-anchor.research.ai-for-math-trust-failclosed-protocol.v0",
+  "stage": "trust-failclosed",
+  "title": "When pack+checks fail closed while a fair cached template silently accepts or returns a wrong answer",
+  "preRegistered": true,
+  "notABenefitPercentage": true,
+  "notALatencyBakeOff": true,
+  "promotionForbiddenInThisSmoke": true,
+  "judgmentsAreSeparate": true,
+  "researchStatus": "experimental-draft-2026-09-14",
+  "model": {
+    "requested": null,
+    "observed": null,
+    "callsAllowed": false,
+    "noModelFirst": true
+  },
+  "budget": {
+    "equalBudget": true,
+    "modelCalls": 0,
+    "dollarCosts": null,
+    "dollarCostsOmittedBecause": "no real prices or fees; this smoke invents none"
+  },
+  "outOfScopeThisSmoke": [
+    "public Capability/Procedure promotion of the pack (forbidden in this smoke)",
+    "starting H1 / method accumulation (not this PR, 2026-09-14)",
+    "Agent Host / human calculator UI / fifth MCP tool (not this PR, 2026-09-14)",
+    "same-family latency bake-off as a primary claim (reuse-benefit already reported no net utility vs B_template; not re-asked here)",
+    "dollar cost or savings percentage",
+    "inventing a formal kernel"
+  ],
+  "trustworthinessScale": {
+    "holds": "emitted the protocol's trusted exact rational for this cell (in-family control with canonical G)",
+    "fail-closed": "refused or falsified without emitting a finite-sum value (unsupported, domain, input, or identity miss)",
+    "silent-wrong": "emitted a finite-sum value other than the true sum of the stated summand on the stated bounds (arithmetic; wrong/swapped saved G is the clear case)",
+    "silent-accept-out-of-declared-domain": "emitted a finite-sum value when the protocol's trusted outcome is no_value because pack declared-domain checks were skipped. The value may be mathematically correct (over-limit) or Karr-conventional (reversed bounds). This is policy no_value, not arithmetic silent-wrong."
+  },
+  "workload": {
+    "family": "inclusive finite sums of (k+c)^2 for rational c and integer bounds",
+    "question": "When does Math Anchor pack + checks fail closed (wrong saved G / out-of-domain / identity or obligation binding failures) while a fair SymPy-side cached template path silently accepts or returns a wrong answer?",
+    "whatThePackAddsVersusFairTemplate": "independent general and instance identity checks plus declared-domain fail-closed (reversed bounds, |a|,|b|<=10^6). Family matching is not pack-unique: the fair template also refuses 1/k and k^3.",
+    "notClaimed": [
+      "new mathematics",
+      "unique closed form versus SymPy",
+      "dollar savings",
+      "latency win versus B_template",
+      "semantic adoption from lifecycleEvidence",
+      "product readiness"
+    ]
+  },
+  "mandatoryClaimZh": "相对公平的 SymPy 侧缓存模板，包加检查在哪些探针上 fail-closed，而模板静默接受或给出错误值？",
+  "mandatoryClaimAnswerZh": "相对公平模板（同一条缓存 G 做代入，不做包身份检查，也不做包域检查），包路径在错误保存的 G、交换载荷、反转边界与越界上 fail-closed，而模板给出错误值或静默接受；出族 k^3、1/k 与 parameterC 不一致上双方都拒绝，不是包独有。身份/义务绑定钩子只在包路径上存在。本实验不以时延为主要结论。",
+  "arms": [
+    {
+      "id": "B_template",
+      "description": "Fair SymPy-side cached parametric G(k,c). Instantiates without pack identity checks and without pack domain checks (Karr reversed bounds; no |a|,|b|<=10^6 cap) because that models naive reuse. Family matching remains, so the arm is not crippled into applying G to 1/k or k^3. No independent certificate checker.",
+      "engine": "sympy.Expr.subs on cached G(k,c)",
+      "methodPack": false,
+      "mayConstruct": false,
+      "mayCache": true,
+      "fairTemplateInstantiation": true,
+      "packIdentityChecks": false,
+      "packDomainChecks": false,
+      "familyMatching": true,
+      "independentChecker": false,
+      "karrReversedBoundsAccepted": true
+    },
+    {
+      "id": "P-pack",
+      "description": "Frozen shifted-square apply: instantiate saved G; reconstruction disabled. Applicability, general and instance identity, and declared-domain checks must refuse bad cases. Reuses existing apply / certificate / obligation paths.",
+      "engine": "math-anchor.research.experimental-parameterized-method-pack-application.v0",
+      "methodPack": true,
+      "packId": "math-anchor.research.method-pack.shifted-square-antidifference.v0",
+      "packVersion": "0.1.0-experimental",
+      "compareBaseline": false,
+      "reconstructionDisabled": true,
+      "mayConstruct": false,
+      "independentChecker": true
+    }
+  ],
+  "savedG": {
+    "canonical": {
+      "id": "canonical",
+      "source": "k*(k - 1)*(2*k - 1)/6 + c*k*(k - 1) + (c**2)*k",
+      "note": "Correct parametric antidifference of (k+c)^2"
+    },
+    "linear-k": {
+      "id": "linear-k",
+      "source": "k",
+      "note": "Wrong saved G: stripped down to the index. True P1 sum is 355; naive G(b+1)-G(a) is 6."
+    },
+    "swapped-cubes-antidifference": {
+      "id": "swapped-cubes-antidifference",
+      "source": "k**2*(k - 1)**2/4",
+      "note": "Swapped payload: Faulhaber antidifference of k^3, not of (k+c)^2. Naive G(8)-G(2)=783."
+    }
+  },
+  "tasks": [
+    {
+      "id": "control-P1",
+      "taskId": "P1-shifted-square-c3-2-to-7",
+      "role": "in-family-control",
+      "summand": "(k+3)^2",
+      "variable": "k",
+      "parameterC": "3",
+      "lower": 2,
+      "upper": 7,
+      "savedG": "canonical",
+      "proposalTrustedOutcome": "exact",
+      "trueExact": "355",
+      "expectedExact": "355",
+      "successMeans": "both arms emit exact 355; template is not crippled on in-family canonical G",
+      "expectedByArm": {
+        "B_template": {
+          "trust": "holds",
+          "status": "ok",
+          "expectedExact": "355"
+        },
+        "P-pack": {
+          "trust": "holds",
+          "status": "ok",
+          "expectedExact": "355"
+        }
+      },
+      "notes": "Held-out (c,a,b) from the parameterized pack. Control cell, not a latency comparison."
+    },
+    {
+      "id": "wrong-saved-G",
+      "taskId": "P1-shifted-square-c3-2-to-7",
+      "role": "adversarial-saved-content",
+      "summand": "(k+3)^2",
+      "variable": "k",
+      "parameterC": "3",
+      "lower": 2,
+      "upper": 7,
+      "savedG": "linear-k",
+      "proposalTrustedOutcome": "no_value",
+      "trueExact": "355",
+      "successMeans": "P-pack fail-closes with no value; B_template silently emits 6",
+      "expectedByArm": {
+        "B_template": {
+          "trust": "silent-wrong",
+          "status": "ok",
+          "expectedExactIfComputed": "6",
+          "notes": "Naive cache instantiates G=k; G(8)-G(2)=6. No identity check."
+        },
+        "P-pack": {
+          "trust": "fail-closed",
+          "failClosed": true,
+          "emittedValue": false,
+          "notes": "Independent identity check falsifies wrong saved G; no finite-sum value."
+        }
+      },
+      "notes": "Same (c,a,b) as control. Both arms receive the mutated saved G."
+    },
+    {
+      "id": "swapped-saved-G",
+      "taskId": "P1-shifted-square-c3-2-to-7",
+      "role": "adversarial-saved-content",
+      "summand": "(k+3)^2",
+      "variable": "k",
+      "parameterC": "3",
+      "lower": 2,
+      "upper": 7,
+      "savedG": "swapped-cubes-antidifference",
+      "proposalTrustedOutcome": "no_value",
+      "trueExact": "355",
+      "successMeans": "P-pack fail-closes with no value; B_template silently emits 783",
+      "expectedByArm": {
+        "B_template": {
+          "trust": "silent-wrong",
+          "status": "ok",
+          "expectedExactIfComputed": "783",
+          "notes": "Naive cache instantiates the k^3 antidifference on a shifted-square task."
+        },
+        "P-pack": {
+          "trust": "fail-closed",
+          "failClosed": true,
+          "emittedValue": false,
+          "notes": "Swapped payload fails the bivariate/instance identity check."
+        }
+      },
+      "notes": "Swapped payload, not a missing payload. Strip is a separate structural probe."
+    },
+    {
+      "id": "out-of-family-cubes",
+      "taskId": "P-reject-cubes",
+      "role": "out-of-family",
+      "summand": "k^3",
+      "variable": "k",
+      "lower": 1,
+      "upper": 20,
+      "savedG": "canonical",
+      "proposalTrustedOutcome": "no_value",
+      "trueExact": "44100",
+      "countedAsSolved": false,
+      "successMeans": "both arms fail-closed; family matching is not pack-unique",
+      "expectedByArm": {
+        "B_template": {
+          "trust": "fail-closed",
+          "failClosed": true,
+          "code": "E_UNSUPPORTED",
+          "countedAsSolved": false,
+          "notes": "Fair template still matches the (k+c)^2 family. Not crippled into applying G to k^3."
+        },
+        "P-pack": {
+          "trust": "fail-closed",
+          "failClosed": true,
+          "code": "E_UNSUPPORTED",
+          "applicability": "rejected",
+          "countedAsSolved": false
+        }
+      },
+      "notes": "Disproves overclaim that out-of-family refusal is pack-unique versus a fair family-matched template."
+    },
+    {
+      "id": "out-of-family-harmonic",
+      "taskId": "P-reject-harmonic",
+      "role": "out-of-family",
+      "summand": "1/k",
+      "variable": "k",
+      "lower": 1,
+      "upper": 3,
+      "savedG": "canonical",
+      "proposalTrustedOutcome": "no_value",
+      "countedAsSolved": false,
+      "successMeans": "both arms fail-closed; never counted as solved",
+      "expectedByArm": {
+        "B_template": {
+          "trust": "fail-closed",
+          "failClosed": true,
+          "code": "E_UNSUPPORTED",
+          "countedAsSolved": false
+        },
+        "P-pack": {
+          "trust": "fail-closed",
+          "failClosed": true,
+          "code": "E_UNSUPPORTED",
+          "applicability": "rejected",
+          "countedAsSolved": false
+        }
+      }
+    },
+    {
+      "id": "reversed-bounds",
+      "taskId": "P-reject-reversed",
+      "role": "out-of-domain",
+      "summand": "(k+1)^2",
+      "variable": "k",
+      "parameterC": "1",
+      "lower": 5,
+      "upper": 1,
+      "savedG": "canonical",
+      "proposalTrustedOutcome": "no_value",
+      "countedAsSolved": false,
+      "successMeans": "P-pack fail-closes E_DOMAIN; fair template silently emits Karr -50",
+      "expectedByArm": {
+        "B_template": {
+          "trust": "silent-accept-out-of-declared-domain",
+          "status": "ok",
+          "mayComputeKarr": true,
+          "expectedExactIfComputed": "-50",
+          "notes": "Uncrippled template evaluates G(upper+1)-G(lower) when reversed. Policy skip of declared domain, not arithmetic silent-wrong."
+        },
+        "P-pack": {
+          "trust": "fail-closed",
+          "failClosed": true,
+          "code": "E_DOMAIN",
+          "applicability": "rejected",
+          "countedAsSolved": false
+        }
+      },
+      "notes": "This proposal's trusted outcome is no_value. Karr -50 is policy silent-accept of declared-domain skip, not a family success and not arithmetic silent-wrong."
+    },
+    {
+      "id": "parameter-mismatch",
+      "taskId": "P-reject-parameter-mismatch",
+      "role": "identity-binding",
+      "summand": "(k+1)^2",
+      "variable": "k",
+      "parameterC": "2",
+      "lower": 0,
+      "upper": 4,
+      "savedG": "canonical",
+      "proposalTrustedOutcome": "no_value",
+      "countedAsSolved": false,
+      "successMeans": "both arms fail-closed; parameter/summand mismatch is not pack-unique versus a fair template that still matches the family",
+      "expectedByArm": {
+        "B_template": {
+          "trust": "fail-closed",
+          "failClosed": true,
+          "code": "E_DOMAIN",
+          "countedAsSolved": false,
+          "notes": "Fair template compares declared parameterC to the (k+c)^2 implied by the summand."
+        },
+        "P-pack": {
+          "trust": "fail-closed",
+          "failClosed": true,
+          "code": "E_DOMAIN",
+          "applicability": "rejected",
+          "countedAsSolved": false
+        }
+      },
+      "notes": "A1–A4 / R1–R3 style binding of declared c to the summand. Existing apply/template hooks; not a parallel stack."
+    },
+    {
+      "id": "over-limit",
+      "taskId": "P-reject-over-limit",
+      "role": "out-of-domain",
+      "summand": "(k+3)^2",
+      "variable": "k",
+      "parameterC": "3",
+      "lower": 1000001,
+      "upper": 1000002,
+      "savedG": "canonical",
+      "proposalTrustedOutcome": "no_value",
+      "mathematicalExact": "2000018000041",
+      "countedAsSolved": false,
+      "successMeans": "P-pack fail-closes E_LIMIT; fair template silently accepts the mathematically correct sum (pack domain skipped)",
+      "expectedByArm": {
+        "B_template": {
+          "trust": "silent-accept-out-of-declared-domain",
+          "status": "ok",
+          "expectedExactIfComputed": "2000018000041",
+          "silentAcceptOutOfDeclaredPackDomain": true,
+          "notes": "True sum of (k+3)^2 on these bounds. Trusted outcome in this proposal is still no_value because |a|,|b| exceed 10^6. Policy silent-accept, not arithmetic silent-wrong; wrongAcceptance stays false."
+        },
+        "P-pack": {
+          "trust": "fail-closed",
+          "failClosed": true,
+          "code": "E_LIMIT",
+          "applicability": "rejected",
+          "countedAsSolved": false
+        }
+      },
+      "notes": "Silent accept of declared-domain overflow, not a wrong number. Trust label is silent-accept-out-of-declared-domain. Matching still requires the mathematical exact; garbage values are not a match."
+    }
+  ],
+  "structuralProbes": {
+    "strippedPayloadMustRefuseOnPack": true,
+    "bindingMismatchMustFailClosedOnPack": true,
+    "templateHasNoObligationBindingHook": true,
+    "notes": "Strip and typed-binding reuse existing apply / verify_typed_binding paths (A3 / PR13 R1–R3). Not a parallel checker."
+  },
+  "latency": {
+    "trials": 1,
+    "labels": ["observed"],
+    "unit": "ms",
+    "primaryClaim": false,
+    "note": "Informational in-process wall time only. Not a latency bake-off and not a utility claim. equalBudget is zero model calls."
+  },
+  "scoring": {
+    "trustworthiness": "Per cell: holds / fail-closed / silent-wrong / silent-accept-out-of-declared-domain as defined in trustworthinessScale. Never collapsed into one success flag.",
+    "behavior": "Whether P-pack instantiates saved G (including mutated G) instead of reconstructing. Wrap of gosper_sum / construct_antidifference / summation / Sum.doit is the reconstruction probe.",
+    "utility": "Optional secondary only. Not scored as a primary claim in this smoke. Latency is informational if present.",
+    "coversOriginalTaskClaim": "must stay false",
+    "callAloneIsNotAdoption": "must stay true on P-pack apply",
+    "wrongAcceptance": "arithmetic silent-wrong: a finite-sum other than trueExact of the stated summand on the stated bounds. Not set for policy silent-accept (Karr / over-limit mathematical exact).",
+    "silentAcceptance": "policy no_value: emitted the pre-registered Karr or over-limit exact when pack declared-domain checks were skipped",
+    "matchedPreRegisteredExpectation": "observed trust label equals expectedByArm.trust, and when expectedExactIfComputed is set the emitted valueExact must equal it. Any emission is not a silent-wrong match."
+  },
+  "decisionRule": {
+    "promote": "Forbidden in this smoke. Do not start H1. Fail-closed vs silent-wrong / silent-accept on one family is not product readiness.",
+    "targeted_fix": "P-pack emitted a value on wrong/swapped G, P-pack reconstructed, control missed 355, formal_kernel_checked true, coversOriginalTaskClaim true, or stripped payload succeeded on the pack.",
+    "evidence_insufficient": "Default for promotion. Arithmetic silent-wrong differentiation is wrong/swapped saved G. Domain probes are policy silent-accept. Neither is a promotion case."
+  },
+  "honesty": {
+    "smokeIsNotOverallBenefitPercent": true,
+    "greenHarnessTestsAreNotCompletion": true,
+    "lifecycleEvidenceIsNotSemanticAdoption": true,
+    "callAloneIsNotAdoption": true,
+    "coversOriginalTaskClaimStaysFalse": true,
+    "unsupportedIsNotACounterexample": true,
+    "formalKernelChecked": false,
+    "telescopingIsHandProvidedInfrastructure": true,
+    "noDollarCostsInvented": true,
+    "packNotPromoted": true,
+    "judgmentsAreNotOneSuccessFlag": true,
+    "latencyIsNotThePrimaryClaim": true,
+    "familyMatchingIsNotPackUnique": true,
+    "karrAcceptIsNotAFamilySuccess": true,
+    "karrAcceptIsPolicySilentAcceptNotArithmeticSilentWrong": true,
+    "overLimitAcceptIsPolicySilentAcceptNotArithmeticSilentWrong": true,
+    "arithmeticSilentWrongIsWrongOrSwappedSavedG": true
+  }
+}

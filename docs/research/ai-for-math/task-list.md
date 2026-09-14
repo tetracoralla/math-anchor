@@ -183,6 +183,11 @@ Equal-budget reuse-benefit smoke adds B_template (cached `G`) and B_codegen
 convention contrast: [reuse-benefit.md](reuse-benefit.md). Three judgments
 stay separate. Not a benefit percentage.
 
+Trust / fail-closed vs that same fair template (wrong saved `G`, swapped
+payload, out-of-family, reversed bounds, binding mismatch):
+[trust-failclosed.md](trust-failclosed.md). Latency is not the primary claim.
+Not a promotion. Experimental draft 2026-09-14.
+
 A3 records claim→obligation coverage for this same workflow (T1, cubes, T9
 conditional rewrite, and the negative cases). The only generated obligation
 id is `difference-identity`. Natural-language translation, the binomial

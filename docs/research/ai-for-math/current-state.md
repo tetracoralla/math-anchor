@@ -172,7 +172,9 @@ An equal-budget no-model timing smoke exists
 matches the in-family numbers. A later equal-budget smoke against a cached
 parametric template and an exact QQ evaluator
 ([reuse-benefit.md](reuse-benefit.md)) found **no net utility** versus those
-strong baselines. Trustworthiness and reuse behavior still hold in the
-declared domain; they are not collapsed into one success flag. That is not a
-public Capability and not a dollar or promotion claim. See
-[parameterized-method.md](parameterized-method.md).
+strong baselines. A subsequent trust/fail-closed smoke
+([trust-failclosed.md](trust-failclosed.md)) records when pack + checks
+fail closed while that fair template silently accepts or returns a wrong
+answer; latency is not the primary claim. Trustworthiness, behavior, and
+utility stay separate. That is not a public Capability and not a dollar or
+promotion claim. See [parameterized-method.md](parameterized-method.md).

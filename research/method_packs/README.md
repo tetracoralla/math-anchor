@@ -72,7 +72,9 @@ the mandatory “what math is saved” claim, and honesty limits. Equal-budget
 no-model timing: `docs/research/ai-for-math/parameterized-cost-smoke.md`.
 Strong-baseline reuse-benefit smoke (B0 / B1 / B_template / B_codegen /
 P-pack; three separate judgments):
-`docs/research/ai-for-math/reuse-benefit.md`.
+`docs/research/ai-for-math/reuse-benefit.md`. Trust / fail-closed vs a fair
+template (not a latency bake-off):
+`docs/research/ai-for-math/trust-failclosed.md`.
 
 ## Mathematical scope
 
