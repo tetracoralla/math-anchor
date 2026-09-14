@@ -31,19 +31,21 @@ answer?**
 
 ## Trustworthiness scale (per cell)
 
-These three labels are the trustworthiness vocabulary. They are not collapsed
-into one `success`.
+These labels are the trustworthiness vocabulary. They are not collapsed
+into one `success`. Arithmetic silent-wrong and policy silent-accept stay
+distinct. Wrong/swapped saved `G` is the clear silent-wrong differentiation.
 
 | Label | Means |
 | --- | --- |
 | **holds** | Emitted the protocol's trusted exact rational (in-family control with canonical `G`) |
 | **fail-closed** | Refused or falsified **without** a finite-sum value |
-| **silent-wrong** | Emitted a finite-sum value when the protocol's trusted outcome is `no_value`, or emitted a value other than the true sum of the stated summand on the stated bounds |
+| **silent-wrong** | Emitted a finite-sum **other than** the true sum of the stated summand on the stated bounds (arithmetic; wrong/swapped saved `G`) |
+| **silent-accept-out-of-declared-domain** | Emitted a finite-sum when the trusted outcome is `no_value` because pack declared-domain checks were skipped. The value may be mathematically correct (over-limit) or Karr-conventional (reversed bounds). Policy `no_value`, not arithmetic silent-wrong. `wrongAcceptance` stays false. |
 
-Over-limit (`|a|,|b| > 10^6`) is classified silent-wrong on the template
-**relative to this proposal's trusted outcome** (`no_value`), even though the
-emitted rational is the mathematical sum. That is silent acceptance of
-declared-domain overflow, not a wrong number.
+Matching a pre-registered `silent-wrong` / silent-accept cell requires
+`expectedExactIfComputed` when that field is set. Emitting an arbitrary
+finite-sum is not a match. Non-emission on an `exact` cell is fail-closed,
+never silent-wrong.
 
 ## Arms
 
@@ -62,10 +64,10 @@ Pre-registered protocol (frozen before the run):
 
 `research/trust_failclosed_eval/protocol.json`
 
-Unsupported arm/task/latency/Chinese-answer/saved-G overrides are rejected
-(pinned execution plan). The differentiation clause in the mandatory Chinese
-answer is also generated from live `observedWrongGDifferentiation` /
-`observedDomainDifferentiation` flags.
+Unsupported arm/task/latency/Chinese-answer/saved-G/honesty/scoring/decisionRule
+overrides are rejected (pinned execution plan). The differentiation clause in
+the mandatory Chinese answer is also generated from live
+`observedWrongGDifferentiation` / `observedDomainDifferentiation` flags.
 
 ```sh
 .venv/bin/python research/trust_failclosed_eval/run.py \
@@ -113,7 +115,7 @@ No dollar costs. No savings percentage.
 
 | Judgment | Verdict | What it does *not* mean |
 | --- | --- | --- |
-| **Trustworthiness** | per-cell `holds` / `fail-closed` / `silent-wrong`; contrast recorded | Not a utility win; not uniqueness; not one `success` |
+| **Trustworthiness** | per-cell `holds` / `fail-closed` / `silent-wrong` / `silent-accept-out-of-declared-domain`; contrast recorded | Not a utility win; not uniqueness; not one `success` |
 | **Behavior** | `pack_uses_saved_content` | Not unique reuse: B_template also instantiates a cached `G` |
 | **Utility** | `not_the_primary_claim` | Reuse-benefit already reported no net benefit vs B_template; not re-asked |
 
@@ -133,9 +135,9 @@ a path invariant, not the probe.
 | B_template | swapped-saved-G | silent-wrong | ok | 783 |
 | B_template | out-of-family-cubes | fail-closed | inapplicable | `E_UNSUPPORTED` |
 | B_template | out-of-family-harmonic | fail-closed | inapplicable | `E_UNSUPPORTED` |
-| B_template | reversed-bounds | silent-wrong | ok | -50 |
+| B_template | reversed-bounds | silent-accept-out-of-declared-domain | ok | -50 (Karr; policy) |
 | B_template | parameter-mismatch | fail-closed | inapplicable | `E_DOMAIN` |
-| B_template | over-limit | silent-wrong | ok | 2000018000041 |
+| B_template | over-limit | silent-accept-out-of-declared-domain | ok | 2000018000041 (math-correct; policy) |
 | P-pack | control-P1 | holds | ok | 355 |
 | P-pack | wrong-saved-G | fail-closed | falsified | (no value) |
 | P-pack | swapped-saved-G | fail-closed | falsified | (no value) |
@@ -152,19 +154,25 @@ Structural:
 - tampered `identity.right` fail-closes on the pack path
 - B_template has no obligation binding hook
 
-Informational observed ms on harness `13ebce1` (not a claim): B_template
-control 2.1; P-pack control 336 (checker warmup on this process); mutated-G
-pack cells ~5 ms and fail closed. Do not invent a savings percentage from
-these numbers.
+Trust labels in this table follow the post-nit vocabulary: over-limit and
+reversed-bounds template cells are `silent-accept-out-of-declared-domain`.
+Cell values and the promotion decision are unchanged. Informational observed
+ms on harness `13ebce1` (not a claim): B_template control 2.1; P-pack control
+336 (checker warmup on this process); mutated-G pack cells ~5 ms and fail
+closed. Do not invent a savings percentage from these numbers.
 
 ## What differentiates (and what does not)
 
-**Differentiates** (P-pack fail-closed, B_template silent-wrong):
+**Differentiates** (P-pack fail-closed, B_template emits a value):
 
-- Wrong saved `G = k` (true sum 355, template emits 6)
-- Swapped cubes antidifference payload (template emits 783)
-- Reversed bounds (template Karr `-50`)
-- Over-limit bounds (template emits the mathematical sum)
+- Wrong saved `G = k` (true sum 355, template emits 6) — **arithmetic silent-wrong**
+- Swapped cubes antidifference payload (template emits 783) — **arithmetic silent-wrong**
+- Reversed bounds (template Karr `-50`) — **policy silent-accept**, not a wrong number
+- Over-limit bounds (template emits the mathematical sum `2000018000041`) — **policy silent-accept**, not arithmetic silent-wrong
+
+`observedWrongGDifferentiation` is the arithmetic silent-wrong contrast.
+`observedDomainDifferentiation` is the policy silent-accept contrast.
+Over-limit is not the silent-wrong story and is not a promotion path.
 
 **Does not differentiate** (both fail-closed; disproves overclaim):
 
@@ -195,9 +203,10 @@ Do not invent a savings percentage from the informational milliseconds.
 - Smoke ≠ overall benefit percentage. The report refuses to emit one.
 - Green harness tests ≠ completion of the research claim.
 - The three judgments are not one success flag.
-- Trustworthiness is per-cell `holds` / `fail-closed` / `silent-wrong`.
+- Trustworthiness is per-cell `holds` / `fail-closed` / `silent-wrong` / `silent-accept-out-of-declared-domain`.
 - Family matching is not pack-unique versus a fair template.
-- Karr `-50` is not a family success in this proposal.
+- Karr `-50` is not a family success in this proposal (policy silent-accept).
+- Over-limit `2000018000041` is the mathematical sum; policy silent-accept, `wrongAcceptance` false.
 - `lifecycleEvidence` alone is not semantic adoption.
 - Call-alone is not adoption.
 - `coversOriginalTaskClaim` stays false.

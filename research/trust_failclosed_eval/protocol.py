@@ -50,7 +50,9 @@ SAVED_G_CUBES = "swapped-cubes-antidifference"
 TRUST_HOLDS = "holds"
 TRUST_FAIL_CLOSED = "fail-closed"
 TRUST_SILENT_WRONG = "silent-wrong"
-TRUST_SCALE = (TRUST_HOLDS, TRUST_FAIL_CLOSED, TRUST_SILENT_WRONG)
+TRUST_SILENT_ACCEPT = "silent-accept-out-of-declared-domain"
+TRUST_SCALE = (TRUST_HOLDS, TRUST_FAIL_CLOSED, TRUST_SILENT_WRONG, TRUST_SILENT_ACCEPT)
+TEMPLATE_NAIVE_EMISSION = (TRUST_SILENT_WRONG, TRUST_SILENT_ACCEPT)
 
 WRONG_G_TEMPLATE_EXACT = "6"
 SWAPPED_G_TEMPLATE_EXACT = "783"
@@ -62,7 +64,7 @@ MANDATORY_CLAIM_DIFFERENTIATION_ZH = (
     "包路径在错误保存的 G、交换载荷、反转边界与越界上 fail-closed，而模板给出错误值或静默接受"
 )
 MANDATORY_CLAIM_NO_SAVED_G_DIFF_ZH = "错误保存的 G 上未见 fail-closed 对 silent-wrong 的分化"
-MANDATORY_CLAIM_NO_DOMAIN_DIFF_ZH = "反转边界或越界上未见 fail-closed 对 silent-wrong 的分化"
+MANDATORY_CLAIM_NO_DOMAIN_DIFF_ZH = "反转边界或越界上未见 fail-closed 对模板静默接受的分化"
 MANDATORY_CLAIM_LATENCY_NOT_PRIMARY_ZH = "本实验不以时延为主要结论"
 KNOWN_MANDATORY_CLAIM_DIFF_CLAUSES_ZH = (
     MANDATORY_CLAIM_DIFFERENTIATION_ZH,
@@ -116,6 +118,12 @@ def validate_protocol(document: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("trust/fail-closed smoke only supports the pre-registered saved-G mutations")
     if document.get("trustworthinessScale") != supported.get("trustworthinessScale"):
         raise ValueError("trust/fail-closed smoke only supports the pre-registered trustworthiness scale")
+    if document.get("honesty") != supported.get("honesty"):
+        raise ValueError("trust/fail-closed smoke only supports the pre-registered honesty block")
+    if document.get("scoring") != supported.get("scoring"):
+        raise ValueError("trust/fail-closed smoke only supports the pre-registered scoring block")
+    if document.get("decisionRule") != supported.get("decisionRule"):
+        raise ValueError("trust/fail-closed smoke only supports the pre-registered decisionRule block")
     pinned_answer = supported.get("mandatoryClaimAnswerZh")
     if not isinstance(pinned_answer, str) or MANDATORY_CLAIM_LATENCY_NOT_PRIMARY_ZH not in pinned_answer:
         raise ValueError("pinned Chinese answer must state that latency is not the primary claim")

@@ -16,7 +16,7 @@ do not add a fifth MCP tool.
 - [parameterized-method.md](parameterized-method.md) — saved `G(k,c)` for `(k+c)^2`; apply without Gosper.
 - [parameterized-cost-smoke.md](parameterized-cost-smoke.md) — equal-budget B0/B1/P-pack timing; not a benefit percentage.
 - [reuse-benefit.md](reuse-benefit.md) — same family vs B0/B1/B_template/B_codegen; three separate judgments; not a benefit percentage.
-- [trust-failclosed.md](trust-failclosed.md) — pack fail-closed vs fair template silent-wrong; latency is not the primary claim; not a promotion.
+- [trust-failclosed.md](trust-failclosed.md) — pack fail-closed vs fair template silent-wrong / silent-accept; latency is not the primary claim; not a promotion.
 
 A1 vertical:
 

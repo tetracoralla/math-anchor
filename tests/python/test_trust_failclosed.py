@@ -22,6 +22,8 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from research.method_packs.format import PARAM_PACK_ID
+from research.method_packs.shifted_square import CANONICAL_G_SOURCE, parse_bivariate
+from research.reuse_benefit_eval.template import CACHED_G, _C, _K
 from research.trust_failclosed_eval.arms import run_b_template, run_p_pack
 from research.trust_failclosed_eval.protocol import (
     ARM_B_TEMPLATE,
@@ -46,11 +48,14 @@ from research.trust_failclosed_eval.protocol import (
     TASK_WRONG_G,
     TRUST_FAIL_CLOSED,
     TRUST_HOLDS,
+    TRUST_SCALE,
+    TRUST_SILENT_ACCEPT,
     TRUST_SILENT_WRONG,
     WRONG_G_TEMPLATE_EXACT,
     load_protocol,
     protocol_digest,
     reconcile_mandatory_claim_answer_zh,
+    saved_g_source,
     task_by_id,
     validate_protocol,
 )
@@ -105,7 +110,8 @@ def test_protocol_is_pre_registered_with_required_arms() -> None:
     arms = [arm["id"] for arm in protocol["arms"]]
     assert tuple(arms) == PRIMARY_ARMS
     scale = protocol["trustworthinessScale"]
-    assert set(scale) == {TRUST_HOLDS, TRUST_FAIL_CLOSED, TRUST_SILENT_WRONG}
+    assert tuple(scale) == TRUST_SCALE
+    assert set(scale) == set(TRUST_SCALE)
     template = next(arm for arm in protocol["arms"] if arm["id"] == ARM_B_TEMPLATE)
     assert template["packIdentityChecks"] is False
     assert template["packDomainChecks"] is False
@@ -147,6 +153,21 @@ def test_unsupported_protocol_overrides_are_rejected() -> None:
     with pytest.raises(ValueError, match="pre-registered mandatory Chinese answer"):
         validate_protocol(mutated_zh)
 
+    mutated_honesty = deepcopy(original)
+    mutated_honesty["honesty"] = {**mutated_honesty["honesty"], "formalKernelChecked": True}
+    with pytest.raises(ValueError, match="pre-registered honesty"):
+        validate_protocol(mutated_honesty)
+
+    mutated_scoring = deepcopy(original)
+    mutated_scoring["scoring"] = {**mutated_scoring["scoring"], "coversOriginalTaskClaim": "true"}
+    with pytest.raises(ValueError, match="pre-registered scoring"):
+        validate_protocol(mutated_scoring)
+
+    mutated_rule = deepcopy(original)
+    mutated_rule["decisionRule"] = {**mutated_rule["decisionRule"], "promote": "allowed"}
+    with pytest.raises(ValueError, match="pre-registered decisionRule"):
+        validate_protocol(mutated_rule)
+
 
 def test_control_both_hold_in_family(report: dict) -> None:
     for arm in PRIMARY_ARMS:
@@ -167,6 +188,8 @@ def test_wrong_saved_g_pack_fail_closed_template_silent_wrong(report: dict) -> N
     assert pack["summary"]["valueExact"] is None
     assert pack["summary"]["status"] in {"falsified", "error", "inapplicable"}
     assert template["scoring"]["trustworthiness"] == TRUST_SILENT_WRONG
+    assert template["scoring"]["wrongAcceptance"] is True
+    assert template["scoring"]["silentAcceptance"] is not True
     assert template["summary"]["status"] == "ok"
     assert template["summary"]["valueExact"] == WRONG_G_TEMPLATE_EXACT
     assert template["summary"]["valueExact"] != CONTROL_EXACT
@@ -178,6 +201,7 @@ def test_swapped_saved_g_pack_fail_closed_template_silent_wrong(report: dict) ->
     assert pack["scoring"]["trustworthiness"] == TRUST_FAIL_CLOSED
     assert pack["scoring"]["emittedValue"] is False
     assert template["scoring"]["trustworthiness"] == TRUST_SILENT_WRONG
+    assert template["scoring"]["wrongAcceptance"] is True
     assert template["summary"]["valueExact"] == SWAPPED_G_TEMPLATE_EXACT
 
 
@@ -191,13 +215,15 @@ def test_out_of_family_both_fail_closed_not_pack_unique(report: dict) -> None:
             assert cell["summary"]["errorCode"] == "E_UNSUPPORTED"
 
 
-def test_reversed_bounds_pack_fail_closed_template_karr_silent_wrong(report: dict) -> None:
+def test_reversed_bounds_pack_fail_closed_template_karr_silent_accept(report: dict) -> None:
     pack = _cell(report, ARM_P_PACK, TASK_REVERSED)
     template = _cell(report, ARM_B_TEMPLATE, TASK_REVERSED)
     assert pack["scoring"]["trustworthiness"] == TRUST_FAIL_CLOSED
     assert pack["summary"]["errorCode"] == "E_DOMAIN"
     assert pack["summary"]["valueExact"] is None
-    assert template["scoring"]["trustworthiness"] == TRUST_SILENT_WRONG
+    assert template["scoring"]["trustworthiness"] == TRUST_SILENT_ACCEPT
+    assert template["scoring"]["wrongAcceptance"] is False
+    assert template["scoring"]["silentAcceptance"] is True
     assert template["summary"]["valueExact"] == KARR_REVERSED_EXACT
     assert template["summary"]["karrReversedBoundsAccepted"] is True
 
@@ -216,7 +242,9 @@ def test_over_limit_pack_fail_closed_template_silent_accept(report: dict) -> Non
     assert pack["scoring"]["trustworthiness"] == TRUST_FAIL_CLOSED
     assert pack["summary"]["errorCode"] == "E_LIMIT"
     assert pack["summary"]["valueExact"] is None
-    assert template["scoring"]["trustworthiness"] == TRUST_SILENT_WRONG
+    assert template["scoring"]["trustworthiness"] == TRUST_SILENT_ACCEPT
+    assert template["scoring"]["wrongAcceptance"] is False
+    assert template["scoring"]["silentAcceptance"] is True
     assert template["summary"]["valueExact"] == OVER_LIMIT_EXACT
     assert template["scoring"]["trustReason"] == "silent_accept_out_of_declared_pack_domain"
 
@@ -272,7 +300,7 @@ def test_three_judgments_are_separate_and_not_one_success(report: dict) -> None:
     behavior = judgments["behavior"]
     utility = judgments["utility"]
     assert trust["appliedPerCell"] is True
-    assert trust["scale"] == [TRUST_HOLDS, TRUST_FAIL_CLOSED, TRUST_SILENT_WRONG]
+    assert trust["scale"] == list(TRUST_SCALE)
     assert trust["control"]["P-pack"] == TRUST_HOLDS
     assert trust["control"]["B_template"] == TRUST_HOLDS
     assert trust["observedContrast"][TASK_WRONG_G]["differentiates"] is True
@@ -334,7 +362,7 @@ def test_harness_source_does_not_hardcode_latency_figures() -> None:
         assert "savings %" not in lowered
 
 
-def test_classify_trust_keeps_three_labels() -> None:
+def test_classify_trust_keeps_four_labels() -> None:
     control = task_by_id(TASK_CONTROL)
     holds = classify_trust(control, ARM_P_PACK, {"status": "ok", "valueExact": "355"})
     assert holds["observed"] == TRUST_HOLDS
@@ -346,6 +374,86 @@ def test_classify_trust_keeps_three_labels() -> None:
         {"status": "falsified", "valueExact": None, "errorCode": None},
     )
     assert closed["observed"] == TRUST_FAIL_CLOSED
+    over = classify_trust(
+        task_by_id(TASK_OVER_LIMIT),
+        ARM_B_TEMPLATE,
+        {"status": "ok", "valueExact": OVER_LIMIT_EXACT},
+    )
+    assert over["observed"] == TRUST_SILENT_ACCEPT
+    missing = classify_trust(control, ARM_P_PACK, {"status": "ok", "valueExact": None})
+    assert missing["observed"] == TRUST_FAIL_CLOSED
+
+
+def _zero_construction() -> dict[str, int]:
+    return {"gosper_sum": 0, "construct_antidifference": 0, "summation": 0, "Sum.doit": 0}
+
+
+def test_silent_wrong_match_requires_expected_exact_if_computed() -> None:
+    ignored_mutation = score_cell(
+        arm_id=ARM_B_TEMPLATE,
+        task=task_by_id(TASK_WRONG_G),
+        summary={"status": "ok", "valueExact": CONTROL_EXACT},
+        construction=_zero_construction(),
+    )
+    assert ignored_mutation["trustworthiness"] == TRUST_SILENT_WRONG
+    assert ignored_mutation["matchedPreRegisteredExpectation"] is False
+    assert ignored_mutation["wrongAcceptance"] is True
+
+    naive = score_cell(
+        arm_id=ARM_B_TEMPLATE,
+        task=task_by_id(TASK_WRONG_G),
+        summary={"status": "ok", "valueExact": WRONG_G_TEMPLATE_EXACT},
+        construction=_zero_construction(),
+    )
+    assert naive["matchedPreRegisteredExpectation"] is True
+    assert naive["wrongAcceptance"] is True
+
+    garbage_over_limit = score_cell(
+        arm_id=ARM_B_TEMPLATE,
+        task=task_by_id(TASK_OVER_LIMIT),
+        summary={"status": "ok", "valueExact": "0"},
+        construction=_zero_construction(),
+    )
+    assert garbage_over_limit["trustworthiness"] == TRUST_SILENT_WRONG
+    assert garbage_over_limit["matchedPreRegisteredExpectation"] is False
+    assert garbage_over_limit["wrongAcceptance"] is True
+    assert garbage_over_limit["silentAcceptance"] is not True
+
+    math_correct_over_limit = score_cell(
+        arm_id=ARM_B_TEMPLATE,
+        task=task_by_id(TASK_OVER_LIMIT),
+        summary={"status": "ok", "valueExact": OVER_LIMIT_EXACT},
+        construction=_zero_construction(),
+    )
+    assert math_correct_over_limit["trustworthiness"] == TRUST_SILENT_ACCEPT
+    assert math_correct_over_limit["matchedPreRegisteredExpectation"] is True
+    assert math_correct_over_limit["wrongAcceptance"] is False
+    assert math_correct_over_limit["silentAcceptance"] is True
+
+
+def test_template_saved_g_comes_from_protocol_parser() -> None:
+    import sympy as sp
+    from fractions import Fraction
+
+    protocol = load_protocol()
+    assert saved_g_source("canonical", protocol) == CANONICAL_G_SOURCE
+    terms = parse_bivariate(saved_g_source("canonical", protocol))
+    expr = sp.Integer(0)
+    for (index_power, parameter_power), coefficient in terms.items():
+        expr += (
+            sp.Rational(int(coefficient.numerator), int(coefficient.denominator))
+            * (_K ** index_power)
+            * (_C ** parameter_power)
+        )
+    assert sp.expand(expr - CACHED_G) == 0
+    assert parse_bivariate(saved_g_source("linear-k", protocol)) == {(1, 0): Fraction(1)}
+    swapped = parse_bivariate(saved_g_source("swapped-cubes-antidifference", protocol))
+    assert swapped[(4, 0)] == Fraction(1, 4)
+    source = (ROOT / "research" / "trust_failclosed_eval" / "arms.py").read_text(encoding="utf-8")
+    assert "_SAVED_G_EXPR" not in source
+    assert "parse_bivariate" in source
+    template_block = source.split("def run_p_pack")[0]
+    assert "saved_g_source" in template_block
 
 
 def test_pack_emitting_value_on_wrong_g_is_targeted_fix() -> None:

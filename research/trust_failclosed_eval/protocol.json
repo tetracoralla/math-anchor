@@ -31,7 +31,8 @@
   "trustworthinessScale": {
     "holds": "emitted the protocol's trusted exact rational for this cell (in-family control with canonical G)",
     "fail-closed": "refused or falsified without emitting a finite-sum value (unsupported, domain, input, or identity miss)",
-    "silent-wrong": "emitted a finite-sum value when the protocol's trusted outcome is no_value, or emitted a value other than the true sum of the stated summand on the stated bounds"
+    "silent-wrong": "emitted a finite-sum value other than the true sum of the stated summand on the stated bounds (arithmetic; wrong/swapped saved G is the clear case)",
+    "silent-accept-out-of-declared-domain": "emitted a finite-sum value when the protocol's trusted outcome is no_value because pack declared-domain checks were skipped. The value may be mathematically correct (over-limit) or Karr-conventional (reversed bounds). This is policy no_value, not arithmetic silent-wrong."
   },
   "workload": {
     "family": "inclusive finite sums of (k+c)^2 for rational c and integer bounds",
@@ -254,11 +255,11 @@
       "successMeans": "P-pack fail-closes E_DOMAIN; fair template silently emits Karr -50",
       "expectedByArm": {
         "B_template": {
-          "trust": "silent-wrong",
+          "trust": "silent-accept-out-of-declared-domain",
           "status": "ok",
           "mayComputeKarr": true,
           "expectedExactIfComputed": "-50",
-          "notes": "Uncrippled template evaluates G(upper+1)-G(lower) when reversed."
+          "notes": "Uncrippled template evaluates G(upper+1)-G(lower) when reversed. Policy skip of declared domain, not arithmetic silent-wrong."
         },
         "P-pack": {
           "trust": "fail-closed",
@@ -268,7 +269,7 @@
           "countedAsSolved": false
         }
       },
-      "notes": "This proposal's trusted outcome is no_value. Karr -50 is silent-wrong relative to that, not a family success."
+      "notes": "This proposal's trusted outcome is no_value. Karr -50 is policy silent-accept of declared-domain skip, not a family success and not arithmetic silent-wrong."
     },
     {
       "id": "parameter-mismatch",
@@ -317,11 +318,11 @@
       "successMeans": "P-pack fail-closes E_LIMIT; fair template silently accepts the mathematically correct sum (pack domain skipped)",
       "expectedByArm": {
         "B_template": {
-          "trust": "silent-wrong",
+          "trust": "silent-accept-out-of-declared-domain",
           "status": "ok",
           "expectedExactIfComputed": "2000018000041",
           "silentAcceptOutOfDeclaredPackDomain": true,
-          "notes": "True sum of (k+3)^2 on these bounds. Trusted outcome in this proposal is still no_value because |a|,|b| exceed 10^6."
+          "notes": "True sum of (k+3)^2 on these bounds. Trusted outcome in this proposal is still no_value because |a|,|b| exceed 10^6. Policy silent-accept, not arithmetic silent-wrong; wrongAcceptance stays false."
         },
         "P-pack": {
           "trust": "fail-closed",
@@ -331,7 +332,7 @@
           "countedAsSolved": false
         }
       },
-      "notes": "Silent accept of declared-domain overflow, not a wrong number. Classified silent-wrong because a value was emitted when the protocol's trusted outcome is no_value."
+      "notes": "Silent accept of declared-domain overflow, not a wrong number. Trust label is silent-accept-out-of-declared-domain. Matching still requires the mathematical exact; garbage values are not a match."
     }
   ],
   "structuralProbes": {
@@ -348,17 +349,19 @@
     "note": "Informational in-process wall time only. Not a latency bake-off and not a utility claim. equalBudget is zero model calls."
   },
   "scoring": {
-    "trustworthiness": "Per cell: holds / fail-closed / silent-wrong as defined in trustworthinessScale. Never collapsed into one success flag.",
+    "trustworthiness": "Per cell: holds / fail-closed / silent-wrong / silent-accept-out-of-declared-domain as defined in trustworthinessScale. Never collapsed into one success flag.",
     "behavior": "Whether P-pack instantiates saved G (including mutated G) instead of reconstructing. Wrap of gosper_sum / construct_antidifference / summation / Sum.doit is the reconstruction probe.",
     "utility": "Optional secondary only. Not scored as a primary claim in this smoke. Latency is informational if present.",
     "coversOriginalTaskClaim": "must stay false",
     "callAloneIsNotAdoption": "must stay true on P-pack apply",
-    "wrongAcceptance": "emitting a finite-sum value when proposalTrustedOutcome is no_value, or a value other than trueExact on control"
+    "wrongAcceptance": "arithmetic silent-wrong: a finite-sum other than trueExact of the stated summand on the stated bounds. Not set for policy silent-accept (Karr / over-limit mathematical exact).",
+    "silentAcceptance": "policy no_value: emitted the pre-registered Karr or over-limit exact when pack declared-domain checks were skipped",
+    "matchedPreRegisteredExpectation": "observed trust label equals expectedByArm.trust, and when expectedExactIfComputed is set the emitted valueExact must equal it. Any emission is not a silent-wrong match."
   },
   "decisionRule": {
-    "promote": "Forbidden in this smoke. Do not start H1. Fail-closed vs silent-wrong on one family is not product readiness.",
+    "promote": "Forbidden in this smoke. Do not start H1. Fail-closed vs silent-wrong / silent-accept on one family is not product readiness.",
     "targeted_fix": "P-pack emitted a value on wrong/swapped G, P-pack reconstructed, control missed 355, formal_kernel_checked true, coversOriginalTaskClaim true, or stripped payload succeeded on the pack.",
-    "evidence_insufficient": "Default for promotion. Differentiation on adversarial G / reversed bounds is experimental evidence, not a promotion case."
+    "evidence_insufficient": "Default for promotion. Arithmetic silent-wrong differentiation is wrong/swapped saved G. Domain probes are policy silent-accept. Neither is a promotion case."
   },
   "honesty": {
     "smokeIsNotOverallBenefitPercent": true,
@@ -375,6 +378,8 @@
     "latencyIsNotThePrimaryClaim": true,
     "familyMatchingIsNotPackUnique": true,
     "karrAcceptIsNotAFamilySuccess": true,
-    "overLimitAcceptIsSilentWrongRelativeToProposal": true
+    "karrAcceptIsPolicySilentAcceptNotArithmeticSilentWrong": true,
+    "overLimitAcceptIsPolicySilentAcceptNotArithmeticSilentWrong": true,
+    "arithmeticSilentWrongIsWrongOrSwappedSavedG": true
   }
 }

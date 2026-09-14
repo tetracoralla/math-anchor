@@ -1,6 +1,8 @@
 """Score trust/fail-closed cells. Three judgments stay separate.
 
-Trustworthiness is per-cell holds / fail-closed / silent-wrong.
+Trustworthiness is per-cell holds / fail-closed / silent-wrong /
+silent-accept-out-of-declared-domain. Arithmetic silent-wrong is wrong/swapped
+saved G. Policy silent-accept is Karr / over-limit (declared-domain skip).
 Behavior is whether the pack instantiates saved content.
 Utility is not the primary claim of this smoke.
 """
@@ -28,8 +30,11 @@ from .protocol import (
     TASK_REVERSED,
     TASK_SWAPPED_G,
     TASK_WRONG_G,
+    TEMPLATE_NAIVE_EMISSION,
     TRUST_FAIL_CLOSED,
     TRUST_HOLDS,
+    TRUST_SCALE,
+    TRUST_SILENT_ACCEPT,
     TRUST_SILENT_WRONG,
     expected_by_arm,
     expected_exact_if_computed,
@@ -83,42 +88,72 @@ def _is_fail_closed(summary: dict[str, Any]) -> bool:
 
 
 def classify_trust(task: dict[str, Any], arm_id: str, summary: dict[str, Any]) -> dict[str, Any]:
-    """Per-cell trustworthiness. Never a collapsed success flag."""
+    """Per-cell trustworthiness. Never a collapsed success flag.
+
+    Non-emission is fail-closed, never silent-wrong. Arithmetic silent-wrong is
+    a finite-sum other than the true/mathematical exact. Policy silent-accept
+    is the pre-registered Karr or over-limit exact when declared-domain checks
+    were skipped.
+    """
 
     trusted_outcome = task.get("proposalTrustedOutcome")
     value_exact = summary.get("valueExact")
     emitted = bool(value_exact)
-    expected_trust = expected_by_arm(task, arm_id).get("trust")
+    expected = expected_by_arm(task, arm_id)
+    expected_trust = expected.get("trust")
     expected_value = expected_exact_if_computed(task, arm_id)
+    true_exact = task.get("trueExact") if isinstance(task.get("trueExact"), str) else None
+    math_exact = (
+        task.get("mathematicalExact") if isinstance(task.get("mathematicalExact"), str) else None
+    )
 
     if trusted_outcome == "exact":
-        matched = summary.get("status") == "ok" and value_exact == task.get("expectedExact")
-        if matched:
+        protocol_exact = task.get("expectedExact")
+        if summary.get("status") == "ok" and value_exact == protocol_exact:
             observed = TRUST_HOLDS
             reason = "emitted_trusted_exact"
-        elif emitted and value_exact != task.get("expectedExact"):
+        elif emitted:
             observed = TRUST_SILENT_WRONG
             reason = "emitted_wrong_exact"
         else:
-            observed = TRUST_FAIL_CLOSED if _is_fail_closed(summary) else TRUST_SILENT_WRONG
-            reason = "did_not_emit_trusted_exact"
-    else:
-        if emitted:
-            observed = TRUST_SILENT_WRONG
-            if expected_value and value_exact == expected_value:
-                reason = (
-                    "silent_accept_out_of_declared_pack_domain"
-                    if task.get("id") == TASK_OVER_LIMIT
-                    else "emitted_value_when_trusted_outcome_is_no_value"
-                )
-            else:
-                reason = "emitted_value_when_trusted_outcome_is_no_value"
-        elif _is_fail_closed(summary):
             observed = TRUST_FAIL_CLOSED
-            reason = "refused_or_falsified_without_value"
+            reason = (
+                "refused_or_falsified_without_value"
+                if _is_fail_closed(summary)
+                else "did_not_emit_trusted_exact"
+            )
+    elif not emitted:
+        observed = TRUST_FAIL_CLOSED
+        reason = (
+            "refused_or_falsified_without_value"
+            if _is_fail_closed(summary)
+            else "no_value_without_clear_fail_closed_status"
+        )
+    else:
+        policy_skip = (
+            expected.get("silentAcceptOutOfDeclaredPackDomain") is True
+            or expected.get("mayComputeKarr") is True
+        )
+        matches_policy_value = bool(expected_value) and value_exact == expected_value
+        arithmetic_wrong = bool(true_exact) and value_exact != true_exact
+        if not arithmetic_wrong and math_exact:
+            arithmetic_wrong = value_exact != math_exact
+        if policy_skip and matches_policy_value:
+            observed = TRUST_SILENT_ACCEPT
+            reason = (
+                "silent_accept_out_of_declared_pack_domain"
+                if expected.get("silentAcceptOutOfDeclaredPackDomain") is True
+                else "silent_accept_karr_reversed_bounds"
+            )
+        elif math_exact and value_exact == math_exact:
+            observed = TRUST_SILENT_ACCEPT
+            reason = "silent_accept_out_of_declared_pack_domain"
+        elif arithmetic_wrong:
+            observed = TRUST_SILENT_WRONG
+            reason = "emitted_value_when_trusted_outcome_is_no_value"
         else:
-            observed = TRUST_FAIL_CLOSED if not emitted else TRUST_SILENT_WRONG
-            reason = "no_value_without_clear_fail_closed_status"
+            observed = TRUST_SILENT_WRONG
+            reason = "emitted_value_when_trusted_outcome_is_no_value"
 
     return {
         "observed": observed,
@@ -127,7 +162,8 @@ def classify_trust(task: dict[str, Any], arm_id: str, summary: dict[str, Any]) -
         "reason": reason,
         "emittedValue": emitted,
         "valueExact": value_exact,
-        "scale": [TRUST_HOLDS, TRUST_FAIL_CLOSED, TRUST_SILENT_WRONG],
+        "expectedExactIfComputed": expected_value,
+        "scale": list(TRUST_SCALE),
     }
 
 
@@ -146,7 +182,12 @@ def score_cell(
 
     counted_as_solved = trust["observed"] == TRUST_HOLDS
     wrong_acceptance = trust["observed"] == TRUST_SILENT_WRONG
+    silent_acceptance = trust["observed"] == TRUST_SILENT_ACCEPT
     fail_closed = trust["observed"] == TRUST_FAIL_CLOSED
+    expected_value = expected_exact_if_computed(task, arm_id)
+    value_ok = True
+    if expected_value:
+        value_ok = summary.get("valueExact") == expected_value
 
     code_ok = True
     if expected.get("failClosed") is True and expected_code:
@@ -169,9 +210,10 @@ def score_cell(
         "trustworthiness": trust["observed"],
         "trustReason": trust["reason"],
         "expectedTrust": trust["expected"],
-        "matchedPreRegisteredExpectation": trust["matchedProtocol"] and code_ok,
+        "matchedPreRegisteredExpectation": trust["matchedProtocol"] and code_ok and value_ok,
         "countedAsSolved": counted_as_solved,
         "wrongAcceptance": wrong_acceptance,
+        "silentAcceptance": silent_acceptance,
         "failClosed": fail_closed,
         "emittedValue": trust["emittedValue"],
         "coversOriginalTaskClaim": False,
@@ -257,7 +299,7 @@ def decide(
         )
     )
     reasons = [
-        "This smoke answers fail-closed vs silent-wrong against a fair template, not a latency bake-off.",
+        "This smoke answers fail-closed vs silent-wrong / silent-accept against a fair template, not a latency bake-off.",
         "Promotion is forbidden in this smoke even when cells match. Do not start H1.",
         "Out-of-family k^3 and 1/k refusal is not pack-unique versus a family-matched template.",
         "Trustworthiness, behavior, and utility stay separate and are not one success flag.",
@@ -292,7 +334,7 @@ def decide(
             if targeted
             else (
                 "Keep experimental. Do not start H1. Do not promote. "
-                "Fail-closed vs silent-wrong on this family is not product readiness."
+                "Fail-closed vs silent-wrong / silent-accept on this family is not product readiness."
             )
         ),
         "judgments": judgments,
@@ -320,14 +362,15 @@ def three_judgments(
         "notCollapsedIntoOneSuccess": True,
         "trustworthiness": {
             "verdict": "per_cell",
-            "scale": [TRUST_HOLDS, TRUST_FAIL_CLOSED, TRUST_SILENT_WRONG],
+            "scale": list(TRUST_SCALE),
             "appliedPerCell": True,
             "notBehavior": True,
             "notUtility": True,
             "means": (
                 "holds = trusted exact; fail-closed = no value; "
-                "silent-wrong = emitted a value when the protocol trusted outcome is no_value, "
-                "or a wrong exact"
+                "silent-wrong = arithmetic wrong finite-sum (wrong/swapped saved G); "
+                "silent-accept-out-of-declared-domain = policy no_value "
+                "(Karr reversed bounds or over-limit mathematical exact)"
             ),
             "control": {
                 "P-pack": pack_control,
@@ -387,7 +430,27 @@ def _pair_differentiates(cells: list[dict[str, Any]], task: str) -> bool | None:
         return None
     pack_trust = (pack.get("scoring") or {}).get("trustworthiness")
     template_trust = (template.get("scoring") or {}).get("trustworthiness")
+    return pack_trust == TRUST_FAIL_CLOSED and template_trust in TEMPLATE_NAIVE_EMISSION
+
+
+def _pair_arithmetic_silent_wrong(cells: list[dict[str, Any]], task: str) -> bool | None:
+    pack = _cell(cells, ARM_P_PACK, task)
+    template = _cell(cells, ARM_B_TEMPLATE, task)
+    if pack is None or template is None:
+        return None
+    pack_trust = (pack.get("scoring") or {}).get("trustworthiness")
+    template_trust = (template.get("scoring") or {}).get("trustworthiness")
     return pack_trust == TRUST_FAIL_CLOSED and template_trust == TRUST_SILENT_WRONG
+
+
+def _pair_policy_silent_accept(cells: list[dict[str, Any]], task: str) -> bool | None:
+    pack = _cell(cells, ARM_P_PACK, task)
+    template = _cell(cells, ARM_B_TEMPLATE, task)
+    if pack is None or template is None:
+        return None
+    pack_trust = (pack.get("scoring") or {}).get("trustworthiness")
+    template_trust = (template.get("scoring") or {}).get("trustworthiness")
+    return pack_trust == TRUST_FAIL_CLOSED and template_trust == TRUST_SILENT_ACCEPT
 
 
 def _both_fail_closed(cells: list[dict[str, Any]], task: str) -> bool | None:
@@ -421,8 +484,8 @@ def _contrast(cells: list[dict[str, Any]]) -> dict[str, Any]:
             "B_template": template,
             "differentiates": differentiates,
         }
-    saved_flags = [_pair_differentiates(cells, task_id) for task_id in ADVERSARIAL_SAVED_G_TASKS]
-    domain_flags = [_pair_differentiates(cells, task_id) for task_id in OUT_OF_DOMAIN_TASKS]
+    saved_flags = [_pair_arithmetic_silent_wrong(cells, task_id) for task_id in ADVERSARIAL_SAVED_G_TASKS]
+    domain_flags = [_pair_policy_silent_accept(cells, task_id) for task_id in OUT_OF_DOMAIN_TASKS]
     oof_flags = [_both_fail_closed(cells, task_id) for task_id in (TASK_CUBES, TASK_HARMONIC)]
     saved = True if saved_flags and all(flag is True for flag in saved_flags) else (
         False if any(flag is False for flag in saved_flags) else None
@@ -459,13 +522,18 @@ def _trust_evidence(
     ) == TRUST_HOLDS:
         lines.append("in-family control: both arms hold at 355 (template is not crippled)")
     if contrast.get("savedG") is True:
-        lines.append("wrong/swapped saved G: P-pack fail-closed, B_template silent-wrong")
+        lines.append(
+            "wrong/swapped saved G: P-pack fail-closed, B_template silent-wrong (arithmetic)"
+        )
     elif contrast.get("savedG") is False:
-        lines.append("wrong/swapped saved G did not show fail-closed vs silent-wrong")
+        lines.append("wrong/swapped saved G did not show fail-closed vs arithmetic silent-wrong")
     if contrast.get("domain") is True:
-        lines.append("reversed bounds and over-limit: P-pack fail-closed, B_template silent-wrong")
+        lines.append(
+            "reversed bounds and over-limit: P-pack fail-closed, "
+            "B_template silent-accept-out-of-declared-domain (policy no_value)"
+        )
     elif contrast.get("domain") is False:
-        lines.append("declared-domain probes did not show fail-closed vs silent-wrong")
+        lines.append("declared-domain probes did not show fail-closed vs policy silent-accept")
     if contrast.get("outOfFamilyBothFailClosed") is True:
         lines.append("out-of-family k^3 and 1/k: both arms fail-closed (not pack-unique)")
     if contrast.get("parameterMismatchBothFailClosed") is True:

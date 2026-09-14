@@ -9,8 +9,11 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
+import sympy as sp
+
 from math_anchor.errors import CalculatorError
 
+from research.method_packs.shifted_square import parse_bivariate
 from research.reuse_benefit_eval.arms import (
     empty_construction_trace,
     is_arm_exception as _reuse_is_arm_exception,
@@ -19,6 +22,7 @@ from research.reuse_benefit_eval.arms import (
 from research.reuse_benefit_eval.template import (
     CACHED_G,
     TemplateBaselineError,
+    _C,
     _K,
     evaluate_template,
 )
@@ -27,8 +31,6 @@ from .protocol import (
     ARM_B_TEMPLATE,
     ARM_P_PACK,
     SAVED_G_CANONICAL,
-    SAVED_G_CUBES,
-    SAVED_G_LINEAR,
     saved_g_source,
 )
 
@@ -37,13 +39,22 @@ class ArmExecutionError(CalculatorError):
     """Smoke arm failed before producing a result object."""
 
 
-# Built from symbols (no string sympify / parse_expr). Same polynomials as the
-# pre-registered savedG sources in protocol.json.
-_SAVED_G_EXPR = {
-    SAVED_G_CANONICAL: CACHED_G,
-    SAVED_G_LINEAR: _K,
-    SAVED_G_CUBES: (_K ** 2) * ((_K - 1) ** 2) / 4,
-}
+def _sympy_g_from_protocol_source(source: str) -> sp.Expr:
+    """Instantiate protocol savedG text with the pack's independent QQ parser.
+
+    No string sympify / parse_expr. The template cache is the protocol string,
+    not a parallel hardcoded catalog.
+    """
+
+    terms = parse_bivariate(source)
+    expr = sp.Integer(0)
+    for (index_power, parameter_power), coefficient in terms.items():
+        expr += (
+            sp.Rational(int(coefficient.numerator), int(coefficient.denominator))
+            * (_K ** index_power)
+            * (_C ** parameter_power)
+        )
+    return sp.expand(expr)
 
 
 def run_arm(arm_id: str, task: dict[str, Any], *, protocol: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -58,10 +69,16 @@ def run_b_template(task: dict[str, Any], *, protocol: dict[str, Any] | None = No
     """Fair template: family matching on, pack identity/domain checks off."""
 
     saved_id = str(task.get("savedG") or SAVED_G_CANONICAL)
-    cached_g = _SAVED_G_EXPR.get(saved_id)
-    if cached_g is None:
-        raise ArmExecutionError("E_INPUT", f"unknown savedG id for B_template: {saved_id}")
-    source = saved_g_source(saved_id, protocol)
+    try:
+        source = saved_g_source(saved_id, protocol)
+    except KeyError as error:
+        raise ArmExecutionError("E_INPUT", f"unknown savedG id for B_template: {saved_id}") from error
+    cached_g = _sympy_g_from_protocol_source(source)
+    if saved_id == SAVED_G_CANONICAL and sp.expand(cached_g - CACHED_G) != 0:
+        raise ArmExecutionError(
+            "E_RUNTIME",
+            "protocol canonical saved G drifted from the reuse-benefit cached formula",
+        )
     result = evaluate_template(
         task,
         cached_g=cached_g,

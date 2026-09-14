@@ -309,6 +309,7 @@ def _table_row(cell: dict[str, Any]) -> dict[str, Any]:
         "countedAsSolved": scoring.get("countedAsSolved"),
         "failClosed": scoring.get("failClosed"),
         "wrongAcceptance": scoring.get("wrongAcceptance"),
+        "silentAcceptance": scoring.get("silentAcceptance"),
         "usedSavedContent": scoring.get("usedSavedContent"),
         "savedG": cell.get("savedG"),
         "coversOriginalTaskClaim": scoring.get("coversOriginalTaskClaim"),

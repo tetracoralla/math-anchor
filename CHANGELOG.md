@@ -35,10 +35,12 @@ and Apple notarization record exist.
 - Added a research **trust/fail-closed smoke** (`research/trust_failclosed_eval/`)
   that compares the frozen shifted-square pack with a fair cached template on
   wrong saved `G`, swapped payload, out-of-family, reversed bounds, and
-  identity/obligation binding. Trustworthiness is per-cell
-  holds / fail-closed / silent-wrong. Latency is not the primary claim. Not a
-  public Capability, not a promotion, not a Host/UI/MCP change in this PR
-  (2026-09-14).
+  identity/obligation binding. Trustworthiness is per-cell holds /
+  fail-closed / silent-wrong / silent-accept-out-of-declared-domain.
+  Arithmetic silent-wrong is wrong/swapped saved `G`. Over-limit and Karr are
+  policy silent-accept (`wrongAcceptance` false). Latency is not the primary
+  claim. Not a public Capability, not a promotion, not a Host/UI/MCP change
+  in this PR (2026-09-14).
 
 ## 0.7.1 - 2026-09-06
 

@@ -13,8 +13,8 @@ Pre-registered no-model comparison of:
   disabled; existing applicability / identity / domain checks).
 
 Question: when does pack + checks fail closed (wrong saved `G` / out-of-domain /
-identity or obligation binding) while the fair template silently accepts or
-returns a wrong answer?
+identity or obligation binding) while the fair template silently accepts
+(policy `no_value`) or returns a wrong answer (arithmetic silent-wrong)?
 
 Three judgments stay separate: trustworthiness, behavior, utility.
 Utility is **not** the primary claim. Timings are informational if present.
