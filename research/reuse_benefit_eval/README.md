@@ -16,6 +16,9 @@ Same pre-registered `(c,a,b)` on every arm, including held-out `(k+3)^2` on
 first/repeat wall time only. No dollar costs.
 
 Three judgments stay separate: trustworthiness, behavior, utility.
+Trust is classified from structured probes. The wrap of `gosper_sum` /
+`construct_antidifference` is the reconstruction probe. The mandatory
+Chinese latency clause is pinned and generated from live latency flags.
 
 ## Command
 

@@ -78,7 +78,10 @@ Pre-registered protocol (frozen before the run):
 
 `research/reuse_benefit_eval/protocol.json`
 
-Unsupported arm/task/latency overrides are rejected (pinned execution plan).
+Unsupported arm/task/latency/Chinese-answer overrides are rejected
+(pinned execution plan). The latency clause in the mandatory Chinese
+answer is also generated from `observedPackRepeatFasterThanTemplate`;
+a frozen “本机耗时并不更低” that disagrees with that flag is overwritten.
 
 ```sh
 .venv/bin/python research/reuse_benefit_eval/run.py \
@@ -93,8 +96,11 @@ Unsupported arm/task/latency overrides are rejected (pinned execution plan).
 
 This-machine report used for the tables below was written with that command to
 `/tmp/reuse-benefit-report.json`. Environment: Math Anchor 0.7.1, Python 3.13.5,
-SymPy 1.14.0, git `3d01d0266150f14b705dfa4c46e5d6618b687a25` at run time (main
-tip). Harness commit `27fb191`; this documentation commit is later.
+SymPy 1.14.0. Quote `environment.gitHead` from that report — do not treat
+`main` as the harness commit. The millisecond table is **one in-process
+snapshot** from harness `27fb191` / docs `d7f664c` (B0 P1 first 19.3 ms is
+not a stable observation). Scoring/honesty nits after that snapshot do not
+change the measured conclusion or the promotion decision.
 
 ## Pre-registered tasks
 
@@ -144,6 +150,9 @@ B_template (`3.3 ms`) and B_codegen (`26.8 ms`, 13 QQ terms, P0 self-check
 `55`) is reported separately and is **not** folded into a savings percentage.
 
 Construction trace is the wrap of `gosper_sum` / `construct_antidifference`.
+That wrap is the binding reconstruction probe. JSON `gosperCalled` is a path
+invariant, not the probe. `usedSavedContent` is apply's own signal that saved
+`G` was instantiated.
 
 | Arm | Task | Status | Value / code | Counted as solved | gosper | first ms | repeat ms |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -240,6 +249,10 @@ Do not invent a savings percentage from these milliseconds.
 - Smoke ≠ overall benefit percentage. The report refuses to emit one.
 - Green harness tests ≠ completion of the research claim.
 - The three judgments are not one success flag.
+- Trustworthiness is classified from structured probes
+  (`stripped.refused`, `wrong_g.failClosed`, in-family P-pack match), not
+  `"wrong"` / `"crippled"` substring search on problem strings. Evidence
+  lines follow the actual probe outcomes.
 - `lifecycleEvidence=cross-task-use-evidence` alone is not semantic adoption.
 - Call-alone is not adoption.
 - `coversOriginalTaskClaim` stays false.

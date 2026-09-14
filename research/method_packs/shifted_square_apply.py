@@ -206,6 +206,7 @@ def apply_shifted_square_pack(
         },
         "reconstructionDisabled": True,
         "gosperCalled": False,
+        "usedSavedContent": True,
         "constructor": "instantiated-saved-parametric-antidifference",
         "antidifference": g_source,
         "parametricAntidifference": payload["source"],
@@ -621,6 +622,7 @@ def _falsified_result(
         "reason": reason,
         "reconstructionDisabled": True,
         "gosperCalled": False,
+        "usedSavedContent": True,
         "constructor": "instantiated-saved-parametric-antidifference",
         "antidifference": antidifference or payload.get("source"),
         "methodPack": {

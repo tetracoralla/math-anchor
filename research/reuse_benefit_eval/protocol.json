@@ -189,7 +189,8 @@
           "countedAsSolved": false,
           "mayComputeExactRational": true,
           "notAPolynomialFiniteSumSuccess": true,
-          "notes": "SymPy summation may return the harmonic number 11/6. That is not counted as solving the negative."
+          "expectedExactIfComputed": "11/6",
+          "notes": "SymPy summation may return the harmonic number 11/6. That is not counted as solving the negative. Garbage values are not a match."
         },
         "B1": {
           "failClosed": true,
@@ -286,7 +287,7 @@
     "applicabilityMisjudgment": "B1/P-pack/B_template/B_codegen reject an in-family (c,a,b), or B1/P-pack accept 1/k, or treat 1/k as a falsified proposition",
     "coversOriginalTaskClaim": "must stay false",
     "callAloneIsNotAdoption": "must stay true on P-pack apply",
-    "construction": "P-pack, B_template, and B_codegen in-family cells must record 0 gosper_sum and 0 construct_antidifference calls. B1 in-family cells must construct. The JSON gosperCalled flag is a path invariant; the wrap is the probe.",
+    "construction": "P-pack, B_template, and B_codegen in-family cells must record 0 gosper_sum and 0 construct_antidifference calls. B1 in-family cells must construct. The wrap of gosper_sum / construct_antidifference is the binding reconstruction probe. JSON gosperCalled is a path invariant, not the probe. usedSavedContent is apply's own signal that saved G was instantiated, not an arm-level overwrite.",
     "judgments": "trustworthiness, behavior, and utility are recorded separately and must not be collapsed into one success flag"
   },
   "decisionRule": {

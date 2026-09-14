@@ -121,7 +121,13 @@ def run_p_pack(task: dict[str, Any]) -> dict[str, Any]:
     chain = result.get("chain") if isinstance(result.get("chain"), list) else []
     steps = [item.get("step") for item in chain if isinstance(item, dict) and isinstance(item.get("step"), str)]
     wrapped["stepsExecuted"] = steps
-    wrapped["usedSavedContent"] = True
+    # Pass through apply's usedSavedContent. Do not overwrite True on every
+    # non-raising return. Constructor is corroboration if apply omitted the field.
+    # JSON gosperCalled is a path invariant; construction wrap/trace is the probe.
+    if "usedSavedContent" not in wrapped:
+        wrapped["usedSavedContent"] = (
+            wrapped.get("constructor") == "instantiated-saved-parametric-antidifference"
+        )
     wrapped["independentChecker"] = True
     wrapped["floatingApproximation"] = False
     return wrapped

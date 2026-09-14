@@ -39,6 +39,7 @@ from .protocol import (
     TASK_P1,
     load_protocol,
     protocol_digest,
+    reconcile_mandatory_claim_answer_zh,
     task_by_id,
     tasks,
     validate_protocol,
@@ -91,6 +92,10 @@ def run_smoke(*, protocol: dict[str, Any] | None = None) -> dict[str, Any]:
 
     table = [_table_row(cell) for cell in cells]
     judgments = decision.get("judgments") or {}
+    reconciled_claim = reconcile_mandatory_claim_answer_zh(
+        document["mandatoryClaimAnswerZh"],
+        observed_pack_faster_than_template=decision.get("observedPackRepeatFasterThanTemplate"),
+    )
     return {
         "kind": REPORT_KIND,
         "stage": "reuse-benefit",
@@ -110,7 +115,12 @@ def run_smoke(*, protocol: dict[str, Any] | None = None) -> dict[str, Any]:
         "budget": document["budget"],
         "workload": document["workload"],
         "mandatoryClaimZh": document["mandatoryClaimZh"],
-        "mandatoryClaimAnswerZh": document["mandatoryClaimAnswerZh"],
+        "mandatoryClaimAnswerZh": reconciled_claim["answerZh"],
+        "mandatoryClaimAnswerZhPinned": document["mandatoryClaimAnswerZh"],
+        "mandatoryClaimLatencyClauseZh": reconciled_claim["latencyClauseZh"],
+        "mandatoryClaimAnswerZhOverwrittenBecauseLatencyFlagsDisagreed": reconciled_claim[
+            "overwrittenBecauseLatencyFlagsDisagreed"
+        ],
         "executionPlan": {
             "arms": arm_plan,
             "tasks": [task["id"] for task in registered_tasks],
@@ -189,6 +199,13 @@ def run_smoke(*, protocol: dict[str, Any] | None = None) -> dict[str, Any]:
             "noHostUiMcp": True,
             "latencyLabelsAreFirstRepeatNotColdHot": True,
             "gosperCalledJsonFlagIsNotTheProbe": True,
+            "usedSavedContentComesFromApply": True,
+            "constructionWrapIsTheBindingProbe": True,
+            "mandatoryClaimAnswerZhPinned": True,
+            "mandatoryClaimLatencyClauseGeneratedFromFlags": True,
+            "mandatoryClaimAnswerZhConsistentWithLatencyFlags": reconciled_claim[
+                "consistentWithLatencyFlags"
+            ],
             "judgmentsAreNotOneSuccessFlag": judgments.get("notCollapsedIntoOneSuccess") is True,
             "benefitComparisonDoesNotCrippleBaselines": True,
         },
@@ -450,6 +467,7 @@ def _table_row(cell: dict[str, Any]) -> dict[str, Any]:
         "usedSavedContent": scoring.get("usedSavedContent"),
         "stepsExecuted": scoring.get("stepsExecuted"),
         "gosperCalledJsonFlag": scoring.get("gosperCalledJsonFlag"),
+        "constructionProbe": scoring.get("constructionProbe"),
         "constructionTrace": scoring.get("constructionTrace"),
         "latencyMs": cell.get("latencyMs"),
     }

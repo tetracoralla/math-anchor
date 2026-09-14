@@ -23,7 +23,9 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from math_anchor.errors import CalculatorError
-from research.method_packs.format import PARAM_PACK_ID
+from research.method_packs.apply import apply_method_pack
+from research.method_packs.format import DEFAULT_PARAM_PACK_PATH, PARAM_PACK_ID
+from research.method_packs.loader import load_pack
 from research.reuse_benefit_eval.arms import run_b0, run_b_codegen, run_b_template
 from research.reuse_benefit_eval.protocol import (
     ARM_B0,
@@ -31,10 +33,13 @@ from research.reuse_benefit_eval.protocol import (
     ARM_B_CODEGEN,
     ARM_B_TEMPLATE,
     ARM_P_PACK,
+    B0_HARMONIC_EXACT,
     HELD_OUT_TASKS,
     IN_FAMILY_TASKS,
     LIFECYCLE_CROSS_TASK,
     LIFECYCLE_VERIFIED,
+    MANDATORY_CLAIM_LATENCY_FASTER_THAN_TEMPLATE_ZH,
+    MANDATORY_CLAIM_LATENCY_NOT_FASTER_ZH,
     PRIMARY_ARMS,
     PROTOCOL_KIND,
     REPORT_KIND,
@@ -47,9 +52,11 @@ from research.reuse_benefit_eval.protocol import (
     TASK_REVERSED,
     load_protocol,
     protocol_digest,
+    reconcile_mandatory_claim_answer_zh,
+    task_by_id,
     validate_protocol,
 )
-from research.reuse_benefit_eval.score import decide, observed_slower_checked_path
+from research.reuse_benefit_eval.score import decide, observed_slower_checked_path, score_cell
 from research.reuse_benefit_eval.smoke import run_smoke, write_report
 
 
@@ -113,6 +120,8 @@ def test_protocol_is_pre_registered_with_required_arms() -> None:
     assert template_arm["mayCache"] is True
     assert template_arm["karrReversedBoundsAccepted"] is True
     assert "相对强基线" in protocol["mandatoryClaimZh"]
+    assert MANDATORY_CLAIM_LATENCY_NOT_FASTER_ZH in protocol["mandatoryClaimAnswerZh"]
+    assert by_id[TASK_NEGATIVE]["expectedByArm"][ARM_B0]["expectedExactIfComputed"] == B0_HARMONIC_EXACT
 
 
 def test_unsupported_protocol_overrides_are_rejected() -> None:
@@ -133,6 +142,16 @@ def test_unsupported_protocol_overrides_are_rejected() -> None:
     mutated_task["tasks"][1]["upper"] = 6
     with pytest.raises(ValueError, match="pre-registered"):
         validate_protocol(mutated_task)
+
+    mutated_zh = deepcopy(original)
+    mutated_zh["mandatoryClaimAnswerZh"] = original["mandatoryClaimAnswerZh"].replace(
+        MANDATORY_CLAIM_LATENCY_NOT_FASTER_ZH,
+        "本机耗时更低",
+    )
+    with pytest.raises(ValueError, match="pre-registered mandatory Chinese answer"):
+        validate_protocol(mutated_zh)
+    with pytest.raises(ValueError, match="pre-registered mandatory Chinese answer"):
+        run_smoke(protocol=mutated_zh)
 
 
 def test_in_family_values_match_across_strong_baselines(report: dict) -> None:
@@ -163,6 +182,7 @@ def test_p_pack_held_out_does_not_reconstruct(report: dict) -> None:
     assert cell["summary"]["reconstructionDisabled"] is True
     assert cell["scoring"]["constructionTrace"]["gosper_sum"] == 0
     assert cell["scoring"]["constructionTrace"]["construct_antidifference"] == 0
+    assert cell["scoring"]["constructionProbe"] == "wrap"
     assert cell["scoring"]["reconstructedOnPackArm"] is False
     assert cell["scoring"]["usedSavedContent"] is True
     assert cell["scoring"]["lifecycleEvidence"] == LIFECYCLE_CROSS_TASK
@@ -220,7 +240,9 @@ def test_negative_harmonic_is_not_counted_as_solved(report: dict) -> None:
         assert cell["scoring"]["countedAsSolved"] is False
     b0 = _cell(report, ARM_B0, TASK_NEGATIVE)
     assert b0["summary"]["status"] == "ok"
-    assert b0["summary"]["valueExact"] == "11/6"
+    assert b0["summary"]["valueExact"] == B0_HARMONIC_EXACT
+    assert b0["scoring"]["matchedPreRegisteredExpectation"] is True
+    assert b0["scoring"]["countedAsSolved"] is False
     for arm in (ARM_B1, ARM_B_TEMPLATE, ARM_B_CODEGEN, ARM_P_PACK):
         cell = _cell(report, arm, TASK_NEGATIVE)
         assert cell["summary"]["errorCode"] == "E_UNSUPPORTED"
@@ -331,9 +353,16 @@ def test_three_judgments_are_separate_and_not_one_success(report: dict) -> None:
     assert trust["verdict"] == "holds_in_declared_domain"
     assert trust["notUtility"] is True
     assert trust["notBehavior"] is True
+    assert trust["classifiedFromStructuredProbes"] is True
+    assert trust["probes"]["strippedRefused"] is True
+    assert trust["probes"]["wrongGFailClosed"] is True
+    assert trust["probes"]["inFamilyPPackMatched"] is True
+    assert "stripped parametricAntidifference refuses" in trust["evidence"]
+    assert "in-family match failed" not in trust["evidence"]
     assert behavior["verdict"] == "pack_uses_saved_content"
     assert behavior["notUtility"] is True
     assert behavior["packReuseIsNotUniqueVsTemplate"] is True
+    assert behavior["constructionProbe"] == "wrap"
     assert utility["verdict"] == "no_net_benefit_vs_strong_baselines"
     assert utility["mayBeNegative"] is True
     assert utility["fasterThanColdGosperIsNotUniqueness"] is True
@@ -341,6 +370,26 @@ def test_three_judgments_are_separate_and_not_one_success(report: dict) -> None:
     assert report["decision"]["verdict"] == "evidence_insufficient"
     assert report["decision"]["promote"] is False
     assert "success" not in report["decision"] or report["decision"].get("success") is not True
+    faster_than_template = report["decision"]["observedPackRepeatFasterThanTemplate"]
+    if faster_than_template is True:
+        assert MANDATORY_CLAIM_LATENCY_NOT_FASTER_ZH not in report["mandatoryClaimAnswerZh"]
+        assert MANDATORY_CLAIM_LATENCY_FASTER_THAN_TEMPLATE_ZH in report["mandatoryClaimAnswerZh"]
+    elif faster_than_template is False:
+        assert MANDATORY_CLAIM_LATENCY_NOT_FASTER_ZH in report["mandatoryClaimAnswerZh"]
+    assert report["honesty"]["mandatoryClaimLatencyClauseGeneratedFromFlags"] is True
+    assert report["honesty"]["mandatoryClaimAnswerZhPinned"] is True
+    assert report["mandatoryClaimAnswerZhPinned"] == load_protocol()["mandatoryClaimAnswerZh"]
+    assert report["honesty"]["constructionWrapIsTheBindingProbe"] is True
+    assert report["honesty"]["usedSavedContentComesFromApply"] is True
+    assert report["mandatoryClaimLatencyClauseZh"] == (
+        MANDATORY_CLAIM_LATENCY_FASTER_THAN_TEMPLATE_ZH
+        if faster_than_template is True
+        else (
+            MANDATORY_CLAIM_LATENCY_NOT_FASTER_ZH
+            if faster_than_template is False
+            else report["mandatoryClaimLatencyClauseZh"]
+        )
+    )
 
 
 def test_decision_is_not_promote(report: dict) -> None:
@@ -470,3 +519,202 @@ def test_cli_end_to_end(tmp_path: Path) -> None:
     )
     assert p1["summary"]["valueExact"] == "355"
     assert p1["scoring"]["constructionTrace"]["gosper_sum"] == 0
+    assert p1["scoring"]["constructionProbe"] == "wrap"
+    assert stored["decision"]["promote"] is False
+    assert stored["decision"]["verdict"] == "evidence_insufficient"
+
+
+_GREEN_CODEGEN_SKIP = {
+    "sympy.utilities.codegen.C": {
+        "used": False,
+        "probe": {"available": True, "emitsFloatingType": True},
+    }
+}
+_GREEN_FAIR_BASELINES = {
+    "b0ValueExact": "44100",
+    "b1ValueExact": "44100",
+    "pPackRefused": True,
+    "templateRefused": True,
+    "codegenRefused": True,
+}
+
+
+def _stub_cell(arm: str, task: str, **scoring_extra) -> dict:
+    scoring = {
+        "matchedPreRegisteredExpectation": True,
+        "wrongAcceptance": False,
+        "applicabilityMisjudgment": False,
+        "countedAsSolved": task not in {TASK_NEGATIVE, TASK_REVERSED},
+        "coversOriginalTaskClaim": False,
+        "formalKernelChecked": False,
+        "baselineEmbedded": False,
+        "reconstructedOnPackArm": False,
+        "floatingApproximation": False,
+        "usedSavedContent": arm in {ARM_B_TEMPLATE, ARM_B_CODEGEN, ARM_P_PACK},
+        "gosperCalledJsonFlag": False if arm == ARM_P_PACK else None,
+        "reconstructionDisabled": True if arm == ARM_P_PACK else None,
+        "constructionTrace": {
+            "gosper_sum": 0 if arm != ARM_B1 else 1,
+            "construct_antidifference": 0 if arm != ARM_B1 else 1,
+        },
+        "lifecycleEvidence": (
+            LIFECYCLE_VERIFIED
+            if arm == ARM_P_PACK and task == TASK_P0
+            else (LIFECYCLE_CROSS_TASK if arm == ARM_P_PACK and task in HELD_OUT_TASKS else None)
+        ),
+    }
+    scoring.update(scoring_extra)
+    error_code = None
+    if task == TASK_NEGATIVE and arm != ARM_B0:
+        error_code = "E_UNSUPPORTED"
+    elif task == TASK_REVERSED and arm not in {ARM_B0, ARM_B_TEMPLATE, ARM_B_CODEGEN}:
+        error_code = "E_DOMAIN"
+    return {
+        "arm": arm,
+        "task": task,
+        "scoring": scoring,
+        "summary": {
+            "valueExact": "55" if task in IN_FAMILY_TASKS else None,
+            "errorCode": error_code,
+        },
+    }
+
+
+def test_strip_failure_is_trust_fails_from_structured_probe() -> None:
+    decision = decide(
+        [],
+        stripped={"refused": False},
+        wrong_g={"failClosed": True, "emittedValue": False},
+        fair_baselines=_GREEN_FAIR_BASELINES,
+        codegen_skip=_GREEN_CODEGEN_SKIP,
+    )
+    trust = decision["judgments"]["trustworthiness"]
+    assert decision["verdict"] == "targeted_fix"
+    assert decision["promote"] is False
+    assert trust["verdict"] == "fails"
+    assert trust["classifiedFromStructuredProbes"] is True
+    assert trust["probes"]["strippedRefused"] is False
+    assert "stripped parametricAntidifference refuses" not in trust["evidence"]
+    assert any("did not refuse" in line for line in trust["evidence"])
+
+
+def test_wrong_g_failure_is_trust_fails_from_structured_probe() -> None:
+    decision = decide(
+        [_stub_cell(ARM_P_PACK, task) for task in IN_FAMILY_TASKS],
+        stripped={"refused": True},
+        wrong_g={"failClosed": False, "emittedValue": True},
+        fair_baselines=_GREEN_FAIR_BASELINES,
+        codegen_skip=_GREEN_CODEGEN_SKIP,
+    )
+    trust = decision["judgments"]["trustworthiness"]
+    assert trust["verdict"] == "fails"
+    assert trust["probes"]["wrongGFailClosed"] is False
+    assert "wrong saved G fail-closes without emitting a sum" not in trust["evidence"]
+    assert any("emitted" in line for line in trust["evidence"])
+
+
+def test_b1_construction_miss_does_not_rewrite_in_family_trust_evidence() -> None:
+    cells = [_stub_cell(ARM_P_PACK, task) for task in IN_FAMILY_TASKS]
+    cells.append(
+        _stub_cell(
+            ARM_B1,
+            TASK_P0,
+            constructionTrace={"gosper_sum": 0, "construct_antidifference": 0},
+        )
+    )
+    decision = decide(
+        cells,
+        stripped={"refused": True},
+        wrong_g={"failClosed": True, "emittedValue": False},
+        fair_baselines=_GREEN_FAIR_BASELINES,
+        codegen_skip=_GREEN_CODEGEN_SKIP,
+    )
+    assert any("B1" in item and "did not construct" in item for item in decision["problems"])
+    trust = decision["judgments"]["trustworthiness"]
+    assert trust["probes"]["inFamilyPPackMatched"] is True
+    assert "in-family P-pack values match the pre-registered rationals" in trust["evidence"]
+    assert "in-family match failed" not in trust["evidence"]
+    assert trust["verdict"] == "holds_in_declared_domain"
+
+
+def test_b0_harmonic_match_requires_protocol_exact_not_any_ok_value() -> None:
+    task = task_by_id(TASK_NEGATIVE)
+    garbage = score_cell(
+        arm_id=ARM_B0,
+        task=task,
+        summary={"status": "ok", "valueExact": "999"},
+        construction={"gosper_sum": 0, "construct_antidifference": 0},
+    )
+    assert garbage["matchedPreRegisteredExpectation"] is False
+    assert garbage["countedAsSolved"] is False
+    assert garbage["wrongAcceptance"] is False
+
+    harmonic = score_cell(
+        arm_id=ARM_B0,
+        task=task,
+        summary={"status": "ok", "valueExact": B0_HARMONIC_EXACT},
+        construction={"gosper_sum": 0, "construct_antidifference": 0},
+    )
+    assert harmonic["matchedPreRegisteredExpectation"] is True
+    assert harmonic["countedAsSolved"] is False
+
+    garbage_cell = {
+        "arm": ARM_B0,
+        "task": TASK_NEGATIVE,
+        "scoring": garbage,
+        "summary": {"status": "ok", "valueExact": "999"},
+    }
+    decision = decide(
+        [garbage_cell],
+        stripped={"refused": True},
+        wrong_g={"failClosed": True, "emittedValue": False},
+        fair_baselines=_GREEN_FAIR_BASELINES,
+        codegen_skip=_GREEN_CODEGEN_SKIP,
+    )
+    assert any("B0×negative-harmonic" in item and "did not match" in item for item in decision["problems"])
+    assert decision["verdict"] == "targeted_fix"
+    assert decision["promote"] is False
+
+
+def test_contradicting_frozen_chinese_latency_clause_is_overwritten_by_flags() -> None:
+    frozen = load_protocol()["mandatoryClaimAnswerZh"]
+    assert MANDATORY_CLAIM_LATENCY_NOT_FASTER_ZH in frozen
+    overwritten = reconcile_mandatory_claim_answer_zh(
+        frozen,
+        observed_pack_faster_than_template=True,
+    )
+    assert overwritten["overwrittenBecauseLatencyFlagsDisagreed"] is True
+    assert overwritten["consistentWithLatencyFlags"] is False
+    assert MANDATORY_CLAIM_LATENCY_NOT_FASTER_ZH not in overwritten["answerZh"]
+    assert MANDATORY_CLAIM_LATENCY_FASTER_THAN_TEMPLATE_ZH in overwritten["answerZh"]
+    assert overwritten["latencyClauseZh"] == MANDATORY_CLAIM_LATENCY_FASTER_THAN_TEMPLATE_ZH
+
+    consistent = reconcile_mandatory_claim_answer_zh(
+        frozen,
+        observed_pack_faster_than_template=False,
+    )
+    assert consistent["overwrittenBecauseLatencyFlagsDisagreed"] is False
+    assert consistent["consistentWithLatencyFlags"] is True
+    assert MANDATORY_CLAIM_LATENCY_NOT_FASTER_ZH in consistent["answerZh"]
+
+
+def test_p_pack_used_saved_content_comes_from_apply_and_wrap_is_the_probe() -> None:
+    source = (ROOT / "research" / "reuse_benefit_eval" / "arms.py").read_text(encoding="utf-8")
+    p_block = source.split("def run_p_pack")[1].split("def is_arm_exception")[0]
+    assert 'wrapped["usedSavedContent"] = True' not in p_block
+    pack = load_pack(DEFAULT_PARAM_PACK_PATH)
+    result = apply_method_pack(
+        {
+            "summand": "(k+3)^2",
+            "variable": "k",
+            "lower": 2,
+            "upper": 7,
+            "parameterC": "3",
+            "taskId": "P1-shifted-square-c3-2-to-7",
+        },
+        pack=pack,
+        compare_baseline=False,
+    )
+    assert result["usedSavedContent"] is True
+    assert result["constructor"] == "instantiated-saved-parametric-antidifference"
+    assert result["gosperCalled"] is False
