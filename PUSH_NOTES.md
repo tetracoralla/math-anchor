@@ -102,12 +102,13 @@ Local commits:
 - `27fb191` Add reuse-benefit smoke with cache, template, and exact codegen baselines.
 - `d7f664c` Document reuse-benefit workload, three judgments, and no-promote decision.
 - `95b6e5f` Fix reuse-benefit scoring honesty nits from PR #15 review.
+- `9a7b6a7` Harden reuse-benefit reconstruction probe and usedSavedContent docs.
 
 Millisecond tables in `docs/research/ai-for-math/reuse-benefit.md` are one
 in-process snapshot from harness `27fb191` / docs `d7f664c`. Quote
 `environment.gitHead` from a report; do not treat `main` as the harness
-commit. Tip after nits is `95b6e5f` (plus this PUSH_NOTES commit). Nits do
-not change the measured conclusion.
+commit. Tip after nits is `95b6e5f`. External-review follow-up is `9a7b6a7`
+(plus this PUSH_NOTES commit). Neither batch changes the measured conclusion.
 
 ```sh
 .venv/bin/python research/reuse_benefit_eval/run.py \
