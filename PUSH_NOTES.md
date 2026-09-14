@@ -96,18 +96,25 @@ Separate **Draft** PR #16: https://github.com/tetracoralla/math-anchor/pull/16
 **Keep Draft. Do not merge. Do not promote. Do not start H1.**
 Promotion decision stays `evidence_insufficient`. Experiment verdict is
 `differentiation_observed`. Latency is not the primary claim.
+Awaiting owner archive decision after nits (2026-09-14). Not a standing ban.
 
 Local commits:
 
 - `13ebce1` Add trust/fail-closed research harness vs a fair template.
 - `c86f9a7` Record trust/fail-closed this-machine results and local commit SHA.
+- `4ea3f88` Record Draft PR #16 URL and tip SHA at open.
+- `71a442a` Distinguish policy silent-accept from arithmetic silent-wrong.
 
-Judgment table in `docs/research/ai-for-math/trust-failclosed.md` is
+Judgment table values in `docs/research/ai-for-math/trust-failclosed.md` are
 git `13ebce1` evidence (this-machine in-process, one observed trial).
-Tip at Draft PR #16 open: `c86f9a7`.
-Wrong/swapped saved G, reversed bounds, and over-limit: P-pack fail-closed,
-B_template silent-wrong. Out-of-family `k^3` / `1/k` and parameter mismatch:
-both fail-closed. Not a benefit percentage.
+Scoring vocabulary (silent-wrong vs silent-accept-out-of-declared-domain)
+is the nits commit `71a442a`. Millisecond snapshot stays `13ebce1`.
+This notes commit records that SHA. Open tip is `git rev-parse HEAD` / PR
+`headRefOid` after this commit (not `c86f9a7`, not `4ea3f88`).
+Wrong/swapped saved G: P-pack fail-closed, B_template arithmetic silent-wrong.
+Reversed bounds and over-limit: P-pack fail-closed, B_template policy
+silent-accept (`wrongAcceptance` false). Out-of-family `k^3` / `1/k` and
+parameter mismatch: both fail-closed. Not a benefit percentage.
 
 ```sh
 .venv/bin/python research/trust_failclosed_eval/run.py \
