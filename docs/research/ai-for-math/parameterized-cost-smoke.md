@@ -164,5 +164,6 @@ Do not invent a savings percentage from these milliseconds.
 
 Keep experimental. **Do not start H1.** Do not promote the pack.
 
-A later experiment is only justified if it targets work B0 cannot already do
-on this family.
+The follow-up with strong cache/template/codegen baselines and three separate
+judgments is [reuse-benefit.md](reuse-benefit.md). It does **not** promote the
+pack. B_template already matches P-pack on this family.

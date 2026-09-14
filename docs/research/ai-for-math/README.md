@@ -1,9 +1,10 @@
 # AI-for-math research notes (A0–A4 proposal)
 
 These documents, `research/polynomial_finite_sum_proposal/`,
-`research/method_packs/`, and `research/ai_for_math_eval/` are a research
-vertical. They are not a supported Math Anchor domain module, not a public
-Capability/Procedure, and do not add a fifth MCP tool.
+`research/method_packs/`, `research/ai_for_math_eval/`,
+`research/parameterized_cost_eval/`, and `research/reuse_benefit_eval/` are a
+research vertical. They are not a supported Math Anchor domain module, not a
+public Capability/Procedure, and do not add a fifth MCP tool.
 
 - [current-state.md](current-state.md) — capabilities with source / tests / run / used / benefit kept separate.
 - [workload-selection.md](workload-selection.md) — why polynomial finite sums, and what was deferred.
@@ -13,6 +14,7 @@ Capability/Procedure, and do not add a fifth MCP tool.
 - [a4-smoke.md](a4-smoke.md) — equal-budget B0/B1/B2 smoke; not a benefit percentage.
 - [parameterized-method.md](parameterized-method.md) — saved `G(k,c)` for `(k+c)^2`; apply without Gosper.
 - [parameterized-cost-smoke.md](parameterized-cost-smoke.md) — equal-budget B0/B1/P-pack timing; not a benefit percentage.
+- [reuse-benefit.md](reuse-benefit.md) — same family vs B0/B1/B_template/B_codegen; three separate judgments; not a benefit percentage.
 
 A1 vertical:
 
@@ -56,4 +58,12 @@ Parameterized equal-budget cost/timing smoke (no model; report under gitignored 
 ```sh
 .venv/bin/python research/parameterized_cost_eval/run.py \
   --output build/parameterized-cost-smoke-report.json
+```
+
+Reuse-benefit smoke vs strong CAS cache/template/codegen baselines (no model;
+report under gitignored `build/`):
+
+```sh
+.venv/bin/python research/reuse_benefit_eval/run.py \
+  --output build/reuse-benefit-report.json
 ```
