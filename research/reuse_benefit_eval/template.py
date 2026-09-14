@@ -59,19 +59,38 @@ def prepare_template() -> dict[str, Any]:
     }
 
 
-def evaluate_template(task: dict[str, Any]) -> dict[str, Any]:
-    lower = require_integer("lower", task["lower"])
-    upper = require_integer("upper", task["upper"])
+def evaluate_template(
+    task: dict[str, Any],
+    *,
+    cached_g: sp.Expr | None = None,
+    cached_formula: str | None = None,
+    enforce_bound_magnitude_limit: bool = True,
+) -> dict[str, Any]:
+    """Instantiate a cached G(k,c). Default kwargs preserve the reuse-benefit arm.
+
+    Optional kwargs are for later trust/fail-closed probes: a mutated cache and
+    skipping the A1/pack |a|,|b|<=10^6 cap. Family matching stays on. There is
+    still no independent identity check.
+    """
+
+    if enforce_bound_magnitude_limit:
+        lower = require_integer("lower", task["lower"])
+        upper = require_integer("upper", task["upper"])
+    else:
+        lower = _require_integer_unbounded("lower", task["lower"])
+        upper = _require_integer_unbounded("upper", task["upper"])
     variable = str(task.get("variable") or INDEX)
     parameter = _match_family(str(task["summand"]), variable, task.get("parameterC"))
-    value = _eval_g(parameter, lower, upper)
+    formula = CACHED_G if cached_g is None else cached_g
+    value = _eval_g(parameter, lower, upper, cached_g=formula)
     reversed_bounds = upper < lower - 1
+    source = CACHED_G_SOURCE if cached_formula is None else cached_formula
     return {
         "status": "ok",
         "kind": "sympy_cached_parametric_antidifference_template",
         "engine": "sympy.Expr.subs on cached G(k,c)",
         "constructor": "instantiated-cached-parametric-antidifference",
-        "cachedFormula": CACHED_G_SOURCE,
+        "cachedFormula": source,
         "summand": str(task["summand"]),
         "variable": variable,
         "lower": lower,
@@ -85,6 +104,7 @@ def evaluate_template(task: dict[str, Any]) -> dict[str, Any]:
         "exactArithmetic": "sympy.Rational then fractions.Fraction",
         "floatingApproximation": False,
         "karrReversedBoundsAccepted": reversed_bounds,
+        "boundMagnitudeLimitEnforced": enforce_bound_magnitude_limit,
         "stepsExecuted": [
             "applicability",
             "instantiate_saved_G",
@@ -134,8 +154,27 @@ def _match_family(summand: str, variable: str, declared: object) -> Fraction:
     return parameter
 
 
-def _eval_g(parameter: Fraction, lower: int, upper: int) -> Fraction:
-    substituted = CACHED_G.subs(_C, sp.Rational(parameter.numerator, parameter.denominator))
+def _require_integer_unbounded(name: str, value: object) -> int:
+    """Integer bounds without the A1/pack |a|,|b|<=10^6 cap (naive reuse)."""
+
+    if isinstance(value, bool) or type(value) is not int:
+        raise TemplateBaselineError(
+            "E_DOMAIN",
+            f"{name} must be an integer; boolean and non-integer values are unsupported",
+            {"applicability": "rejected", "reason": "input_outside_declared_family"},
+        )
+    return value
+
+
+def _eval_g(
+    parameter: Fraction,
+    lower: int,
+    upper: int,
+    *,
+    cached_g: sp.Expr | None = None,
+) -> Fraction:
+    formula = CACHED_G if cached_g is None else cached_g
+    substituted = formula.subs(_C, sp.Rational(parameter.numerator, parameter.denominator))
     upper_value = substituted.subs(_K, upper + 1)
     lower_value = substituted.subs(_K, lower)
     return _as_fraction(upper_value - lower_value)

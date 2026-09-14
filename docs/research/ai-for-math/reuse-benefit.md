@@ -288,3 +288,8 @@ Keep experimental. **Do not start H1.** Do not promote the pack.
 A later experiment is only justified if it targets work that B0, a cached
 parametric template, and an exact generated evaluator cannot already do — not
 another family whose closed form is a short SymPy `summation`.
+
+The 2026-09-14 trust/fail-closed smoke
+([trust-failclosed.md](trust-failclosed.md)) is that follow-up: fail-closed vs
+silent-wrong against a fair template. It does not re-ask the latency
+question and does not promote the pack.

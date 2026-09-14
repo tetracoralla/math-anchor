@@ -2,9 +2,10 @@
 
 These documents, `research/polynomial_finite_sum_proposal/`,
 `research/method_packs/`, `research/ai_for_math_eval/`,
-`research/parameterized_cost_eval/`, and `research/reuse_benefit_eval/` are a
-research vertical. They are not a supported Math Anchor domain module, not a
-public Capability/Procedure, and do not add a fifth MCP tool.
+`research/parameterized_cost_eval/`, `research/reuse_benefit_eval/`, and
+`research/trust_failclosed_eval/` are a research vertical. They are not a
+supported Math Anchor domain module, not a public Capability/Procedure, and
+do not add a fifth MCP tool.
 
 - [current-state.md](current-state.md) — capabilities with source / tests / run / used / benefit kept separate.
 - [workload-selection.md](workload-selection.md) — why polynomial finite sums, and what was deferred.
@@ -15,6 +16,7 @@ public Capability/Procedure, and do not add a fifth MCP tool.
 - [parameterized-method.md](parameterized-method.md) — saved `G(k,c)` for `(k+c)^2`; apply without Gosper.
 - [parameterized-cost-smoke.md](parameterized-cost-smoke.md) — equal-budget B0/B1/P-pack timing; not a benefit percentage.
 - [reuse-benefit.md](reuse-benefit.md) — same family vs B0/B1/B_template/B_codegen; three separate judgments; not a benefit percentage.
+- [trust-failclosed.md](trust-failclosed.md) — pack fail-closed vs fair template silent-wrong; latency is not the primary claim; not a promotion.
 
 A1 vertical:
 
@@ -66,4 +68,12 @@ report under gitignored `build/`):
 ```sh
 .venv/bin/python research/reuse_benefit_eval/run.py \
   --output build/reuse-benefit-report.json
+```
+
+Trust / fail-closed vs fair template (no model; not a latency bake-off;
+report under gitignored `build/`):
+
+```sh
+.venv/bin/python research/trust_failclosed_eval/run.py \
+  --output build/trust-failclosed-report.json
 ```
