@@ -89,6 +89,32 @@ git checkout chore/ai-for-math-a4-smoke
 git log --oneline -12
 ```
 
+## Reuse-benefit vs strong baselines (Draft PR #15; do not merge)
+
+Branch: `chore/ai-for-math-reuse-benefit` (cut from `main` `3d01d02`).
+Separate **Draft** PR #15.
+**Keep Draft. Do not merge. Do not promote. Do not start H1.**
+Decision stays `evidence_insufficient`. Utility is no net benefit versus
+B0 / B_template / B_codegen on this family.
+
+Local commits:
+
+- `27fb191` Add reuse-benefit smoke with cache, template, and exact codegen baselines.
+- `d7f664c` Document reuse-benefit workload, three judgments, and no-promote decision.
+- `95b6e5f` Fix reuse-benefit scoring honesty nits from PR #15 review.
+
+Millisecond tables in `docs/research/ai-for-math/reuse-benefit.md` are one
+in-process snapshot from harness `27fb191` / docs `d7f664c`. Quote
+`environment.gitHead` from a report; do not treat `main` as the harness
+commit. Tip after nits is `95b6e5f` (plus this PUSH_NOTES commit). Nits do
+not change the measured conclusion.
+
+```sh
+.venv/bin/python research/reuse_benefit_eval/run.py \
+  --output build/reuse-benefit-report.json
+.venv/bin/python -m pytest tests/python/test_reuse_benefit.py
+```
+
 ## Push and open a PR
 
 ```sh
