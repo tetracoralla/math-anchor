@@ -89,6 +89,31 @@ git checkout chore/ai-for-math-a4-smoke
 git log --oneline -12
 ```
 
+## Trust / fail-closed vs fair template (Draft; do not merge)
+
+Branch: `chore/ai-for-math-trust-failclosed` (cut from `main` `fde6a6b`).
+Separate **Draft** PR. **Keep Draft. Do not merge. Do not promote. Do not start H1.**
+Promotion decision stays `evidence_insufficient`. Experiment verdict is
+`differentiation_observed`. Latency is not the primary claim.
+
+Local commits:
+
+- `13ebce1` Add trust/fail-closed research harness vs a fair template.
+
+Judgment table in `docs/research/ai-for-math/trust-failclosed.md` is
+git `13ebce1` evidence (this-machine in-process, one observed trial).
+This notes commit records that harness SHA; quote `git rev-parse HEAD` for
+the branch tip.
+Wrong/swapped saved G, reversed bounds, and over-limit: P-pack fail-closed,
+B_template silent-wrong. Out-of-family `k^3` / `1/k` and parameter mismatch:
+both fail-closed. Not a benefit percentage.
+
+```sh
+.venv/bin/python research/trust_failclosed_eval/run.py \
+  --output build/trust-failclosed-report.json
+.venv/bin/python -m pytest tests/python/test_trust_failclosed.py
+```
+
 ## Reuse-benefit vs strong baselines (Draft PR #15; do not merge)
 
 Branch: `chore/ai-for-math-reuse-benefit` (cut from `main` `3d01d02`).

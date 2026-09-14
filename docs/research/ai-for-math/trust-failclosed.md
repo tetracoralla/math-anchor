@@ -80,8 +80,8 @@ answer is also generated from live `observedWrongGDifferentiation` /
 
 This-machine report used for the tables below was written with that command to
 `/tmp/trust-failclosed-report.json`. Environment: Math Anchor 0.7.1, Python
-3.13.5, SymPy 1.14.0. Quote `environment.gitHead` from that report after the
-harness commit — do not treat `main` `fde6a6b` as the harness commit.
+3.13.5, SymPy 1.14.0. Quote `environment.gitHead` from that report — harness
+commit `13ebce1`. Do not treat `main` `fde6a6b` as the harness commit.
 Millisecond values are **informational** in-process wall times (one
 `observed` trial). They are not a latency bake-off. P-pack control includes
 obligation-checker warmup.
@@ -152,9 +152,10 @@ Structural:
 - tampered `identity.right` fail-closes on the pack path
 - B_template has no obligation binding hook
 
-Informational observed ms (not a claim): B_template control 2.1; P-pack
-control 337.2 (checker warmup on this process); mutated-G pack cells ~5 ms
-and fail closed. Do not invent a savings percentage from these numbers.
+Informational observed ms on harness `13ebce1` (not a claim): B_template
+control 2.1; P-pack control 336 (checker warmup on this process); mutated-G
+pack cells ~5 ms and fail closed. Do not invent a savings percentage from
+these numbers.
 
 ## What differentiates (and what does not)
 
