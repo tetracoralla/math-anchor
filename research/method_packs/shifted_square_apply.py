@@ -3,6 +3,10 @@
 Reconstruction (Gosper / undetermined coefficients / caller-supplied G) is
 disabled on this path. The saved G(k,c) is instantiated, the difference
 identity is checked independently, then the A1 telescoping rule is applied.
+
+`usedSavedContent` is True when the saved G was loaded and subjected to that
+identity check. It is also True on the falsified-identity path: the pack
+still fail-closes and does not establish a finite-sum value.
 """
 
 from __future__ import annotations
@@ -206,6 +210,7 @@ def apply_shifted_square_pack(
         },
         "reconstructionDisabled": True,
         "gosperCalled": False,
+        # True: saved G was loaded and identity-checked. Not a value claim.
         "usedSavedContent": True,
         "constructor": "instantiated-saved-parametric-antidifference",
         "antidifference": g_source,
@@ -615,6 +620,8 @@ def _falsified_result(
     include_backend_receipt: bool,
     antidifference: str | None = None,
 ) -> dict[str, Any]:
+    """Fail-closed identity miss. usedSavedContent means saved G was loaded and checked, not that a value was established."""
+
     identity = instance_identity or general_identity or {}
     result: dict[str, Any] = {
         "status": identity.get("status", "falsified"),
@@ -622,6 +629,7 @@ def _falsified_result(
         "reason": reason,
         "reconstructionDisabled": True,
         "gosperCalled": False,
+        # True: saved G was loaded and identity-checked; fail-closed, no value.
         "usedSavedContent": True,
         "constructor": "instantiated-saved-parametric-antidifference",
         "antidifference": antidifference or payload.get("source"),

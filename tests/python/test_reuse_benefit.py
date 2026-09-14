@@ -26,7 +26,13 @@ from math_anchor.errors import CalculatorError
 from research.method_packs.apply import apply_method_pack
 from research.method_packs.format import DEFAULT_PARAM_PACK_PATH, PARAM_PACK_ID
 from research.method_packs.loader import load_pack
-from research.reuse_benefit_eval.arms import run_b0, run_b_codegen, run_b_template
+from research.reuse_benefit_eval.arms import (
+    run_b0,
+    run_b_codegen,
+    run_b_template,
+    run_p_pack,
+    trace_construction_calls,
+)
 from research.reuse_benefit_eval.protocol import (
     ARM_B0,
     ARM_B1,
@@ -34,6 +40,7 @@ from research.reuse_benefit_eval.protocol import (
     ARM_B_TEMPLATE,
     ARM_P_PACK,
     B0_HARMONIC_EXACT,
+    CONSTRUCTION_TRACE_KEYS,
     HELD_OUT_TASKS,
     IN_FAMILY_TASKS,
     LIFECYCLE_CROSS_TASK,
@@ -56,7 +63,13 @@ from research.reuse_benefit_eval.protocol import (
     task_by_id,
     validate_protocol,
 )
-from research.reuse_benefit_eval.score import decide, observed_slower_checked_path, score_cell
+from research.reuse_benefit_eval.score import (
+    decide,
+    observed_slower_checked_path,
+    result_summary,
+    score_cell,
+    three_judgments,
+)
 from research.reuse_benefit_eval.smoke import run_smoke, write_report
 
 
@@ -182,6 +195,8 @@ def test_p_pack_held_out_does_not_reconstruct(report: dict) -> None:
     assert cell["summary"]["reconstructionDisabled"] is True
     assert cell["scoring"]["constructionTrace"]["gosper_sum"] == 0
     assert cell["scoring"]["constructionTrace"]["construct_antidifference"] == 0
+    assert cell["scoring"]["constructionTrace"]["summation"] == 0
+    assert cell["scoring"]["constructionTrace"]["Sum.doit"] == 0
     assert cell["scoring"]["constructionProbe"] == "wrap"
     assert cell["scoring"]["reconstructedOnPackArm"] is False
     assert cell["scoring"]["usedSavedContent"] is True
@@ -200,6 +215,8 @@ def test_additional_held_out_negative_c_reuses_saved_g(report: dict) -> None:
         cell = _cell(report, ARM_P_PACK, task_id)
         assert cell["scoring"]["usedSavedContent"] is True
         assert cell["scoring"]["constructionTrace"]["gosper_sum"] == 0
+        assert cell["scoring"]["constructionTrace"]["summation"] == 0
+        assert cell["scoring"]["constructionTrace"]["Sum.doit"] == 0
         assert cell["scoring"]["lifecycleEvidence"] == LIFECYCLE_CROSS_TASK
 
 
@@ -221,6 +238,8 @@ def test_template_and_codegen_reuse_cached_g_without_gosper(report: dict) -> Non
         assert cell["scoring"]["usedSavedContent"] is True
         assert cell["scoring"]["constructionTrace"]["gosper_sum"] == 0
         assert cell["scoring"]["constructionTrace"]["construct_antidifference"] == 0
+        assert cell["scoring"]["constructionTrace"]["summation"] == 0
+        assert cell["scoring"]["constructionTrace"]["Sum.doit"] == 0
         assert cell["summary"]["floatingApproximation"] is False
         assert cell["summary"]["methodPackId"] is None
         assert "check_instance_identity" not in cell["scoring"]["stepsExecuted"]
@@ -453,6 +472,8 @@ def test_decision_does_not_invent_a_latency_observation() -> None:
                 "constructionTrace": {
                     "gosper_sum": 0 if arm != ARM_B1 else 1,
                     "construct_antidifference": 0 if arm != ARM_B1 else 1,
+                    "summation": 0,
+                    "Sum.doit": 0,
                 },
                 "lifecycleEvidence": LIFECYCLE_VERIFIED if (arm == ARM_P_PACK and task == TASK_P0) else None,
             },
@@ -519,6 +540,8 @@ def test_cli_end_to_end(tmp_path: Path) -> None:
     )
     assert p1["summary"]["valueExact"] == "355"
     assert p1["scoring"]["constructionTrace"]["gosper_sum"] == 0
+    assert p1["scoring"]["constructionTrace"]["summation"] == 0
+    assert p1["scoring"]["constructionTrace"]["Sum.doit"] == 0
     assert p1["scoring"]["constructionProbe"] == "wrap"
     assert stored["decision"]["promote"] is False
     assert stored["decision"]["verdict"] == "evidence_insufficient"
@@ -556,6 +579,8 @@ def _stub_cell(arm: str, task: str, **scoring_extra) -> dict:
         "constructionTrace": {
             "gosper_sum": 0 if arm != ARM_B1 else 1,
             "construct_antidifference": 0 if arm != ARM_B1 else 1,
+            "summation": 0,
+            "Sum.doit": 0,
         },
         "lifecycleEvidence": (
             LIFECYCLE_VERIFIED
@@ -718,3 +743,208 @@ def test_p_pack_used_saved_content_comes_from_apply_and_wrap_is_the_probe() -> N
     assert result["usedSavedContent"] is True
     assert result["constructor"] == "instantiated-saved-parametric-antidifference"
     assert result["gosperCalled"] is False
+
+
+def _zero_construction() -> dict[str, int]:
+    return {key: 0 for key in CONSTRUCTION_TRACE_KEYS}
+
+
+def test_construction_probe_counts_synthetic_summation_and_sum_doit() -> None:
+    import sympy as sp
+
+    k = sp.symbols("k")
+    with trace_construction_calls() as counts:
+        sp.summation(k, (k, 0, 3))
+    assert counts["summation"] >= 1
+    assert set(counts) == set(CONSTRUCTION_TRACE_KEYS)
+
+    with trace_construction_calls() as counts:
+        sp.Sum(k, (k, 0, 3)).doit()
+    assert counts["Sum.doit"] >= 1
+
+
+@pytest.mark.parametrize("key", ["summation", "Sum.doit"])
+def test_p_pack_synthetic_cas_reconstruction_is_detected(key: str) -> None:
+    construction = _zero_construction()
+    construction[key] = 1
+    scoring = score_cell(
+        arm_id=ARM_P_PACK,
+        task=task_by_id(TASK_P1),
+        summary={
+            "status": "ok",
+            "valueExact": "355",
+            "usedSavedContent": True,
+            "gosperCalled": False,
+            "reconstructionDisabled": True,
+            "formalKernelChecked": False,
+            "baselineEmbedded": False,
+            "floatingApproximation": False,
+            "independentChecker": True,
+            "stepsExecuted": ["retrieve", "instantiate"],
+            "adoption": {
+                "lifecycleEvidence": LIFECYCLE_CROSS_TASK,
+                "callAloneIsNotAdoption": True,
+            },
+        },
+        construction=construction,
+    )
+    assert scoring["reconstructedOnPackArm"] is True
+    assert scoring["constructionTrace"][key] == 1
+    decision = decide(
+        [
+            {
+                "arm": ARM_P_PACK,
+                "task": TASK_P1,
+                "scoring": scoring,
+                "summary": {"valueExact": "355"},
+            }
+        ],
+        stripped={"refused": True},
+        wrong_g={"failClosed": True, "emittedValue": False},
+        fair_baselines=_GREEN_FAIR_BASELINES,
+        codegen_skip=_GREEN_CODEGEN_SKIP,
+    )
+    assert any("summation" in item or "Sum.doit" in item for item in decision["problems"])
+    assert decision["verdict"] == "targeted_fix"
+    assert decision["promote"] is False
+    assert decision["judgments"]["behavior"]["verdict"] == "re_solves"
+
+
+def test_b0_summation_under_wrap_is_not_pack_reconstruction() -> None:
+    with trace_construction_calls() as counts:
+        result = run_b0(
+            {
+                "summand": "(k+1)^2",
+                "variable": "k",
+                "lower": 0,
+                "upper": 4,
+            }
+        )
+    assert result["status"] == "ok"
+    assert result["value"]["exact"] == "55"
+    assert counts["summation"] >= 1
+    scoring = score_cell(
+        arm_id=ARM_B0,
+        task=task_by_id(TASK_P0),
+        summary={
+            "status": "ok",
+            "valueExact": "55",
+            "usedSavedContent": False,
+            "gosperCalled": False,
+            "formalKernelChecked": False,
+            "baselineEmbedded": False,
+            "floatingApproximation": False,
+            "stepsExecuted": ["cas_summation"],
+        },
+        construction=counts,
+    )
+    assert scoring["reconstructedOnPackArm"] is False
+    assert scoring["countedAsSolved"] is True
+    assert scoring["constructionTrace"]["summation"] >= 1
+
+
+def test_b0_live_summation_is_traced_and_not_crippled(report: dict) -> None:
+    cell = _cell(report, ARM_B0, TASK_P1)
+    assert cell["summary"]["valueExact"] == "355"
+    assert cell["summary"]["status"] == "ok"
+    assert cell["scoring"]["constructionTrace"]["summation"] >= 1
+    assert cell["scoring"]["reconstructedOnPackArm"] is False
+    assert cell["scoring"]["countedAsSolved"] is True
+
+
+def test_p_pack_completes_when_summation_and_sum_doit_explode(monkeypatch: pytest.MonkeyPatch) -> None:
+    def boom(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("P-pack must not reconstruct via summation or Sum.doit")
+
+    monkeypatch.setattr("sympy.summation", boom)
+    monkeypatch.setattr("sympy.concrete.summations.summation", boom)
+    monkeypatch.setattr("sympy.Sum.doit", boom)
+    result = run_p_pack(
+        {
+            "summand": "(k+3)^2",
+            "variable": "k",
+            "lower": 2,
+            "upper": 7,
+            "parameterC": "3",
+            "taskId": "P1-shifted-square-c3-2-to-7",
+        }
+    )
+    assert result["status"] == "ok"
+    assert result["value"]["exact"] == "355"
+    assert result["usedSavedContent"] is True
+
+
+def test_used_saved_content_on_falsified_identity_does_not_establish_a_value() -> None:
+    pack = json.loads(Path(DEFAULT_PARAM_PACK_PATH).read_text(encoding="utf-8"))
+    semantics = pack.get("mathSemantics")
+    assert isinstance(semantics, dict)
+    semantics["parametricAntidifference"]["source"] = "k"
+    result = apply_method_pack(
+        {
+            "summand": "(k+3)^2",
+            "variable": "k",
+            "lower": 2,
+            "upper": 7,
+            "parameterC": "3",
+            "taskId": "P1-shifted-square-c3-2-to-7",
+        },
+        pack=pack,
+        compare_baseline=False,
+    )
+    assert result["status"] == "falsified"
+    assert result["usedSavedContent"] is True
+    assert "value" not in result
+    summary = result_summary(result, None)
+    scoring = score_cell(
+        arm_id=ARM_P_PACK,
+        task=task_by_id(TASK_P1),
+        summary=summary,
+        construction=_zero_construction(),
+    )
+    assert scoring["usedSavedContent"] is True
+    assert scoring["countedAsSolved"] is False
+    assert scoring["matchedPreRegisteredExpectation"] is False
+    assert scoring["applicabilityMisjudgment"] is True
+    decision = decide(
+        [
+            {
+                "arm": ARM_P_PACK,
+                "task": TASK_P1,
+                "scoring": scoring,
+                "summary": summary,
+            }
+        ],
+        stripped={"refused": True},
+        wrong_g={"failClosed": True, "emittedValue": False},
+        fair_baselines=_GREEN_FAIR_BASELINES,
+        codegen_skip=_GREEN_CODEGEN_SKIP,
+    )
+    assert decision["verdict"] == "targeted_fix"
+    assert decision["promote"] is False
+
+
+def test_three_judgments_does_not_take_a_dead_problems_parameter() -> None:
+    assert "problems" not in inspect.signature(three_judgments).parameters
+    garbage = score_cell(
+        arm_id=ARM_B0,
+        task=task_by_id(TASK_NEGATIVE),
+        summary={"status": "ok", "valueExact": "999"},
+        construction=_zero_construction(),
+    )
+    decision = decide(
+        [
+            {
+                "arm": ARM_B0,
+                "task": TASK_NEGATIVE,
+                "scoring": garbage,
+                "summary": {"status": "ok", "valueExact": "999"},
+            }
+        ],
+        stripped={"refused": True},
+        wrong_g={"failClosed": True, "emittedValue": False},
+        fair_baselines=_GREEN_FAIR_BASELINES,
+        codegen_skip=_GREEN_CODEGEN_SKIP,
+    )
+    assert decision["problems"]
+    assert decision["verdict"] == "targeted_fix"
+    assert decision["promote"] is False

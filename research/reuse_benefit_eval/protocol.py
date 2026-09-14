@@ -23,6 +23,12 @@ ARM_P_PACK = "P-pack"
 PRIMARY_ARMS = (ARM_B0, ARM_B1, ARM_B_TEMPLATE, ARM_B_CODEGEN, ARM_P_PACK)
 FAMILY_REUSE_ARMS = (ARM_B_TEMPLATE, ARM_B_CODEGEN, ARM_P_PACK)
 KARR_ARMS = (ARM_B0, ARM_B_TEMPLATE, ARM_B_CODEGEN)
+CONSTRUCTION_TRACE_KEYS = (
+    "gosper_sum",
+    "construct_antidifference",
+    "summation",
+    "Sum.doit",
+)
 
 TASK_P0 = "P0-replay"
 TASK_P1 = "P1-held-out"

@@ -16,7 +16,14 @@ from research.polynomial_finite_sum_proposal.polynomials import DomainError
 from research.polynomial_finite_sum_proposal.runner import run_polynomial_finite_sum
 
 from .codegen import CodegenBaselineError, evaluate_codegen
-from .protocol import ARM_B0, ARM_B1, ARM_B_CODEGEN, ARM_B_TEMPLATE, ARM_P_PACK
+from .protocol import (
+    ARM_B0,
+    ARM_B1,
+    ARM_B_CODEGEN,
+    ARM_B_TEMPLATE,
+    ARM_P_PACK,
+    CONSTRUCTION_TRACE_KEYS,
+)
 from .template import TemplateBaselineError, evaluate_template
 
 
@@ -151,20 +158,35 @@ def is_arm_exception(error: BaseException) -> bool:
     )
 
 
+def empty_construction_trace() -> dict[str, int]:
+    return {key: 0 for key in CONSTRUCTION_TRACE_KEYS}
+
+
 @contextmanager
 def trace_construction_calls() -> Iterator[dict[str, int]]:
-    """Wrap Gosper/construct bindings used by B1. JSON gosperCalled is not this probe."""
+    """Wrap reconstruction call sites. JSON gosperCalled is not this probe.
 
+    Counts `gosper_sum`, `construct_antidifference`, `sympy.summation`, and
+    `Sum.doit`. A future pack that reconstructed via CAS summation is visible
+    on the P-pack arm. The wrap still calls the originals, so B0/B1 may use
+    summation; scoring must not treat B0 summation as pack reconstruction.
+    """
+
+    import sympy as sp
     import sympy.concrete.gosper as gosper_mod
+    import sympy.concrete.summations as summations_mod
 
     from research.polynomial_finite_sum_proposal import polynomials
     from research.polynomial_finite_sum_proposal import runner as a1_runner
 
-    counts = {"gosper_sum": 0, "construct_antidifference": 0}
+    counts = empty_construction_trace()
     orig_runner_construct = a1_runner.construct_antidifference
     orig_poly_construct = polynomials.construct_antidifference
     orig_poly_gosper = polynomials.gosper_sum
     orig_sympy_gosper = gosper_mod.gosper_sum
+    orig_summation = sp.summation
+    orig_summations_summation = summations_mod.summation
+    orig_sum_doit = sp.Sum.doit
 
     def wrap_construct(original):
         def wrapped(*args: object, **kwargs: object):
@@ -180,10 +202,32 @@ def trace_construction_calls() -> Iterator[dict[str, int]]:
 
         return wrapped
 
+    def wrap_summation(original):
+        def wrapped(*args: object, **kwargs: object):
+            counts["summation"] += 1
+            return original(*args, **kwargs)
+
+        return wrapped
+
+    def wrap_doit(original):
+        def wrapped(self, *args: object, **kwargs: object):
+            counts["Sum.doit"] += 1
+            return original(self, *args, **kwargs)
+
+        return wrapped
+
+    wrapped_summation = wrap_summation(orig_summation)
     a1_runner.construct_antidifference = wrap_construct(orig_runner_construct)
     polynomials.construct_antidifference = wrap_construct(orig_poly_construct)
     polynomials.gosper_sum = wrap_gosper(orig_poly_gosper)
     gosper_mod.gosper_sum = wrap_gosper(orig_sympy_gosper)
+    sp.summation = wrapped_summation
+    summations_mod.summation = (
+        wrapped_summation
+        if orig_summations_summation is orig_summation
+        else wrap_summation(orig_summations_summation)
+    )
+    sp.Sum.doit = wrap_doit(orig_sum_doit)
     try:
         yield counts
     finally:
@@ -191,3 +235,6 @@ def trace_construction_calls() -> Iterator[dict[str, int]]:
         polynomials.construct_antidifference = orig_poly_construct
         polynomials.gosper_sum = orig_poly_gosper
         gosper_mod.gosper_sum = orig_sympy_gosper
+        sp.summation = orig_summation
+        summations_mod.summation = orig_summations_summation
+        sp.Sum.doit = orig_sum_doit

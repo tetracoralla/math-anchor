@@ -18,6 +18,7 @@ from research.method_packs.format import PARAM_PACK_ID, PARAM_PACK_VERSION
 from research.method_packs.loader import PackFormatError
 
 from .arms import (
+    empty_construction_trace,
     is_arm_exception,
     run_arm,
     run_b0,
@@ -44,7 +45,7 @@ from .protocol import (
     tasks,
     validate_protocol,
 )
-from .score import decide, result_summary, score_cell
+from .score import construction_trace, decide, result_summary, score_cell
 from .template import prepare_template
 
 
@@ -254,7 +255,7 @@ def _run_cell(
     trials: list[dict[str, Any]] = []
     result: dict[str, Any] | None = None
     error: BaseException | None = None
-    last_counts = {"gosper_sum": 0, "construct_antidifference": 0}
+    last_counts = empty_construction_trace()
     for index in range(trial_count):
         started = time.perf_counter()
         trial_result: dict[str, Any] | None = None
@@ -268,10 +269,7 @@ def _run_cell(
                     raise
                 trial_result = None
                 trial_error = caught
-            last_counts = {
-                "gosper_sum": int(counts["gosper_sum"]),
-                "construct_antidifference": int(counts["construct_antidifference"]),
-            }
+            last_counts = construction_trace(counts)
         latency_ms = (time.perf_counter() - started) * 1000.0
         trial_summary = result_summary(trial_result, trial_error)
         label = labels[index] if index < len(labels) else f"trial-{index}"

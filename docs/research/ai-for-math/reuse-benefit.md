@@ -145,14 +145,21 @@ not OR-ed into one `success`.
 Latencies are sequential in-process wall times in arm order B0 → B1 →
 B_template → B_codegen → P-pack. **B1 P0 first trial includes
 obligation-checker warmup; later cells are already warm.** Trial labels are
-`first` / `repeat`. These were never isolated cold processes. Prep for
+`first` / `repeat`. These were never isolated cold processes. **Latency
+conclusions use the repeat trial, not that first-trial warmup.** Prep for
 B_template (`3.3 ms`) and B_codegen (`26.8 ms`, 13 QQ terms, P0 self-check
 `55`) is reported separately and is **not** folded into a savings percentage.
 
-Construction trace is the wrap of `gosper_sum` / `construct_antidifference`.
-That wrap is the binding reconstruction probe. JSON `gosperCalled` is a path
-invariant, not the probe. `usedSavedContent` is apply's own signal that saved
-`G` was instantiated.
+Construction trace is the wrap of `gosper_sum` / `construct_antidifference` /
+`sympy.summation` / `Sum.doit`. That wrap is the binding reconstruction
+probe. JSON `gosperCalled` is a path invariant, not the probe. B0 may use
+`summation`; those calls are traced and are not treated as pack
+reconstruction.
+
+`usedSavedContent` is apply's own signal that saved `G` was loaded and
+subjected to the identity check. It is `True` on both the successful apply
+path and the falsified-identity path. Falsified still fail-closes and does
+not establish a value; scoring routes that in-family cell to `targeted_fix`.
 
 | Arm | Task | Status | Value / code | Counted as solved | gosper | first ms | repeat ms |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -255,6 +262,8 @@ Do not invent a savings percentage from these milliseconds.
   lines follow the actual probe outcomes.
 - `lifecycleEvidence=cross-task-use-evidence` alone is not semantic adoption.
 - Call-alone is not adoption.
+- `usedSavedContent=True` means saved `G` was loaded and identity-checked,
+  including on the falsified path. It does not establish a finite-sum value.
 - `coversOriginalTaskClaim` stays false.
 - `1/k` and reversed bounds are never counted as solved.
 - No dollar costs. No model calls. No savings %.

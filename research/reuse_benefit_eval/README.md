@@ -17,8 +17,10 @@ first/repeat wall time only. No dollar costs.
 
 Three judgments stay separate: trustworthiness, behavior, utility.
 Trust is classified from structured probes. The wrap of `gosper_sum` /
-`construct_antidifference` is the reconstruction probe. The mandatory
-Chinese latency clause is pinned and generated from live latency flags.
+`construct_antidifference` / `sympy.summation` / `Sum.doit` is the
+reconstruction probe. B0 may use summation; that is not pack reconstruction.
+The mandatory Chinese latency clause is pinned and generated from live
+latency flags. Latency conclusions use repeat trials.
 
 ## Command
 

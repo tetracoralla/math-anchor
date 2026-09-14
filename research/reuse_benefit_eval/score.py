@@ -18,6 +18,7 @@ from .protocol import (
     ARM_B_TEMPLATE,
     ARM_P_PACK,
     B0_HARMONIC_EXACT,
+    CONSTRUCTION_TRACE_KEYS,
     HELD_OUT_TASKS,
     IN_FAMILY_TASKS,
     KARR_ARMS,
@@ -32,6 +33,16 @@ from .protocol import (
 )
 
 CONSTRUCTION_PROBE = "wrap"
+
+
+def construction_trace(construction: dict[str, int] | None) -> dict[str, int]:
+    construction = construction or {}
+    return {key: int(construction.get(key) or 0) for key in CONSTRUCTION_TRACE_KEYS}
+
+
+def _trace_reconstructed(trace: dict[str, Any] | None) -> bool:
+    trace = trace or {}
+    return any(trace.get(key) for key in CONSTRUCTION_TRACE_KEYS)
 
 
 def result_summary(result: dict[str, Any] | None, error: BaseException | None) -> dict[str, Any]:
@@ -194,11 +205,10 @@ def score_cell(
         lifecycle = summary["adoption"].get("lifecycleEvidence")
         call_alone = summary["adoption"].get("callAloneIsNotAdoption")
 
-    gosper_calls = (construction or {}).get("gosper_sum")
-    construct_calls = (construction or {}).get("construct_antidifference")
+    trace = construction_trace(construction)
     reconstructed = False
     if arm_id == ARM_P_PACK and task_id in IN_FAMILY_TASKS:
-        reconstructed = bool(gosper_calls) or bool(construct_calls)
+        reconstructed = _trace_reconstructed(trace)
 
     return {
         "matchedPreRegisteredExpectation": matched,
@@ -218,10 +228,7 @@ def score_cell(
         "floatingApproximation": bool(summary.get("floatingApproximation")),
         "stepsExecuted": list(summary.get("stepsExecuted") or []),
         "constructionProbe": CONSTRUCTION_PROBE,
-        "constructionTrace": {
-            "gosper_sum": gosper_calls,
-            "construct_antidifference": construct_calls,
-        },
+        "constructionTrace": trace,
         "reconstructedOnPackArm": reconstructed,
         "semanticAdoptionFromLifecycleEvidenceAlone": False,
     }
@@ -256,7 +263,9 @@ def decide(
         if cell.get("trialsDisagree"):
             problems.append(f"{label}: first and repeat trials disagree")
         if scoring.get("reconstructedOnPackArm"):
-            problems.append(f"{label}: P-pack called gosper_sum or construct_antidifference")
+            problems.append(
+                f"{label}: P-pack reconstructed via gosper_sum, construct_antidifference, summation, or Sum.doit"
+            )
         if scoring.get("floatingApproximation"):
             problems.append(f"{label}: floating approximation labelled as a result")
         if cell.get("arm") == ARM_P_PACK and cell.get("task") in IN_FAMILY_TASKS:
@@ -267,14 +276,12 @@ def decide(
             if not scoring.get("usedSavedContent"):
                 problems.append(f"{label}: P-pack in-family cell did not use saved content")
         if cell.get("arm") in {ARM_B_TEMPLATE, ARM_B_CODEGEN} and cell.get("task") in IN_FAMILY_TASKS:
-            trace = scoring.get("constructionTrace") or {}
-            if trace.get("gosper_sum") or trace.get("construct_antidifference"):
-                problems.append(f"{label}: cache/codegen baseline reconstructed via Gosper")
+            if _trace_reconstructed(scoring.get("constructionTrace")):
+                problems.append(f"{label}: cache/codegen baseline reconstructed via Gosper or summation")
             if not scoring.get("usedSavedContent"):
                 problems.append(f"{label}: cache/codegen baseline did not use saved G")
         if cell.get("arm") == ARM_B1 and cell.get("task") in IN_FAMILY_TASKS:
-            trace = scoring.get("constructionTrace") or {}
-            if not trace.get("construct_antidifference") and not trace.get("gosper_sum"):
+            if not _trace_reconstructed(scoring.get("constructionTrace")):
                 problems.append(f"{label}: B1 did not construct (trace is the probe)")
         if not p0_replay_lifecycle_ok(cell):
             problems.append(f"{label}: P0 replay minted cross-task lifecycle evidence")
@@ -300,13 +307,13 @@ def decide(
         problems.append("floating C codegen was used")
 
     observations = _utility_observations(cells)
+    # Harness problems stay here for targeted_fix. They do not classify the three judgments.
     judgments = three_judgments(
         cells,
         stripped=stripped,
         wrong_g=wrong_g,
         fair_baselines=fair_baselines,
         observations=observations,
-        problems=problems,
     )
 
     if problems:
@@ -378,7 +385,6 @@ def three_judgments(
     wrong_g: dict[str, Any],
     fair_baselines: dict[str, Any],
     observations: dict[str, Any],
-    problems: list[str],
 ) -> dict[str, Any]:
     """Return three independent judgments. Never collapse them into one success flag."""
 
@@ -409,7 +415,6 @@ def three_judgments(
         utility_verdict = "no_net_benefit_vs_strong_baselines"
     else:
         utility_verdict = "evidence_insufficient"
-    _ = problems
 
     return {
         "notCollapsedIntoOneSuccess": True,
@@ -625,10 +630,9 @@ def _p_held_out_uses_saved_content(cells: list[dict[str, Any]]) -> bool | None:
             continue
         observed = True
         scoring = cell.get("scoring") or {}
-        trace = scoring.get("constructionTrace") or {}
         if scoring.get("reconstructedOnPackArm"):
             return False
-        if trace.get("gosper_sum") or trace.get("construct_antidifference"):
+        if _trace_reconstructed(scoring.get("constructionTrace")):
             return False
         if not scoring.get("usedSavedContent"):
             return False
@@ -641,7 +645,7 @@ def _behavior_evidence(cells: list[dict[str, Any]], p_held_out_uses_saved: bool 
     lines: list[str] = []
     if p_held_out_uses_saved is True:
         lines.append(
-            "P-pack held-outs instantiate saved G with 0 gosper_sum / construct_antidifference calls (wrap is the probe)"
+            "P-pack held-outs instantiate saved G with 0 gosper_sum / construct_antidifference / summation / Sum.doit calls (wrap is the probe)"
         )
     elif p_held_out_uses_saved is False:
         lines.append("P-pack held-outs reconstructed or did not use saved content (wrap is the probe)")
@@ -654,8 +658,7 @@ def _behavior_evidence(cells: list[dict[str, Any]], p_held_out_uses_saved: bool 
         if cell.get("arm") != ARM_B1 or cell.get("task") not in HELD_OUT_TASKS:
             continue
         b1_seen = True
-        trace = (cell.get("scoring") or {}).get("constructionTrace") or {}
-        if trace.get("construct_antidifference") or trace.get("gosper_sum"):
+        if _trace_reconstructed((cell.get("scoring") or {}).get("constructionTrace")):
             b1_constructed = True
     if b1_constructed:
         lines.append("B1 held-outs still construct (baselines are not crippled)")
