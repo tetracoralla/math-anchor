@@ -76,6 +76,14 @@ P-pack; three separate judgments):
 template (not a latency bake-off):
 `docs/research/ai-for-math/trust-failclosed.md`.
 
+**Dated freeze (2026-09-15):** H1 method-pack accumulation is paused pending
+new workload evidence. These packs remain **research samples** of the A2
+extraction experiment, not public Capabilities, and not a standing
+“永远不做 / never accumulate methods”. Epoch 1 archive:
+`docs/research/ai-for-math/research-epoch-1.md`. P0 next is Epoch 2 Shadow
+Verifier, not another family whose closed form is a short SymPy
+`summation`.
+
 ## Mathematical scope
 
 Univariate rational-coefficient polynomials, constant denominators only,

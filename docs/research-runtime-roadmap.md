@@ -111,11 +111,17 @@ lanes.
 ## Next construction boundaries
 
 The next Agent-owned construction work is ordered by dependency, not by adding
-mathematical domains:
+mathematical domains. Research Epoch 1 (method reuse vs fail-closed) is
+archived in `docs/research/ai-for-math/research-epoch-1.md`. **P0** is the
+Epoch 2 Shadow Verifier scaffold in `research/shadow_verifier_eval/`
+(`docs/research/ai-for-math/shadow-verifier.md`). G1–G6 remain targets;
+live four-arm model evidence is still required.
 
-1. measure the current no-tool, model-visible MCP, explicit obligation, and
-   harness-triggered paths with schema, routing, request, result, and repair
-   cost reported separately;
+1. measure the current no-tool (B0), model-visible MCP (B1), explicit
+   obligation (B2), and harness-triggered shadow checkpoint (B3) paths with
+   schema, routing, request, result, and repair cost reported separately
+   (`research/shadow_verifier_eval/`; B0/B1 are `model_arms=deferred` until
+   a written live budget exists);
 2. integrate the local CLI as a real Host or harness checkpoint with receipt
    artifacts kept outside the model context and only actionable failures fed
    back;
@@ -133,8 +139,10 @@ A first in-tree research vertical for rational-polynomial finite sums lives in
 `docs/research/ai-for-math/`. It is a proposal runner, not a productized domain
 pack: construction reuses SymPy Gosper/summation, identity checking reuses the
 existing polynomial certificate path, and the telescoping combination rule is
-hand-provided infrastructure. An experimental A2 method pack extracted from that
-T1 sample lives in `research/method_packs/` and is not a public Capability.
+hand-provided infrastructure. Experimental A2 method packs in
+`research/method_packs/` are research samples and a dated freeze of H1
+accumulation (2026-09-15) pending new workload evidence, not a public
+Capability and not a standing ban on later method work.
 
 Promotion to a high-frequency or research-utility claim requires current
 comparative results, not a green provider suite. The working stop conditions

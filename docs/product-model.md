@@ -11,7 +11,7 @@
   package identity does not rename the product, source Plugin, runtime, or MCP
   server.
 - The stable Agent protocol remains `math.search`, `math.describe`, `math.run`, and `math.batch`; a brand change does not rename those capability identifiers.
-- The strategic Agent identity is a mathematical obligation and receipt runtime. The four MCP tools remain a compatibility and direct-operation carrier; operation count is not the product's progress measure.
+- The strategic Agent identity is a **Mathematical Evidence Runtime**: Claim → Certificate/Witness → Independent Verifier → Binding → Assurance → Receipt. Progressive assurance of finite claims, not a larger catalogue and not “problem → Math Anchor computes → answer”. The four MCP tools remain a compatibility and direct-operation carrier; operation count is not the product's progress measure. The macOS calculator remains a compact human utility over the same core; it is not the Agent-research center.
 
 ## Users and tasks
 

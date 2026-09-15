@@ -1,5 +1,18 @@
 # Current state vs capabilities (A0)
 
+**Epoch 1 archive (2026-09-15):** A0 through trust-failclosed, including
+merged PRs #15 and #16, is summarized in
+[research-epoch-1.md](research-epoch-1.md). Method reuse as the primary R&D
+bet is **rejected** on this family (`no_net_benefit_vs_strong_baselines` in
+#15). Independent verification / fail-closed **survives as a hypothesis**
+(`differentiation_observed` in #16; promotion stayed
+`evidence_insufficient`). H1 method-pack accumulation is a **dated freeze**
+pending new workload evidence, not a standing refusal. P0 next is Epoch 2
+Shadow Verifier ([shadow-verifier.md](shadow-verifier.md)): a Mathematical
+Evidence Runtime (Claim → Certificate → Verifier → Binding → Assurance →
+Receipt). The calculator remains a compact human utility, not the research
+center.
+
 Review SHA: `1be6afe70b11c7434a51356c805444eafa12ed80` (pyproject 0.7.1).
 This note is a research snapshot, not a claim that the A0/A1 proposal is a
 supported product module.
@@ -178,3 +191,5 @@ fail closed while that fair template silently accepts or returns a wrong
 answer; latency is not the primary claim. Trustworthiness, behavior, and
 utility stay separate. That is not a public Capability and not a dollar or
 promotion claim. See [parameterized-method.md](parameterized-method.md).
+Those packs remain research samples; H1 accumulation is frozen dated
+2026-09-15 pending new workload evidence (not “永远不做”).

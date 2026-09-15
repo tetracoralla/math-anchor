@@ -1,8 +1,16 @@
 # Candidate multi-step tasks (A0)
 
-These are inputs for later method extraction (A2) and equal-budget evaluation
-(A4). A1 implements only the polynomial finite-sum slice. Putnam smokes already
-in the repo are listed as pipeline regressions, not as research workloads.
+**Epoch 1 archive:** [research-epoch-1.md](research-epoch-1.md). Method
+reuse as the primary bet is rejected on this family (#15). Fail-closed
+independent checks survive as a hypothesis (#16). **P0 next** is Epoch 2
+Shadow Verifier ([shadow-verifier.md](shadow-verifier.md)), not a new
+polynomial family and not H1 accumulation. H1 is a dated freeze
+(2026-09-15) pending new workload evidence, not a standing ban.
+
+These rows were inputs for method extraction (A2) and equal-budget
+evaluation (A4). A1 implemented only the polynomial finite-sum slice.
+Putnam smokes already in the repo are listed as pipeline regressions, not
+as research workloads.
 
 Each row records source, goal, complete input, acceptance, likely repeated
 steps, and reusable intermediates.
@@ -193,3 +201,19 @@ conditional rewrite, and the negative cases). The only generated obligation
 id is `difference-identity`. Natural-language translation, the binomial
 rewrite, telescoping-as-obligation, and kernel-checked conclusions stay
 uncovered. See [a3-coverage.md](a3-coverage.md).
+
+## Epoch 2 P0 (shadow verifier; not H1)
+
+Seeded corruptions for the obligation / shadow-checkpoint scaffold. These
+are **not** a new method pack and **not** LP certificates (Epoch 3).
+
+- Sign flip: `(x+y)^2` claimed equal to `x^2 - 2xy + y^2` → `falsified`.
+- Domain overshoot: `(x^2-1)/(x-1)` vs `x+1` under strict definedness →
+  `falsified`.
+- Dimension mismatch: distance vs speed + time → `falsified`.
+- Wrong witness / stale certificate bound to a different claim → `unknown`
+  / `certificate_rejected`.
+- Unregistered kind and dependency-blocked completeness cases.
+
+Live B0 (model-only) and B1 (model + MCP) stay `model_arms=deferred` until
+a written model budget exists. See [shadow-verifier.md](shadow-verifier.md).
