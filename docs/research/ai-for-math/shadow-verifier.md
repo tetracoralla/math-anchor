@@ -35,7 +35,7 @@ without a second stack, while recording B0/B1 as deferred live-model arms?
 | **B0** | Model-only, no mathematical provider | **deferred** (`model_arms=deferred`) |
 | **B1** | Model + current MCP (`math.search` / `math.describe` / `math.run` / `math.batch`), voluntary tool use. No fifth tool. A correct answer without a target call is not adoption | **deferred** |
 | **B2** | Explicit `math-anchor.obligation-set.v0.1` request, `responseMode=full` | **ran** (library) |
-| **B3** | Host/harness shadow checkpoint: full receipt on disk; quiet success returns **zero** model-context bytes; `failures_only` only when action is required; seeded repair-loop hook | **ran** (library + CLI probes) |
+| **B3** | Host/harness shadow checkpoint: full receipt on disk; library quiet success **projects** zero model-context bytes when checked; `failures_only` only when action is required; seeded same-claim repair-loop hook | **ran** (library + CLI probes) |
 
 B2/B3 call `math_anchor.obligations.check_obligation_set`. They are not a
 second mathematical stack.
@@ -61,13 +61,19 @@ second mathematical stack.
 | **G1** | detection | ≥80% of **supported** seeded errors | B2/B3 corpus measured; **not** Epoch 2 G1 (no live models) |
 | **G2** | accepted-error drop | material reduction vs matched B0 | **deferred** (needs live B0) |
 | **G3** | false reject | valid controls stay checked | B2/B3 controls measured; **not** live-model G3 |
-| **G4** | context | ≤10% main-context growth; **0** returned content on successful checkpoints | B3 quiet success = 0 bytes measured; **≤10% vs B0 deferred** |
-| **G5** | repair | after `failures_only`, repair can reach checked / quiet success | seeded harness hook measured; **not** live-model repair |
+| **G4** | context | ≤10% main-context growth; **0** returned content on successful checkpoints | B3 library 0 bytes is a **wrapper projection**; product evidence is CLI `--quiet-success` empty stdout; **≤10% vs B0 deferred** |
+| **G5** | repair | after `failures_only`, repair can reach checked / quiet success | same-claim seeded hook (sign-flip) measured; dimension-mismatch resubmit is a **different valid claim**; **not** live-model repair; **G5 unmet** |
 | **G6** | strong + weak models | same protocol on a stronger and a weaker model | **deferred** |
 
 Silence on success is **zero returned content**, not proof the Agent used
-the receipt. Seeded repair is a **pre-authored correction**, not evidence
-that a model repaired from feedback.
+the receipt. B3 library `modelContextBytes=0` on checked cells is a
+**wrapper projection** (`quiet_success` and `feedback.status=="checked"`
+zero the count even though the runtime `failures_only` envelope is
+non-empty). Product evidence is the CLI probe: `check-obligations
+--quiet-success` on a valid identity emits empty stdout. Seeded repair
+probes are **same-claim pre-authored corrections** only, not evidence
+that a model repaired from feedback. Submitting a different valid claim
+is not a repair of the original error. G5 remains unmet.
 
 ## Commands and artifact paths
 
@@ -75,7 +81,7 @@ Pre-registered protocol (frozen before the run):
 
 `research/shadow_verifier_eval/protocol.json`
 
-Unsupported arm/task/gate/honesty/model/live-command overrides are rejected.
+Unsupported arm/task/gate/honesty/model/budget/live-command overrides are rejected.
 
 ```sh
 .venv/bin/python research/shadow_verifier_eval/run.py \
@@ -114,7 +120,12 @@ Math Anchor 0.7.1, Python 3.13.5. Harness commit `0426908` (quote
 
 Byte counts below are canonical JSON sizes of obligation **feedback**
 (model-context projection) and **receipt** artifacts. They are not tokens
-and not a 10% context claim.
+and not a 10% context claim. B3 control rows showing **0** model-context
+bytes are the B3 wrapper projection described above, not a measurement of
+Host I/O and not independent evidence that an Agent saw zero bytes. The
+report also records `runtimeFeedbackBytes` (canonical size of the runtime
+feedback object before that projection). Product quiet-success evidence is
+CLI `--quiet-success` empty stdout, already probed.
 
 ## Pre-registered corpus
 
@@ -168,10 +179,18 @@ B0/B1 cells are `status=deferred`, `model_arms=deferred`, with
 | B3 | unsupported-kind | unsupported | yes | 1260 | no |
 | B3 | dependency-blocked | unknown | yes | 1934 | no |
 
-B3 receipts for those cells were 1346–2020 bytes on disk and **not**
-returned on quiet success. Seeded repair on sign-flip and dimension-mismatch
-reached `checked` with quiet success (0 returned bytes). That hook is
-**not** a live model repair.
+B3 canonical `receiptBytes` for those cells were 1346–2020 (pretty-printed
+files are larger) and **not** returned on quiet success. B2 cells write
+the same debug receipts but set `receiptOutsideModelContext=false` because
+full feedback is returned to the model-context projection.
+
+Seeded **same-claim** correction on sign-flip (restore `+2xy` on the same
+identity) reached `checked` with quiet success. That hook is **not** a live
+model repair. The dimension-mismatch follow-up submits a **different**
+valid claim (`force = mass * acceleration`, the G3 control), not a
+correction of `distance` vs `speed + time`. It is recorded as
+`unrelated_valid_resubmit` and does **not** count as a G5 repair probe.
+G5 stays unmet.
 
 Structural:
 
@@ -209,7 +228,11 @@ Do not invent a savings percentage or a model quality delta.
 - G1–G6 stay targets.
 - `model_arms=deferred`. No live-model numbers.
 - Quiet success is zero returned content, not proof of use.
-- Seeded repair is not live-model repair.
+- B3 library `modelContextBytes=0` is a wrapper projection when checked;
+  product evidence is CLI `--quiet-success` empty stdout.
+- Seeded repair is not live-model repair. Only same-claim corrections
+  count as repair probes. Dimension-mismatch resubmit is not a repair of
+  the original claim. G5 remains unmet.
 - `coversOriginalTaskClaim` stays false.
 - Call-alone is not adoption.
 - Polynomial checker independence is not independence for every kind.

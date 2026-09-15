@@ -9,8 +9,11 @@ Pre-registered no-model scaffold of:
 - **B0:** model-only (no math provider) — interface recorded; `model_arms=deferred`
 - **B1:** model + current four-tool MCP, voluntary use — interface recorded; deferred
 - **B2:** explicit `math-anchor.obligation-set.v0.1` (full feedback)
-- **B3:** Host/harness shadow checkpoint (`failures_only`, quiet success, receipt
-  outside model context, seeded repair-loop hook)
+- **B3:** Host/harness shadow checkpoint (`failures_only`, quiet success as a
+  library wrapper projection of zero model-context bytes when checked — product
+  evidence is CLI `--quiet-success` empty stdout — receipt outside model
+  context, seeded same-claim repair-loop hook; unrelated valid resubmits are
+  not repair probes)
 
 B2/B3 reuse the existing obligation runtime. They are not a second stack.
 Gates G1–G6 are **targets**. Live four-arm evidence is required before Epoch 2

@@ -11,9 +11,10 @@ from .protocol import (
     DEFERRED_ARMS,
     GATE_IDS,
     MODEL_ARMS_DEFERRED,
-    REPAIRABLE_TASKS,
     RUNNABLE_ARMS,
+    SAME_CLAIM_REPAIR_TASKS,
     SUPPORTED_ERROR_TASKS,
+    UNRELATED_RESUBMIT_TASKS,
     expected_by_arm,
 )
 
@@ -51,19 +52,46 @@ def score_cell(arm_id: str, task: dict[str, Any], result: dict[str, Any]) -> dic
     if arm_id == ARM_B3:
         quiet_ok = bool(result.get("quietSuccess")) is bool(expected.get("quietSuccess"))
         if expected.get("modelContextBytesZero") is True:
-            context_ok = result.get("modelContextBytes") == 0
+            context_ok = (
+                result.get("modelContextBytes") == 0
+                and int(result.get("runtimeFeedbackBytes") or 0) > 0
+                and result.get("modelContextBytesIsWrapperProjection") is True
+            )
         elif expected.get("modelContextBytesZero") is False:
             context_ok = int(result.get("modelContextBytes") or 0) > 0
+    if "receiptOutsideModelContext" in expected:
+        receipt_ok = result.get("receiptOutsideModelContext") is bool(
+            expected.get("receiptOutsideModelContext")
+        )
+    elif arm_id == ARM_B3:
         receipt_ok = result.get("receiptOutsideModelContext") is True
     repair_ok = True
+    repair_matched = None
+    unrelated_resubmit_matched = None
     repair = result.get("repair") if isinstance(result.get("repair"), dict) else None
     if arm_id == ARM_B3 and expected.get("repairAfterPrimaryStatus"):
         repair_ok = (
             repair is not None
+            and repair.get("sameClaimCorrection") is True
+            and repair.get("kind") == "same_claim_correction"
             and repair.get("primaryStatus") == expected.get("repairAfterPrimaryStatus")
             and bool(repair.get("quietSuccess")) is bool(expected.get("repairAfterQuietSuccess"))
             and repair.get("notALiveModelRepair") is True
         )
+        repair_matched = repair_ok
+    elif arm_id == ARM_B3 and expected.get("unrelatedValidResubmitAfterPrimaryStatus"):
+        unrelated_resubmit_matched = (
+            repair is not None
+            and repair.get("sameClaimCorrection") is not True
+            and repair.get("kind") == "unrelated_valid_resubmit"
+            and repair.get("primaryStatus")
+            == expected.get("unrelatedValidResubmitAfterPrimaryStatus")
+            and bool(repair.get("quietSuccess"))
+            is bool(expected.get("unrelatedValidResubmitAfterQuietSuccess"))
+            and repair.get("notALiveModelRepair") is True
+        )
+        repair_ok = unrelated_resubmit_matched
+        repair_matched = None
     elif repair is not None and arm_id != ARM_B3:
         repair_ok = False
 
@@ -90,8 +118,16 @@ def score_cell(arm_id: str, task: dict[str, Any], result: dict[str, Any]) -> dic
         "falseReject": false_reject,
         "quietSuccess": result.get("quietSuccess"),
         "modelContextBytes": result.get("modelContextBytes"),
+        "runtimeFeedbackBytes": result.get("runtimeFeedbackBytes"),
+        "modelContextBytesIsWrapperProjection": result.get(
+            "modelContextBytesIsWrapperProjection"
+        ),
         "receiptOutsideModelContext": result.get("receiptOutsideModelContext"),
-        "repairMatched": repair_ok if expected.get("repairAfterPrimaryStatus") else None,
+        "repairMatched": repair_matched,
+        "unrelatedValidResubmitMatched": unrelated_resubmit_matched,
+        "sameClaimCorrection": (
+            None if repair is None else repair.get("sameClaimCorrection") is True
+        ),
         "coversOriginalTaskClaim": False,
         "formalKernelChecked": False,
         "g1SupportedSeededError": bool(task.get("g1SupportedSeededError")),
@@ -117,6 +153,7 @@ def score_gates(
     g3_false: dict[str, int] = {}
     g4_zero: dict[str, bool] = {}
     g5_repair: dict[str, bool] = {}
+    g5_unrelated: dict[str, bool] = {}
     for arm_id in RUNNABLE_ARMS:
         detected = 0
         total = 0
@@ -137,19 +174,27 @@ def score_gates(
         if arm_id == ARM_B3:
             zeros = []
             repairs = []
+            unrelated = []
             for task_id in CONTROL_TASKS:
                 cell = _cell(cells, arm_id, task_id)
                 zeros.append(
                     cell is not None
                     and cell.get("modelContextBytes") == 0
                     and cell.get("quietSuccess") is True
+                    and int(cell.get("runtimeFeedbackBytes") or 0) > 0
+                    and cell.get("modelContextBytesIsWrapperProjection") is True
                 )
             g4_zero[arm_id] = all(zeros) and bool(zeros)
-            for task_id in REPAIRABLE_TASKS:
+            for task_id in SAME_CLAIM_REPAIR_TASKS:
                 cell = _cell(cells, arm_id, task_id)
                 scoring = (cell or {}).get("scoring") or {}
                 repairs.append(scoring.get("repairMatched") is True)
             g5_repair[arm_id] = all(repairs) and bool(repairs)
+            for task_id in UNRELATED_RESUBMIT_TASKS:
+                cell = _cell(cells, arm_id, task_id)
+                scoring = (cell or {}).get("scoring") or {}
+                unrelated.append(scoring.get("unrelatedValidResubmitMatched") is True)
+            g5_unrelated[arm_id] = all(unrelated) and bool(unrelated)
 
     binding_detected = 0
     binding_total = 2
@@ -207,6 +252,10 @@ def score_gates(
             "G4",
             thisMachine={
                 "B3QuietSuccessZeroReturnedContent": g4_zero.get(ARM_B3),
+                "B3LibraryZeroBytesIsWrapperProjection": g4_zero.get(ARM_B3) is True,
+                "productEvidenceCliQuietSuccessStdoutEmpty": (
+                    probes.get("cliQuietSuccess", {}).get("stdoutEmpty") is True
+                ),
                 "tenPercentVsB0": None,
             },
             deferredBecause="≤10% main-context growth vs B0 requires live model tokens",
@@ -215,7 +264,10 @@ def score_gates(
         "G5": _gate(
             "G5",
             thisMachine={
+                "B3SameClaimSeededCorrectionMatched": g5_repair.get(ARM_B3),
                 "B3SeededRepairHookMatched": g5_repair.get(ARM_B3),
+                "B3UnrelatedValidResubmitReachedChecked": g5_unrelated.get(ARM_B3),
+                "dimensionMismatchResubmitIsNotOriginalClaimRepair": True,
                 "notALiveModelRepair": True,
             },
             thisMachineDoesNotMeetEpoch2Gate=True,

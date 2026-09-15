@@ -15,7 +15,7 @@ from math_anchor.errors import CalculatorError
 from math_anchor.obligations import check_obligation_set
 
 from .model_interface import deferred_cell
-from .protocol import ARM_B0, ARM_B1, ARM_B2, ARM_B3, expected_by_arm
+from .protocol import ARM_B0, ARM_B1, ARM_B2, ARM_B3, arm_spec, expected_by_arm
 
 
 class ArmExecutionError(CalculatorError):
@@ -106,6 +106,7 @@ def run_b2(
         quiet_success=False,
         receipt_dir=receipt_dir,
         apply_repair=False,
+        protocol=protocol,
     )
 
 
@@ -126,6 +127,7 @@ def run_b3(
         quiet_success=True,
         receipt_dir=receipt_dir,
         apply_repair=True,
+        protocol=protocol,
     )
     result["repairLoopHook"] = True
     result["repairHookIsNotLiveModelRepair"] = True
@@ -142,6 +144,7 @@ def _obligation_result(
     quiet_success: bool,
     receipt_dir: Path | None,
     apply_repair: bool,
+    protocol: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     primary_id = str(task.get("primaryObligationId") or "")
     entries = list(receipt.get("obligations") or [])
@@ -154,6 +157,7 @@ def _obligation_result(
     ]
     all_checked = feedback.get("status") == "checked"
     quiet = bool(quiet_success and all_checked)
+    runtime_feedback_bytes = len(_canonical_bytes(feedback))
     if quiet:
         returned_feedback = None
         model_context_bytes = 0
@@ -164,7 +168,7 @@ def _obligation_result(
             "summary": feedback.get("summary"),
             "obligationIds": feedback_ids,
         }
-        model_context_bytes = len(_canonical_bytes(feedback))
+        model_context_bytes = runtime_feedback_bytes
     receipt_bytes = len(_canonical_bytes(receipt))
     receipt_path = None
     if receipt_dir is not None:
@@ -172,12 +176,16 @@ def _obligation_result(
         _write_receipt(receipt_path, receipt)
 
     detected = primary_status not in {None, "checked"}
+    receipt_outside_model_context = bool(
+        arm_spec(arm_id, protocol).get("receiptOutsideModelContext")
+    )
     repair_block: dict[str, Any] | None = None
     if apply_repair and isinstance(task.get("repair"), dict):
         repair_block = _run_seeded_repair(
             task["repair"],
             receipt_dir=receipt_dir,
             task_id=str(task["id"]),
+            receipt_outside_model_context=receipt_outside_model_context,
         )
 
     expected = expected_by_arm(task, arm_id)
@@ -203,9 +211,11 @@ def _obligation_result(
         "feedbackObligationIds": feedback_ids,
         "feedbackIncludesPrimary": primary_id in feedback_ids,
         "quietSuccess": quiet,
-        "receiptOutsideModelContext": receipt_path is not None,
+        "receiptOutsideModelContext": receipt_outside_model_context,
         "receiptPath": str(receipt_path) if receipt_path is not None else None,
+        "runtimeFeedbackBytes": runtime_feedback_bytes,
         "modelContextBytes": model_context_bytes,
+        "modelContextBytesIsWrapperProjection": quiet,
         "receiptBytes": receipt_bytes,
         "detected": detected,
         "coversOriginalTaskClaim": False,
@@ -227,6 +237,7 @@ def _run_seeded_repair(
     *,
     receipt_dir: Path | None,
     task_id: str,
+    receipt_outside_model_context: bool,
 ) -> dict[str, Any]:
     request = deepcopy(repair.get("obligationRequest"))
     if not isinstance(request, dict):
@@ -239,19 +250,24 @@ def _run_seeded_repair(
         primary_id = entries[0].get("id")
     primary = entries[0] if entries else {}
     all_checked = feedback.get("status") == "checked"
+    runtime_feedback_bytes = len(_canonical_bytes(feedback))
     receipt_path = None
     if receipt_dir is not None:
         receipt_path = receipt_dir / f"B3-{task_id}.repair.receipt.json"
         _write_receipt(receipt_path, receipt)
+    same_claim = repair.get("sameClaimCorrection") is True
     return {
         "kind": repair.get("kind"),
+        "sameClaimCorrection": same_claim,
         "notALiveModelRepair": True,
         "primaryObligationId": primary_id,
         "primaryStatus": primary.get("status"),
         "feedbackStatus": feedback.get("status"),
         "quietSuccess": all_checked,
-        "modelContextBytes": 0 if all_checked else len(_canonical_bytes(feedback)),
-        "receiptOutsideModelContext": receipt_path is not None,
+        "runtimeFeedbackBytes": runtime_feedback_bytes,
+        "modelContextBytes": 0 if all_checked else runtime_feedback_bytes,
+        "modelContextBytesIsWrapperProjection": all_checked,
+        "receiptOutsideModelContext": receipt_outside_model_context,
         "receiptPath": str(receipt_path) if receipt_path is not None else None,
         "receiptDigest": receipt.get("receiptDigest"),
         "expectedPrimaryStatus": repair.get("expectedPrimaryStatus"),

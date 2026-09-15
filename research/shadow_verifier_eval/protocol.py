@@ -1,7 +1,7 @@
 """Pre-registered shadow-verifier protocol. Loaded from protocol.json; not inferred.
 
 Unsupported execution-field overrides are rejected (pinned plan, same contract
-as A4 R3 / trust-failclosed).
+as A4 R3 / trust-failclosed). `budget` is pinned like honesty / scoring.
 """
 
 from __future__ import annotations
@@ -35,7 +35,8 @@ TASK_DEPENDENCY = "dependency-blocked"
 
 CONTROL_TASKS = (TASK_CONTROL_POLY, TASK_CONTROL_DIM)
 SUPPORTED_ERROR_TASKS = (TASK_SIGN_FLIP, TASK_DOMAIN_OVERSHOOT, TASK_DIMENSION_MISMATCH)
-REPAIRABLE_TASKS = (TASK_SIGN_FLIP, TASK_DIMENSION_MISMATCH)
+SAME_CLAIM_REPAIR_TASKS = (TASK_SIGN_FLIP,)
+UNRELATED_RESUBMIT_TASKS = (TASK_DIMENSION_MISMATCH,)
 COMPLETENESS_TASKS = (TASK_UNSUPPORTED, TASK_DEPENDENCY)
 ALL_TASKS = (
     TASK_CONTROL_POLY,
@@ -71,6 +72,7 @@ _PINNED_FIELDS = (
     "scoring",
     "decisionRule",
     "model",
+    "budget",
     "liveModelCommands",
     "independence",
     "outOfScopeThisSmoke",

@@ -92,6 +92,7 @@ def test_protocol_is_pre_registered_with_four_arms_and_gates() -> None:
     assert protocol["model"]["callsAllowed"] is False
     assert protocol["model"]["modelArms"] == MODEL_ARMS_DEFERRED
     assert protocol["budget"]["dollarCosts"] is None
+    assert protocol["budget"]["modelCalls"] == 0
     assert [arm["id"] for arm in protocol["arms"]] == list(PRIMARY_ARMS)
     assert [task["id"] for task in protocol["tasks"]] == list(ALL_TASKS)
     assert tuple(protocol["gates"]) == GATE_IDS
@@ -112,6 +113,12 @@ def test_protocol_is_pre_registered_with_four_arms_and_gates() -> None:
     assert b3["repairHookIsNotLiveModelRepair"] is True
     assert protocol["honesty"]["polynomialCheckerIndependenceIsNotEveryKind"] is True
     assert protocol["honesty"]["calculatorIsNotStandingBanned"] is True
+    assert protocol["honesty"]["b3LibraryQuietSuccessZeroBytesIsWrapperProjection"] is True
+    assert protocol["honesty"]["productQuietSuccessEvidenceIsCliStdout"] is True
+    assert protocol["honesty"]["seededRepairProbeIsSameClaimCorrectionOnly"] is True
+    assert protocol["honesty"]["dimensionMismatchResubmitIsNotOriginalClaimRepair"] is True
+    assert b2["receiptOutsideModelContext"] is False
+    assert b3["receiptOutsideModelContext"] is True
 
 
 def test_unsupported_protocol_overrides_are_rejected() -> None:
@@ -151,6 +158,13 @@ def test_unsupported_protocol_overrides_are_rejected() -> None:
     with pytest.raises(ValueError, match="pre-registered liveModelCommands"):
         validate_protocol(mutated_live)
 
+    mutated_budget = deepcopy(original)
+    mutated_budget["budget"] = {**mutated_budget["budget"], "modelCalls": 999}
+    with pytest.raises(ValueError, match="pre-registered budget"):
+        validate_protocol(mutated_budget)
+    with pytest.raises(ValueError, match="pre-registered budget"):
+        run_smoke(protocol=mutated_budget)
+
 
 def test_b2_b3_detect_supported_seeded_errors(report: dict) -> None:
     expected_status = {
@@ -188,10 +202,31 @@ def test_b3_quiet_success_returns_zero_model_context(report: dict) -> None:
         assert cell["receiptOutsideModelContext"] is True
         assert cell["feedbackIncludesPrimary"] is False
         assert cell["receiptBytes"] > 0
+        assert int(cell["runtimeFeedbackBytes"] or 0) > 0
+        assert cell["modelContextBytesIsWrapperProjection"] is True
         b2 = _cell(report, ARM_B2, task_id)
         assert b2["quietSuccess"] is False
         assert b2["feedbackIncludesPrimary"] is True
         assert int(b2["modelContextBytes"] or 0) > 0
+        assert b2["receiptOutsideModelContext"] is False
+        assert b2["receiptPath"] is not None
+        assert b2["modelContextBytesIsWrapperProjection"] is False
+
+
+def test_b2_receipt_outside_model_context_follows_arm_semantics(report: dict) -> None:
+    for task_id in ALL_TASKS:
+        b2 = _cell(report, ARM_B2, task_id)
+        b3 = _cell(report, ARM_B3, task_id)
+        assert b2["receiptOutsideModelContext"] is False
+        assert b2["scoring"]["receiptOutsideModelContext"] is False
+        assert b2["receiptPath"] is not None
+        assert b2["returnedFeedback"] is not None
+        assert b3["receiptOutsideModelContext"] is True
+        assert b3["scoring"]["receiptOutsideModelContext"] is True
+    control = next(task for task in load_protocol()["tasks"] if task["id"] == TASK_CONTROL_POLY)
+    without_file = run_b2(control)
+    assert without_file["receiptPath"] is None
+    assert without_file["receiptOutsideModelContext"] is False
 
 
 def test_b3_failures_only_on_seeded_errors(report: dict) -> None:
@@ -204,16 +239,27 @@ def test_b3_failures_only_on_seeded_errors(report: dict) -> None:
 
 
 def test_b3_seeded_repair_hook_is_not_live_model_repair(report: dict) -> None:
-    for task_id in (TASK_SIGN_FLIP, TASK_DIMENSION_MISMATCH):
-        cell = _cell(report, ARM_B3, task_id)
-        repair = cell["repair"]
-        assert repair["notALiveModelRepair"] is True
-        assert repair["kind"] == "pre_registered_seeded_correction"
-        assert repair["primaryStatus"] == "checked"
-        assert repair["quietSuccess"] is True
-        assert cell["scoring"]["repairMatched"] is True
-        b2 = _cell(report, ARM_B2, task_id)
-        assert b2.get("repair") is None
+    sign_flip = _cell(report, ARM_B3, TASK_SIGN_FLIP)
+    repair = sign_flip["repair"]
+    assert repair["notALiveModelRepair"] is True
+    assert repair["kind"] == "same_claim_correction"
+    assert repair["sameClaimCorrection"] is True
+    assert repair["primaryStatus"] == "checked"
+    assert repair["quietSuccess"] is True
+    assert sign_flip["scoring"]["repairMatched"] is True
+    assert sign_flip["scoring"]["sameClaimCorrection"] is True
+    assert _cell(report, ARM_B2, TASK_SIGN_FLIP).get("repair") is None
+
+    dimension = _cell(report, ARM_B3, TASK_DIMENSION_MISMATCH)
+    resubmit = dimension["repair"]
+    assert resubmit["notALiveModelRepair"] is True
+    assert resubmit["kind"] == "unrelated_valid_resubmit"
+    assert resubmit["sameClaimCorrection"] is False
+    assert resubmit["primaryStatus"] == "checked"
+    assert dimension["scoring"]["repairMatched"] is None
+    assert dimension["scoring"]["unrelatedValidResubmitMatched"] is True
+    assert dimension["scoring"]["sameClaimCorrection"] is False
+    assert _cell(report, ARM_B2, TASK_DIMENSION_MISMATCH).get("repair") is None
 
 
 def test_completeness_unsupported_and_dependency_blocked(report: dict) -> None:
@@ -290,9 +336,16 @@ def test_gates_remain_targets_and_epoch2_is_not_complete(report: dict) -> None:
     assert gates["G3"]["thisMachine"]["B2FalseRejects"] == 0
     assert gates["G3"]["thisMachine"]["B3FalseRejects"] == 0
     assert gates["G4"]["thisMachine"]["B3QuietSuccessZeroReturnedContent"] is True
+    assert gates["G4"]["thisMachine"]["B3LibraryZeroBytesIsWrapperProjection"] is True
+    assert gates["G4"]["thisMachine"]["productEvidenceCliQuietSuccessStdoutEmpty"] is True
     assert gates["G4"]["thisMachine"]["tenPercentVsB0"] is None
+    assert gates["G5"]["thisMachine"]["B3SameClaimSeededCorrectionMatched"] is True
     assert gates["G5"]["thisMachine"]["B3SeededRepairHookMatched"] is True
+    assert gates["G5"]["thisMachine"]["B3UnrelatedValidResubmitReachedChecked"] is True
+    assert gates["G5"]["thisMachine"]["dimensionMismatchResubmitIsNotOriginalClaimRepair"] is True
     assert gates["G5"]["thisMachine"]["notALiveModelRepair"] is True
+    assert gates["G5"]["epoch2GateMet"] is False
+    assert gates["G5"]["thisMachineDoesNotMeetEpoch2Gate"] is True
     assert gates["G6"]["thisMachine"] is None
     decision = report["decision"]
     assert decision["promote"] is False
@@ -306,6 +359,9 @@ def test_gates_remain_targets_and_epoch2_is_not_complete(report: dict) -> None:
     assert report["kind"] == REPORT_KIND
     assert report["protocolDigest"] == protocol_digest()
     assert report["honesty"]["epoch2NotCompleteUntilLiveFourArmEvidence"] is True
+    assert report["honesty"]["b3LibraryQuietSuccessZeroBytesIsWrapperProjection"] is True
+    assert report["honesty"]["productQuietSuccessEvidenceIsCliStdout"] is True
+    assert report["honesty"]["seededRepairProbeIsSameClaimCorrectionOnly"] is True
 
 
 def test_include_model_arms_is_rejected() -> None:

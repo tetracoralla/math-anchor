@@ -81,7 +81,7 @@
     },
     {
       "id": "B3",
-      "description": "Host/harness shadow checkpoint: full receipt stored outside the model context; quiet success returns zero model-context bytes; failures_only feedback only when action is required; seeded repair-loop hook (pre-authored correction, not a live model repair).",
+      "description": "Host/harness shadow checkpoint: full receipt stored outside the model context; library quiet success zeros modelContextBytes by wrapper projection when checked (product evidence is CLI --quiet-success empty stdout); failures_only feedback only when action is required; seeded same-claim repair-loop hook (pre-authored correction, not a live model repair; unrelated valid resubmits are not repair probes).",
       "engine": "math-anchor.obligation-set.v0.1 + failures_only + quiet-success",
       "mathProvider": "obligation-runtime",
       "responseMode": "failures_only",
@@ -134,19 +134,19 @@
       "id": "G4",
       "name": "context",
       "target": "main-context growth near or below 10%; successful checkpoints return zero content (quiet success)",
-      "thisSmokeMeasures": "B3 quiet success is zero returned model-context bytes; the 10% vs B0 comparison is live-only",
+      "thisSmokeMeasures": "B3 library quiet success zeros modelContextBytes by wrapper projection when feedback.status is checked; that is not Host I/O. Product evidence is CLI --quiet-success empty stdout. The 10% vs B0 comparison is live-only",
       "liveModelRequired": true,
       "status": "target",
-      "note": "Silence on success is zero returned content, not proof the Agent used the receipt."
+      "note": "Silence on success is zero returned content, not proof the Agent used the receipt. B3 library 0-byte cells are the harness wrapper; CLI --quiet-success empty stdout is the product path."
     },
     "G5": {
       "id": "G5",
       "name": "repair",
       "target": "after failures_only, a repair loop can resubmit and reach checked / quiet success",
-      "thisSmokeMeasures": "pre-registered seeded repair hook on sign-flip and dimension-mismatch",
+      "thisSmokeMeasures": "same-claim seeded correction on sign-flip only; dimension-mismatch follow-up is an unrelated valid resubmit (force = mass * acceleration), not a repair of distance vs speed+time",
       "liveModelRequired": true,
       "status": "target",
-      "note": "Seeded repair is a harness hook with a pre-authored correction. It is not evidence that a model repaired from feedback."
+      "note": "Seeded same-claim correction is a harness hook with a pre-authored correction of the original claim. Submitting a different valid claim is not a repair probe. Neither is evidence that a model repaired from feedback. G5 remains unmet."
     },
     "G6": {
       "id": "G6",
@@ -208,6 +208,7 @@
           "primaryStatus": "checked",
           "feedbackStatus": "checked",
           "responseMode": "full",
+          "receiptOutsideModelContext": false,
           "feedbackIncludesPrimary": true,
           "detected": false
         },
@@ -257,6 +258,7 @@
           "primaryStatus": "checked",
           "feedbackStatus": "checked",
           "responseMode": "full",
+          "receiptOutsideModelContext": false,
           "feedbackIncludesPrimary": true,
           "detected": false
         },
@@ -295,8 +297,10 @@
         ]
       },
       "repair": {
-        "kind": "pre_registered_seeded_correction",
+        "kind": "same_claim_correction",
+        "sameClaimCorrection": true,
         "notALiveModelRepair": true,
+        "note": "Same identity as the seeded error, with the bilinear sign restored. Pre-authored; not a live model repair.",
         "obligationRequest": {
           "schemaVersion": "math-anchor.obligation-set.v0.1",
           "obligations": [
@@ -321,6 +325,7 @@
           "primaryStatus": "falsified",
           "feedbackStatus": "attention_required",
           "responseMode": "full",
+          "receiptOutsideModelContext": false,
           "feedbackIncludesPrimary": true,
           "detected": true
         },
@@ -334,7 +339,8 @@
           "feedbackIncludesPrimary": true,
           "detected": true,
           "repairAfterPrimaryStatus": "checked",
-          "repairAfterQuietSuccess": true
+          "repairAfterQuietSuccess": true,
+          "repairSameClaimCorrection": true
         }
       }
     },
@@ -370,6 +376,7 @@
           "primaryStatus": "falsified",
           "feedbackStatus": "attention_required",
           "responseMode": "full",
+          "receiptOutsideModelContext": false,
           "feedbackIncludesPrimary": true,
           "detected": true
         },
@@ -412,8 +419,10 @@
         ]
       },
       "repair": {
-        "kind": "pre_registered_seeded_correction",
+        "kind": "unrelated_valid_resubmit",
+        "sameClaimCorrection": false,
         "notALiveModelRepair": true,
+        "note": "This payload is the G3 control (force = mass * acceleration), not a correction of distance vs speed + time. It is not a repair probe.",
         "obligationRequest": {
           "schemaVersion": "math-anchor.obligation-set.v0.1",
           "obligations": [
@@ -442,6 +451,7 @@
           "primaryStatus": "falsified",
           "feedbackStatus": "attention_required",
           "responseMode": "full",
+          "receiptOutsideModelContext": false,
           "feedbackIncludesPrimary": true,
           "detected": true
         },
@@ -454,8 +464,8 @@
           "receiptOutsideModelContext": true,
           "feedbackIncludesPrimary": true,
           "detected": true,
-          "repairAfterPrimaryStatus": "checked",
-          "repairAfterQuietSuccess": true
+          "unrelatedValidResubmitAfterPrimaryStatus": "checked",
+          "unrelatedValidResubmitAfterQuietSuccess": true
         }
       }
     },
@@ -487,6 +497,7 @@
           "primaryStatus": "unsupported",
           "feedbackStatus": "attention_required",
           "responseMode": "full",
+          "receiptOutsideModelContext": false,
           "feedbackIncludesPrimary": true,
           "detected": true
         },
@@ -540,6 +551,7 @@
           "primaryStatus": "unknown",
           "feedbackStatus": "attention_required",
           "responseMode": "full",
+          "receiptOutsideModelContext": false,
           "feedbackIncludesPrimary": true,
           "detected": true
         },
@@ -567,8 +579,8 @@
   "scoring": {
     "detection": "A supported seeded error is detected when the primary obligation status is not checked and matches the pre-registered expectedPrimaryStatus.",
     "falseReject": "A G3 control is a false reject when the primary obligation status is not checked.",
-    "quietSuccess": "B3 quiet success is zero returned model-context bytes and an empty failures_only obligations array when every obligation is checked. The full receipt remains a local artifact.",
-    "repair": "B3 repair is the pre-registered seeded correction only. Live model repair is deferred.",
+    "quietSuccess": "B3 library quiet success zeros modelContextBytes by wrapper projection when every obligation is checked. The runtime failures_only envelope is still non-empty; product evidence is CLI --quiet-success empty stdout. The full receipt remains a local artifact.",
+    "repair": "B3 repair probes are same-claim seeded corrections only (sign-flip restores +2xy on the same identity). An unrelated valid resubmit (dimension-mismatch to force = mass * acceleration) is recorded but is not a repair of the original claim. Live model repair is deferred. G5 remains unmet.",
     "coversOriginalTaskClaim": "must stay false",
     "callAloneIsNotAdoption": "must stay true",
     "g1ThroughG6AreTargets": true,
@@ -586,7 +598,11 @@
     "modelArmsDeferred": true,
     "noLiveModelNumbersInvented": true,
     "quietSuccessIsZeroReturnedContentNotProofOfUse": true,
+    "b3LibraryQuietSuccessZeroBytesIsWrapperProjection": true,
+    "productQuietSuccessEvidenceIsCliStdout": true,
     "seededRepairIsNotLiveModelRepair": true,
+    "seededRepairProbeIsSameClaimCorrectionOnly": true,
+    "dimensionMismatchResubmitIsNotOriginalClaimRepair": true,
     "coversOriginalTaskClaimStaysFalse": true,
     "callAloneIsNotAdoption": true,
     "lifecycleEvidenceIsNotSemanticAdoption": true,

@@ -16,9 +16,12 @@ and Apple notarization record exist.
 - Added an Epoch 2 **shadow-verifier research scaffold**
   (`research/shadow_verifier_eval/`) with pinned B0–B3 protocol, seeded
   corruption corpus, deterministic B2/B3 obligation-runtime path (quiet
-  success / `failures_only` / repair hook), and B0/B1 `model_arms=deferred`.
-  G1–G6 stay targets. Not Epoch 2 completion, not a pack promotion, not a
-  fifth MCP tool, not a benefit percentage.
+  success / `failures_only` / same-claim repair hook), and B0/B1
+  `model_arms=deferred`. B3 library quiet-success 0 bytes is a wrapper
+  projection; product evidence is CLI `--quiet-success`. G5 repair probes
+  are same-claim corrections only. G1–G6 stay targets. Not Epoch 2
+  completion, not a pack promotion, not a fifth MCP tool, not a benefit
+  percentage.
 - Added an in-tree **research proposal** for rational-polynomial finite sums
   (`research/polynomial_finite_sum_proposal/`). It is not a public operation,
   not a fifth MCP tool, and not a supported domain module.
