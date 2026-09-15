@@ -3,7 +3,7 @@
 ## Epoch 1 archive + Epoch 2 shadow verifier (Draft; do not merge)
 
 Branch: `chore/ai-for-math-epoch-2-shadow-verifier` (cut from `main` `fdc5031`).
-Separate **Draft** PR (URL recorded after `gh pr create --draft`).
+Separate **Draft** PR #17: https://github.com/tetracoralla/math-anchor/pull/17
 **Keep Draft. Do not merge. Do not promote method packs. Do not start H1.**
 Epoch 2 is **not complete**. B0/B1 are `model_arms=deferred`. G1–G6 stay
 targets. Promotion decision stays `evidence_insufficient`.
@@ -17,6 +17,7 @@ packs are research samples / dated freeze of H1 (2026-09-15), not
 Local commits:
 
 - `0426908` Add Epoch 2 shadow-verifier research scaffold.
+- `82a2341` Archive Research Epoch 1 and record shadow-verifier this-machine results.
 
 Epoch 2 (code): `research/shadow_verifier_eval/` pinned protocol, seeded
 corpus, deterministic B2/B3, B0/B1 interface only. Byte table in
