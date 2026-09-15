@@ -18,12 +18,24 @@ Local commits:
 
 - `0426908` Add Epoch 2 shadow-verifier research scaffold.
 - `82a2341` Archive Research Epoch 1 and record shadow-verifier this-machine results.
+- `f856f86` Record Draft PR #17 URL and local commit SHAs.
+- `16754bd` Fix shadow-verifier honesty nits from PR #17 review.
 
 Epoch 2 (code): `research/shadow_verifier_eval/` pinned protocol, seeded
 corpus, deterministic B2/B3, B0/B1 interface only. Byte table in
 `docs/research/ai-for-math/shadow-verifier.md` is git `0426908` evidence
 (this-machine canonical JSON sizes, not tokens). B0/B1 deferred. G1 3/3 on
 the supported seeded-error tasks is not Epoch 2 completion.
+Honesty nits (`16754bd`): B2 `receiptOutsideModelContext` follows arm
+semantics (false while full feedback is returned); G5 repair probes are
+same-claim corrections only (dimension-mismatch resubmit is not a repair
+of the original claim); `budget` is pinned against in-memory mutation;
+B3 library `modelContextBytes=0` is a wrapper projection — product
+evidence is CLI `--quiet-success` empty stdout. Decision remains
+`evidence_insufficient` / `deterministic_b2_b3_scaffold_ran` /
+`promote=false` / `epoch2Complete=false`. This notes commit records that
+SHA. Open tip is `git rev-parse HEAD` / PR `headRefOid` after this commit
+(not `f856f86`, not `16754bd`).
 
 ```sh
 .venv/bin/python research/shadow_verifier_eval/run.py \
