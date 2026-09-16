@@ -1,0 +1,618 @@
+{
+  "kind": "math-anchor.research.ai-for-math-shadow-verifier-protocol.v0",
+  "stage": "shadow-verifier",
+  "title": "Four-arm shadow verifier: explicit obligation and host shadow checkpoint versus model-only / voluntary MCP",
+  "preRegistered": true,
+  "notABenefitPercentage": true,
+  "promotionForbiddenInThisSmoke": true,
+  "epoch2NotCompleteUntilLiveFourArmEvidence": true,
+  "doNotStartH1": true,
+  "doNotPromoteMethodPacks": true,
+  "judgmentsAreSeparate": true,
+  "researchStatus": "experimental-draft-2026-09-15",
+  "model": {
+    "requested": null,
+    "observed": null,
+    "callsAllowed": false,
+    "noModelFirst": true,
+    "modelArms": "deferred",
+    "modelArmsOmittedBecause": "this environment does not run paid model calls; live B0/B1 numbers are not invented"
+  },
+  "budget": {
+    "equalBudget": true,
+    "modelCalls": 0,
+    "dollarCosts": null,
+    "dollarCostsOmittedBecause": "no real prices or fees; this smoke invents none"
+  },
+  "outOfScopeThisSmoke": [
+    "live B0/B1 model quality deltas (deferred; do not invent)",
+    "public Capability/Procedure promotion of method packs (forbidden)",
+    "starting H1 / method accumulation (dated freeze 2026-09-15, not a standing ban)",
+    "LP certificates / Epoch 3 certificate-native work",
+    "expanding the operation catalog for its own sake",
+    "fifth MCP tool",
+    "dollar cost or savings percentage",
+    "claiming Epoch 2 complete from a no-model B2/B3 scaffold"
+  ],
+  "independence": {
+    "polynomialIdentityChecker": "math-anchor-stdlib-polynomial-checker recomputes coefficients without importing the SymPy producer",
+    "otherKinds": "expression_equivalence and dimension_consistency reuse the same registered providers as the MCP catalog; they are not a second checker stack",
+    "shadowCheckpoint": "B3 independence is Host-triggered execution plus context isolation (receipt outside model context), not a separately implemented verifier for every kind",
+    "producerVsChecker": "A swapped producer certificate is rejected by binding the checker to the caller's claim. That is claim-binding, not proof of surrounding prose, coverage completeness, or caller assumptions"
+  },
+  "progressiveAssurance": [
+    "Claim",
+    "Certificate/Witness",
+    "Independent Verifier",
+    "Binding",
+    "Assurance",
+    "Receipt"
+  ],
+  "arms": [
+    {
+      "id": "B0",
+      "description": "Model-only (no mathematical provider). Interface and recorded protocol for a later live run. Not executed in this smoke.",
+      "engine": "deferred-live-model",
+      "mathProvider": false,
+      "mcpTools": [],
+      "runnableThisSmoke": false,
+      "deferredBecause": "model_arms=deferred; no paid model calls"
+    },
+    {
+      "id": "B1",
+      "description": "Model plus current MCP compatibility surface (math.search / math.describe / math.run / math.batch), voluntary tool use. No fifth MCP tool. Interface and recorded protocol for a later live run. Not executed in this smoke.",
+      "engine": "deferred-live-model-plus-mcp",
+      "mathProvider": "mcp-voluntary",
+      "mcpTools": ["math.search", "math.describe", "math.run", "math.batch"],
+      "fifthMcpTool": false,
+      "runnableThisSmoke": false,
+      "deferredBecause": "model_arms=deferred; no paid model calls",
+      "correctAnswerWithoutTargetCallIsNotAdoption": true
+    },
+    {
+      "id": "B2",
+      "description": "Explicit structured claims submitted as math-anchor.obligation-set.v0.1. Full feedback. Reuses the existing obligation runtime; not a second stack.",
+      "engine": "math-anchor.obligation-set.v0.1",
+      "mathProvider": "obligation-runtime",
+      "responseMode": "full",
+      "quietSuccess": false,
+      "runnableThisSmoke": true,
+      "receiptOutsideModelContext": false
+    },
+    {
+      "id": "B3",
+      "description": "Host/harness shadow checkpoint: full receipt stored outside the model context; library quiet success zeros modelContextBytes by wrapper projection when checked (product evidence is CLI --quiet-success empty stdout); failures_only feedback only when action is required; seeded same-claim repair-loop hook (pre-authored correction, not a live model repair; unrelated valid resubmits are not repair probes).",
+      "engine": "math-anchor.obligation-set.v0.1 + failures_only + quiet-success",
+      "mathProvider": "obligation-runtime",
+      "responseMode": "failures_only",
+      "quietSuccess": true,
+      "runnableThisSmoke": true,
+      "receiptOutsideModelContext": true,
+      "repairLoopHook": true,
+      "repairHookIsNotLiveModelRepair": true
+    }
+  ],
+  "corruptionKinds": {
+    "none": "Valid control claim; used to measure false reject (G3), not detection (G1).",
+    "sign_flip": "Polynomial identity with a flipped bilinear sign. Supported seeded error; provider should falsify.",
+    "stale_swapped_result": "A valid certificate for a different identity is bound to this claim. Independent checker must reject (unknown / certificate_rejected), not check.",
+    "wrong_witness": "Producer witness for x = x bound to (x+y)^2 identity. Same binding path as stale_swapped_result; claim-binding, not a second stack.",
+    "wrong_claim_binding": "Certificate statement fields do not match the caller's normalized left/right/variables.",
+    "domain_overshoot": "Removable discontinuity treated as an identity under strict definedness. Looks equivalent; provider should falsify.",
+    "dimension_mismatch": "Dimensionally inconsistent formula. Supported seeded error; provider should falsify.",
+    "unsupported_kind": "Unregistered obligation kind. Completeness case (explicit unsupported), not a G1 supported seeded error.",
+    "dependency_blocked": "Downstream obligation gated on an unchecked dependency. Completeness case, not a G1 supported seeded error."
+  },
+  "gates": {
+    "G1": {
+      "id": "G1",
+      "name": "detection",
+      "target": "at least 80% detection of supported seeded errors",
+      "thisSmokeMeasures": "B2/B3 deterministic corpus plus structural binding probes",
+      "liveModelRequired": true,
+      "status": "target",
+      "note": "A this-machine B2/B3 detection rate is not Epoch 2 G1. G1 needs live four-arm evidence."
+    },
+    "G2": {
+      "id": "G2",
+      "name": "accepted-error-drop",
+      "target": "material reduction in accepted mathematical errors against the matched no-provider (B0) condition",
+      "thisSmokeMeasures": null,
+      "liveModelRequired": true,
+      "status": "target-deferred"
+    },
+    "G3": {
+      "id": "G3",
+      "name": "false-reject",
+      "target": "valid control claims stay checked (low false reject)",
+      "thisSmokeMeasures": "B2/B3 control cells must be checked",
+      "liveModelRequired": true,
+      "status": "target",
+      "note": "This-machine zero false reject on two controls is not a live-model G3 result."
+    },
+    "G4": {
+      "id": "G4",
+      "name": "context",
+      "target": "main-context growth near or below 10%; successful checkpoints return zero content (quiet success)",
+      "thisSmokeMeasures": "B3 library quiet success zeros modelContextBytes by wrapper projection when feedback.status is checked; that is not Host I/O. Product evidence is CLI --quiet-success empty stdout. The 10% vs B0 comparison is live-only",
+      "liveModelRequired": true,
+      "status": "target",
+      "note": "Silence on success is zero returned content, not proof the Agent used the receipt. B3 library 0-byte cells are the harness wrapper; CLI --quiet-success empty stdout is the product path."
+    },
+    "G5": {
+      "id": "G5",
+      "name": "repair",
+      "target": "after failures_only, a repair loop can resubmit and reach checked / quiet success",
+      "thisSmokeMeasures": "same-claim seeded correction on sign-flip only; dimension-mismatch follow-up is an unrelated valid resubmit (force = mass * acceleration), not a repair of distance vs speed+time",
+      "liveModelRequired": true,
+      "status": "target",
+      "note": "Seeded same-claim correction is a harness hook with a pre-authored correction of the original claim. Submitting a different valid claim is not a repair probe. Neither is evidence that a model repaired from feedback. G5 remains unmet."
+    },
+    "G6": {
+      "id": "G6",
+      "name": "strong-and-weak-models",
+      "target": "detection / accepted-error / context gates hold for both a stronger and a weaker model under the same protocol",
+      "thisSmokeMeasures": null,
+      "liveModelRequired": true,
+      "status": "target-deferred"
+    }
+  },
+  "liveModelCommands": {
+    "deterministicThisMachine": ".venv/bin/python research/shadow_verifier_eval/run.py --output build/shadow-verifier-report.json",
+    "tests": ".venv/bin/python -m pytest tests/python/test_shadow_verifier.py",
+    "coreConformance": ".venv/bin/python script/check_obligations.py",
+    "plannedLiveFourArm": ".venv/bin/python research/shadow_verifier_eval/run.py --include-model-arms --confirm-model-runs N --output build/shadow-verifier-live-report.json",
+    "plannedLiveFourArmNote": "N is a written planned-call count. This scaffold rejects --include-model-arms because the live B0/B1 runner is not implemented and model_arms=deferred. Do not start a paid run without a budget. Do not invent live-model numbers.",
+    "includeModelArmsRejectedBecause": "live B0/B1 runner is not implemented in this PR; model_arms=deferred"
+  },
+  "workload": {
+    "question": "Can the existing obligation runtime detect seeded mathematical corruptions (B2) and project Host shadow-checkpoint semantics (B3: quiet success, failures_only, receipt outside model context, repair hook) without a second stack, while recording B0/B1 as deferred live-model arms?",
+    "notClaimed": [
+      "live model quality deltas",
+      "dollar savings",
+      "Epoch 2 completion",
+      "method-pack promotion",
+      "semantic adoption",
+      "product readiness",
+      "independent checker for every obligation kind"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "control-polynomial-identity",
+      "role": "valid-control",
+      "corruptionKind": "none",
+      "g1SupportedSeededError": false,
+      "g3Control": true,
+      "primaryObligationId": "identity",
+      "prompt": "As polynomials in x and y over the rationals, is (x + y)^2 identical to x^2 + 2*x*y + y^2?",
+      "obligationRequest": {
+        "schemaVersion": "math-anchor.obligation-set.v0.1",
+        "obligations": [
+          {
+            "id": "identity",
+            "kind": "polynomial_identity",
+            "claim": {
+              "left": "(x + y)^2",
+              "right": "x^2 + 2*x*y + y^2",
+              "variables": ["x", "y"]
+            }
+          }
+        ]
+      },
+      "expectedPrimaryStatus": "checked",
+      "expectedByArm": {
+        "B0": {"status": "deferred", "modelArms": "deferred"},
+        "B1": {"status": "deferred", "modelArms": "deferred"},
+        "B2": {
+          "primaryStatus": "checked",
+          "feedbackStatus": "checked",
+          "responseMode": "full",
+          "receiptOutsideModelContext": false,
+          "feedbackIncludesPrimary": true,
+          "detected": false
+        },
+        "B3": {
+          "primaryStatus": "checked",
+          "feedbackStatus": "checked",
+          "responseMode": "failures_only",
+          "quietSuccess": true,
+          "modelContextBytesZero": true,
+          "receiptOutsideModelContext": true,
+          "feedbackIncludesPrimary": false,
+          "detected": false
+        }
+      }
+    },
+    {
+      "id": "control-dimension-consistency",
+      "role": "valid-control",
+      "corruptionKind": "none",
+      "g1SupportedSeededError": false,
+      "g3Control": true,
+      "primaryObligationId": "dimension-ok",
+      "prompt": "Is force dimensionally consistent with mass * acceleration when force is newton, mass kilogram, and acceleration meter / second^2?",
+      "obligationRequest": {
+        "schemaVersion": "math-anchor.obligation-set.v0.1",
+        "obligations": [
+          {
+            "id": "dimension-ok",
+            "kind": "dimension_consistency",
+            "claim": {
+              "left": "force",
+              "right": "mass * acceleration",
+              "symbols": {
+                "force": "newton",
+                "mass": "kilogram",
+                "acceleration": "meter / second^2"
+              }
+            }
+          }
+        ]
+      },
+      "expectedPrimaryStatus": "checked",
+      "expectedByArm": {
+        "B0": {"status": "deferred", "modelArms": "deferred"},
+        "B1": {"status": "deferred", "modelArms": "deferred"},
+        "B2": {
+          "primaryStatus": "checked",
+          "feedbackStatus": "checked",
+          "responseMode": "full",
+          "receiptOutsideModelContext": false,
+          "feedbackIncludesPrimary": true,
+          "detected": false
+        },
+        "B3": {
+          "primaryStatus": "checked",
+          "feedbackStatus": "checked",
+          "responseMode": "failures_only",
+          "quietSuccess": true,
+          "modelContextBytesZero": true,
+          "receiptOutsideModelContext": true,
+          "feedbackIncludesPrimary": false,
+          "detected": false
+        }
+      }
+    },
+    {
+      "id": "sign-flip",
+      "role": "supported-seeded-error",
+      "corruptionKind": "sign_flip",
+      "g1SupportedSeededError": true,
+      "g3Control": false,
+      "primaryObligationId": "sign-flip",
+      "prompt": "As polynomials in x and y over the rationals, is (x + y)^2 identical to x^2 - 2*x*y + y^2?",
+      "obligationRequest": {
+        "schemaVersion": "math-anchor.obligation-set.v0.1",
+        "obligations": [
+          {
+            "id": "sign-flip",
+            "kind": "polynomial_identity",
+            "claim": {
+              "left": "(x + y)^2",
+              "right": "x^2 - 2*x*y + y^2",
+              "variables": ["x", "y"]
+            }
+          }
+        ]
+      },
+      "repair": {
+        "kind": "same_claim_correction",
+        "sameClaimCorrection": true,
+        "notALiveModelRepair": true,
+        "note": "Same identity as the seeded error, with the bilinear sign restored. Pre-authored; not a live model repair.",
+        "obligationRequest": {
+          "schemaVersion": "math-anchor.obligation-set.v0.1",
+          "obligations": [
+            {
+              "id": "sign-flip-repaired",
+              "kind": "polynomial_identity",
+              "claim": {
+                "left": "(x + y)^2",
+                "right": "x^2 + 2*x*y + y^2",
+                "variables": ["x", "y"]
+              }
+            }
+          ]
+        },
+        "expectedPrimaryStatus": "checked"
+      },
+      "expectedPrimaryStatus": "falsified",
+      "expectedByArm": {
+        "B0": {"status": "deferred", "modelArms": "deferred"},
+        "B1": {"status": "deferred", "modelArms": "deferred"},
+        "B2": {
+          "primaryStatus": "falsified",
+          "feedbackStatus": "attention_required",
+          "responseMode": "full",
+          "receiptOutsideModelContext": false,
+          "feedbackIncludesPrimary": true,
+          "detected": true
+        },
+        "B3": {
+          "primaryStatus": "falsified",
+          "feedbackStatus": "attention_required",
+          "responseMode": "failures_only",
+          "quietSuccess": false,
+          "modelContextBytesZero": false,
+          "receiptOutsideModelContext": true,
+          "feedbackIncludesPrimary": true,
+          "detected": true,
+          "repairAfterPrimaryStatus": "checked",
+          "repairAfterQuietSuccess": true,
+          "repairSameClaimCorrection": true
+        }
+      }
+    },
+    {
+      "id": "domain-overshoot-definedness",
+      "role": "supported-seeded-error",
+      "corruptionKind": "domain_overshoot",
+      "g1SupportedSeededError": true,
+      "g3Control": false,
+      "primaryObligationId": "definedness",
+      "prompt": "Under a strict real definedness policy, are (x^2 - 1)/(x - 1) and x + 1 equivalent for all real x?",
+      "obligationRequest": {
+        "schemaVersion": "math-anchor.obligation-set.v0.1",
+        "obligations": [
+          {
+            "id": "definedness",
+            "kind": "expression_equivalence",
+            "claim": {
+              "left": "(x^2 - 1)/(x - 1)",
+              "right": "x + 1",
+              "variables": ["x"],
+              "domain": "real",
+              "definednessPolicy": "strict"
+            }
+          }
+        ]
+      },
+      "expectedPrimaryStatus": "falsified",
+      "expectedByArm": {
+        "B0": {"status": "deferred", "modelArms": "deferred"},
+        "B1": {"status": "deferred", "modelArms": "deferred"},
+        "B2": {
+          "primaryStatus": "falsified",
+          "feedbackStatus": "attention_required",
+          "responseMode": "full",
+          "receiptOutsideModelContext": false,
+          "feedbackIncludesPrimary": true,
+          "detected": true
+        },
+        "B3": {
+          "primaryStatus": "falsified",
+          "feedbackStatus": "attention_required",
+          "responseMode": "failures_only",
+          "quietSuccess": false,
+          "modelContextBytesZero": false,
+          "receiptOutsideModelContext": true,
+          "feedbackIncludesPrimary": true,
+          "detected": true
+        }
+      }
+    },
+    {
+      "id": "dimension-mismatch",
+      "role": "supported-seeded-error",
+      "corruptionKind": "dimension_mismatch",
+      "g1SupportedSeededError": true,
+      "g3Control": false,
+      "primaryObligationId": "dimension-error",
+      "prompt": "Is distance dimensionally consistent with speed + time when distance is meter, speed meter / second, and time second?",
+      "obligationRequest": {
+        "schemaVersion": "math-anchor.obligation-set.v0.1",
+        "obligations": [
+          {
+            "id": "dimension-error",
+            "kind": "dimension_consistency",
+            "claim": {
+              "left": "distance",
+              "right": "speed + time",
+              "symbols": {
+                "distance": "meter",
+                "speed": "meter / second",
+                "time": "second"
+              }
+            }
+          }
+        ]
+      },
+      "repair": {
+        "kind": "unrelated_valid_resubmit",
+        "sameClaimCorrection": false,
+        "notALiveModelRepair": true,
+        "note": "This payload is the G3 control (force = mass * acceleration), not a correction of distance vs speed + time. It is not a repair probe.",
+        "obligationRequest": {
+          "schemaVersion": "math-anchor.obligation-set.v0.1",
+          "obligations": [
+            {
+              "id": "dimension-repaired",
+              "kind": "dimension_consistency",
+              "claim": {
+                "left": "force",
+                "right": "mass * acceleration",
+                "symbols": {
+                  "force": "newton",
+                  "mass": "kilogram",
+                  "acceleration": "meter / second^2"
+                }
+              }
+            }
+          ]
+        },
+        "expectedPrimaryStatus": "checked"
+      },
+      "expectedPrimaryStatus": "falsified",
+      "expectedByArm": {
+        "B0": {"status": "deferred", "modelArms": "deferred"},
+        "B1": {"status": "deferred", "modelArms": "deferred"},
+        "B2": {
+          "primaryStatus": "falsified",
+          "feedbackStatus": "attention_required",
+          "responseMode": "full",
+          "receiptOutsideModelContext": false,
+          "feedbackIncludesPrimary": true,
+          "detected": true
+        },
+        "B3": {
+          "primaryStatus": "falsified",
+          "feedbackStatus": "attention_required",
+          "responseMode": "failures_only",
+          "quietSuccess": false,
+          "modelContextBytesZero": false,
+          "receiptOutsideModelContext": true,
+          "feedbackIncludesPrimary": true,
+          "detected": true,
+          "unrelatedValidResubmitAfterPrimaryStatus": "checked",
+          "unrelatedValidResubmitAfterQuietSuccess": true
+        }
+      }
+    },
+    {
+      "id": "unsupported-kind",
+      "role": "completeness",
+      "corruptionKind": "unsupported_kind",
+      "g1SupportedSeededError": false,
+      "g3Control": false,
+      "primaryObligationId": "sheaf-step",
+      "prompt": "Check the unregistered obligation that H^1(X, O_X) = 0 as sheaf cohomology vanishing.",
+      "obligationRequest": {
+        "schemaVersion": "math-anchor.obligation-set.v0.1",
+        "obligations": [
+          {
+            "id": "sheaf-step",
+            "kind": "sheaf_cohomology_vanishing",
+            "claim": {
+              "statement": "H^1(X, O_X) = 0"
+            }
+          }
+        ]
+      },
+      "expectedPrimaryStatus": "unsupported",
+      "expectedByArm": {
+        "B0": {"status": "deferred", "modelArms": "deferred"},
+        "B1": {"status": "deferred", "modelArms": "deferred"},
+        "B2": {
+          "primaryStatus": "unsupported",
+          "feedbackStatus": "attention_required",
+          "responseMode": "full",
+          "receiptOutsideModelContext": false,
+          "feedbackIncludesPrimary": true,
+          "detected": true
+        },
+        "B3": {
+          "primaryStatus": "unsupported",
+          "feedbackStatus": "attention_required",
+          "responseMode": "failures_only",
+          "quietSuccess": false,
+          "modelContextBytesZero": false,
+          "receiptOutsideModelContext": true,
+          "feedbackIncludesPrimary": true,
+          "detected": true
+        }
+      }
+    },
+    {
+      "id": "dependency-blocked",
+      "role": "completeness",
+      "corruptionKind": "dependency_blocked",
+      "g1SupportedSeededError": false,
+      "g3Control": false,
+      "primaryObligationId": "dependent-step",
+      "prompt": "After an unregistered sheaf-cohomology step, check the polynomial identity x = x that depends on it.",
+      "obligationRequest": {
+        "schemaVersion": "math-anchor.obligation-set.v0.1",
+        "obligations": [
+          {
+            "id": "sheaf-step",
+            "kind": "sheaf_cohomology_vanishing",
+            "claim": {
+              "statement": "H^1(X, O_X) = 0"
+            }
+          },
+          {
+            "id": "dependent-step",
+            "kind": "polynomial_identity",
+            "claim": {
+              "left": "x",
+              "right": "x",
+              "variables": ["x"]
+            },
+            "dependsOn": ["sheaf-step"]
+          }
+        ]
+      },
+      "expectedPrimaryStatus": "unknown",
+      "expectedByArm": {
+        "B0": {"status": "deferred", "modelArms": "deferred"},
+        "B1": {"status": "deferred", "modelArms": "deferred"},
+        "B2": {
+          "primaryStatus": "unknown",
+          "feedbackStatus": "attention_required",
+          "responseMode": "full",
+          "receiptOutsideModelContext": false,
+          "feedbackIncludesPrimary": true,
+          "detected": true
+        },
+        "B3": {
+          "primaryStatus": "unknown",
+          "feedbackStatus": "attention_required",
+          "responseMode": "failures_only",
+          "quietSuccess": false,
+          "modelContextBytesZero": false,
+          "receiptOutsideModelContext": true,
+          "feedbackIncludesPrimary": true,
+          "detected": true
+        }
+      }
+    }
+  ],
+  "structuralProbes": {
+    "coreConformanceMustPass": true,
+    "wrongWitnessMustReject": true,
+    "staleSwappedCertificateMustReject": true,
+    "cliQuietSuccessMustEmitZeroStdout": true,
+    "cliFailureMustReturnFailuresOnly": true,
+    "notes": "Binding probes reuse math_anchor.obligations claim-binding (valid certificate for a different statement → unknown / certificate_rejected). CLI probes reuse check-obligations --quiet-success. Not a parallel checker."
+  },
+  "scoring": {
+    "detection": "A supported seeded error is detected when the primary obligation status is not checked and matches the pre-registered expectedPrimaryStatus.",
+    "falseReject": "A G3 control is a false reject when the primary obligation status is not checked.",
+    "quietSuccess": "B3 library quiet success zeros modelContextBytes by wrapper projection when every obligation is checked. The runtime failures_only envelope is still non-empty; product evidence is CLI --quiet-success empty stdout. The full receipt remains a local artifact.",
+    "repair": "B3 repair probes are same-claim seeded corrections only (sign-flip restores +2xy on the same identity). An unrelated valid resubmit (dimension-mismatch to force = mass * acceleration) is recorded but is not a repair of the original claim. Live model repair is deferred. G5 remains unmet.",
+    "coversOriginalTaskClaim": "must stay false",
+    "callAloneIsNotAdoption": "must stay true",
+    "g1ThroughG6AreTargets": true,
+    "thisMachineDoesNotCompleteEpoch2": true
+  },
+  "decisionRule": {
+    "promote": "Forbidden in this smoke. Do not promote method packs. Do not start H1. Deterministic B2/B3 detection is not Epoch 2 completion.",
+    "targeted_fix": "B2/B3 missed a pre-registered status, a control was not checked, quiet success returned model-context bytes, a binding probe checked a swapped certificate, or core.v0.1.json drifted.",
+    "evidence_insufficient": "Default for promotion and for Epoch 2 completion. Live B0/B1/G2/G6 remain deferred."
+  },
+  "honesty": {
+    "smokeIsNotOverallBenefitPercent": true,
+    "greenHarnessTestsAreNotCompletion": true,
+    "epoch2NotCompleteUntilLiveFourArmEvidence": true,
+    "modelArmsDeferred": true,
+    "noLiveModelNumbersInvented": true,
+    "quietSuccessIsZeroReturnedContentNotProofOfUse": true,
+    "b3LibraryQuietSuccessZeroBytesIsWrapperProjection": true,
+    "productQuietSuccessEvidenceIsCliStdout": true,
+    "seededRepairIsNotLiveModelRepair": true,
+    "seededRepairProbeIsSameClaimCorrectionOnly": true,
+    "dimensionMismatchResubmitIsNotOriginalClaimRepair": true,
+    "coversOriginalTaskClaimStaysFalse": true,
+    "callAloneIsNotAdoption": true,
+    "lifecycleEvidenceIsNotSemanticAdoption": true,
+    "formalKernelChecked": false,
+    "noDollarCostsInvented": true,
+    "packNotPromoted": true,
+    "doNotStartH1": true,
+    "notASecondObligationStack": true,
+    "polynomialCheckerIndependenceIsNotEveryKind": true,
+    "calculatorIsNotTheResearchCenter": true,
+    "calculatorIsNotStandingBanned": true
+  }
+}

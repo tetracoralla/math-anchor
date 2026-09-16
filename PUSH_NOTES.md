@@ -1,7 +1,54 @@
-# Push / PR notes for A0–A4
+# Push / PR notes for A0–A4 / Epoch 1–2
 
-This checkout has **no GitHub authentication** in this environment, so commits
-stay on the local branch. HEAD at start of A0 work:
+## Epoch 1 archive + Epoch 2 shadow verifier (Draft; do not merge)
+
+Branch: `chore/ai-for-math-epoch-2-shadow-verifier` (cut from `main` `fdc5031`).
+Separate **Draft** PR #17: https://github.com/tetracoralla/math-anchor/pull/17
+**Keep Draft. Do not merge. Do not promote method packs. Do not start H1.**
+Epoch 2 is **not complete**. B0/B1 are `model_arms=deferred`. G1–G6 stay
+targets. Promotion decision stays `evidence_insufficient`.
+
+Epoch 1 (docs): method reuse hypothesis rejected (#15
+`no_net_benefit_vs_strong_baselines`); independent verification /
+fail-closed hypothesis survives (#16 `differentiation_observed`). Method
+packs are research samples / dated freeze of H1 (2026-09-15), not
+“永远不做”.
+
+Local commits:
+
+- `0426908` Add Epoch 2 shadow-verifier research scaffold.
+- `82a2341` Archive Research Epoch 1 and record shadow-verifier this-machine results.
+- `f856f86` Record Draft PR #17 URL and local commit SHAs.
+- `16754bd` Fix shadow-verifier honesty nits from PR #17 review.
+
+Epoch 2 (code): `research/shadow_verifier_eval/` pinned protocol, seeded
+corpus, deterministic B2/B3, B0/B1 interface only. Byte table in
+`docs/research/ai-for-math/shadow-verifier.md` is git `0426908` evidence
+(this-machine canonical JSON sizes, not tokens). B0/B1 deferred. G1 3/3 on
+the supported seeded-error tasks is not Epoch 2 completion.
+Honesty nits (`16754bd`): B2 `receiptOutsideModelContext` follows arm
+semantics (false while full feedback is returned); G5 repair probes are
+same-claim corrections only (dimension-mismatch resubmit is not a repair
+of the original claim); `budget` is pinned against in-memory mutation;
+B3 library `modelContextBytes=0` is a wrapper projection — product
+evidence is CLI `--quiet-success` empty stdout. Decision remains
+`evidence_insufficient` / `deterministic_b2_b3_scaffold_ran` /
+`promote=false` / `epoch2Complete=false`. This notes commit records that
+SHA. Open tip is `git rev-parse HEAD` / PR `headRefOid` after this commit
+(not `f856f86`, not `16754bd`).
+
+```sh
+.venv/bin/python research/shadow_verifier_eval/run.py \
+  --output build/shadow-verifier-report.json
+.venv/bin/python -m pytest tests/python/test_shadow_verifier.py
+```
+
+`--include-model-arms` is rejected in this scaffold.
+
+## Earlier A0–A4 notes
+
+This checkout previously had **no GitHub authentication** during A0–A4
+local work. HEAD at start of A0 work:
 `1be6afe70b11c7434a51356c805444eafa12ed80` on `main`.
 
 ## A0+A1 (already on this branch)

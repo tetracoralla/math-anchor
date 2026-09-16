@@ -183,6 +183,13 @@ matched no-provider condition, and main-context growth near or below 10%.
 Silence on successful checkpoints is measured as zero returned content, not as
 proof that the Agent used or benefited from the result.
 
+A pinned no-model scaffold for those four arms lives in
+`research/shadow_verifier_eval/` (note:
+`docs/research/ai-for-math/shadow-verifier.md`). It runs B2/B3 against a
+seeded corruption corpus, reuses the existing obligation runtime, and
+records B0/B1 as `model_arms=deferred`. Gates G1–G6 are targets. That
+scaffold does not complete Epoch 2 and does not invent live-model numbers.
+
 ## Current isolated and direct-host findings
 
 The checked-in suites and experiments now target `0.7.0`. Existing

@@ -293,3 +293,9 @@ The 2026-09-14 trust/fail-closed smoke
 ([trust-failclosed.md](trust-failclosed.md)) is that follow-up: fail-closed vs
 silent-wrong against a fair template. It does not re-ask the latency
 question and does not promote the pack.
+
+Research Epoch 1 is archived in
+[research-epoch-1.md](research-epoch-1.md): method reuse rejected on this
+family; fail-closed survives as a hypothesis. **P0 next** is Epoch 2 Shadow
+Verifier ([shadow-verifier.md](shadow-verifier.md)). H1 remains a dated
+freeze (2026-09-15) pending new workload evidence, not a standing ban.

@@ -7,6 +7,21 @@ and Apple notarization record exist.
 
 ## Unreleased
 
+- Archived **Research Epoch 1** (A0 → trust-failclosed, including PRs #15
+  and #16): method reuse as the primary R&D bet is rejected on the studied
+  family; independent verification / fail-closed survives as a hypothesis.
+  Method packs remain research samples and a dated freeze of H1
+  accumulation (2026-09-15) pending new workload evidence, not a standing
+  ban. See `docs/research/ai-for-math/research-epoch-1.md`.
+- Added an Epoch 2 **shadow-verifier research scaffold**
+  (`research/shadow_verifier_eval/`) with pinned B0–B3 protocol, seeded
+  corruption corpus, deterministic B2/B3 obligation-runtime path (quiet
+  success / `failures_only` / same-claim repair hook), and B0/B1
+  `model_arms=deferred`. B3 library quiet-success 0 bytes is a wrapper
+  projection; product evidence is CLI `--quiet-success`. G5 repair probes
+  are same-claim corrections only. G1–G6 stay targets. Not Epoch 2
+  completion, not a pack promotion, not a fifth MCP tool, not a benefit
+  percentage.
 - Added an in-tree **research proposal** for rational-polynomial finite sums
   (`research/polynomial_finite_sum_proposal/`). It is not a public operation,
   not a fifth MCP tool, and not a supported domain module.

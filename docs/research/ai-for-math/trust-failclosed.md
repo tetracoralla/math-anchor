@@ -228,6 +228,12 @@ Do not invent a savings percentage from the informational milliseconds.
 
 Keep experimental. **Do not start H1.** Do not promote the pack.
 
-A later PR (not this one, 2026-09-14) could attach a Host/UI/MCP hook only if
-a concrete caller needs the fail-closed contrast; that is a proposal, not a
-standing ban and not a Capability promotion.
+Research Epoch 1 is archived in
+[research-epoch-1.md](research-epoch-1.md). **P0 next** is Epoch 2 Shadow
+Verifier ([shadow-verifier.md](shadow-verifier.md)): Host/harness
+checkpoint semantics (`failures_only`, quiet success) as a research
+scaffold, not a Capability promotion and not a standing ban on Host/UI/MCP.
+
+A later PR (not the 2026-09-14 trust/fail-closed PR) may attach a Host hook
+if a concrete caller needs the fail-closed contrast; that remains a
+proposal, not “永远不做”.
