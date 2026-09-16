@@ -4,7 +4,7 @@
 
 Branch: `chore/ai-for-math-epoch-2-live-arm-readiness` (cut from `main`
 `6256276`, PR #17 already merged).
-Separate **Draft** PR (URL recorded after `gh pr create --draft`).
+Separate **Draft** PR #18: https://github.com/tetracoralla/math-anchor/pull/18
 **Keep Draft. Do not merge. Do not promote method packs. Do not start H1.**
 Epoch 2 is **not complete**. B0/B1 remain `model_arms=deferred`. G1–G6 stay
 targets. Dated H1 freeze 2026-09-15 unchanged. No invented live-model
@@ -20,7 +20,12 @@ This PR:
   backend; paid loop still not wired.
 - `natural_tasks/` human-authored prompts with controller-only oracle notes.
 
-Local tip after commits: `git rev-parse HEAD` / PR `headRefOid`.
+Local commits:
+
+- `2d50a3f` Advance Epoch 2 shadow verifier: expanded corpus + live-arm plan skeleton.
+
+Open tip after this notes commit is `git rev-parse HEAD` / PR `headRefOid`
+(not only `2d50a3f`).
 
 ```sh
 .venv/bin/python research/shadow_verifier_eval/run.py \
