@@ -1,6 +1,7 @@
 """Load and validate the human-authored natural_tasks pack for live plans.
 
-Agent-facing prompts stay separate from controller-only oracle notes.
+Agent-facing prompts stay separate from controller-only oracle notes and titles
+(titles often encode judgment and must not enter agentView).
 Missing or invalid pack paths fail closed (no silent skip).
 """
 
@@ -124,10 +125,12 @@ def load_natural_tasks_pack(path: str | Path) -> dict[str, Any]:
         if task_id in controller_oracle:
             _fail(f"duplicate natural-tasks id: {task_id}")
         loaded_ids.append(task_id)
+        # Titles often encode judgment ("wrong step", etc.). Keep them
+        # controller-only; agent view gets a neutral label only.
         agent_view.append(
             {
                 "task": task_id,
-                "title": task.get("title"),
+                "label": f"{task.get('domain') or 'task'}:{task_id}",
                 "domain": task.get("domain"),
                 "prompt": prompt,
                 "sourceFile": name,
@@ -136,6 +139,7 @@ def load_natural_tasks_pack(path: str | Path) -> dict[str, Any]:
         )
         controller_oracle[task_id] = {
             "task": task_id,
+            "title": task.get("title"),
             "sourceFile": name,
             "silentWrongRisk": task.get("silentWrongRisk"),
             "oracleNotes": notes,

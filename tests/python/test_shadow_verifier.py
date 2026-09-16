@@ -609,6 +609,10 @@ AGENT_PROMPT_SPOILERS = (
     "wrong for this claim",
     "Adversarial:",
     "known blind spot",
+    "wrong step result",
+    "wrong step",
+    "silent-wrong",
+    "silent wrong",
 )
 
 
@@ -654,26 +658,55 @@ def test_emit_live_plan_agent_prompts_do_not_contain_spoilers(tmp_path: Path) ->
     payload = json.loads(completed.stdout)
     assert payload == json.loads(out.read_text(encoding="utf-8"))
 
-    agent_prompts: list[str] = []
-    for item in payload.get("prompts") or []:
-        agent_prompts.append(str(item.get("prompt") or ""))
-    for cell in payload.get("cells") or []:
-        agent_prompts.append(str(cell.get("prompt") or ""))
-    natural = payload.get("naturalTasks") or {}
-    for item in (natural.get("agentView") or {}).get("prompts") or []:
-        agent_prompts.append(str(item.get("prompt") or ""))
+    def _agent_view_strings(node: object) -> list[str]:
+        found: list[str] = []
+        if isinstance(node, dict):
+            for value in node.values():
+                found.extend(_agent_view_strings(value))
+        elif isinstance(node, list):
+            for value in node:
+                found.extend(_agent_view_strings(value))
+        elif isinstance(node, str):
+            found.append(node)
+        return found
 
-    assert agent_prompts, "expected agent-facing prompts in live plan"
-    for prompt in agent_prompts:
-        lowered = prompt.lower()
+    agent_strings: list[str] = []
+    for item in payload.get("prompts") or []:
+        agent_strings.extend(_agent_view_strings(item))
+    for cell in payload.get("cells") or []:
+        # Cell metadata may include corruptionKind labels; only scan the
+        # agent-facing prompt field here (protocol cells are seeded tasks).
+        agent_strings.append(str(cell.get("prompt") or ""))
+    natural = payload.get("naturalTasks") or {}
+    agent_strings.extend(_agent_view_strings(natural.get("agentView") or {}))
+
+    assert agent_strings, "expected agent-facing strings in live plan"
+    for blob in agent_strings:
+        lowered = blob.lower()
         for spoiler in AGENT_PROMPT_SPOILERS:
             assert spoiler.lower() not in lowered, (
-                f"agent prompt leaked spoiler {spoiler!r}: {prompt!r}"
+                f"agent-visible text leaked spoiler {spoiler!r}: {blob!r}"
             )
 
-    # Controller-only judgment text may still live under gradingOracleFields.
-    oracle_blob = json.dumps(payload.get("gradingOracleFields") or {}).lower()
+    # Judgment titles must not appear under naturalTasks.agentView.
+    natural_agent = json.dumps(natural.get("agentView") or {}).lower()
+    assert "wrong step result" not in natural_agent
+    assert "title" not in {
+        key
+        for item in (natural.get("agentView") or {}).get("prompts") or []
+        for key in item
+    }
+
+    # Controller-only judgment text may still live under gradingOracleFields /
+    # naturalTasks.controllerOracle (including descriptive titles).
+    oracle_blob = json.dumps(
+        {
+            "grading": payload.get("gradingOracleFields") or {},
+            "naturalController": natural.get("controllerOracle") or {},
+        }
+    ).lower()
     assert "unit kind is wrong" in oracle_blob or "controlleroraclenote" in oracle_blob
+    assert "wrong step result" in oracle_blob
 
 
 def test_emit_live_plan_overwrite_emits_single_error_json(tmp_path: Path) -> None:
