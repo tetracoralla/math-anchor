@@ -1,0 +1,26 @@
+{
+  "id": "nt-kinematics-step-reuse",
+  "title": "Projectile range reusing a prior legal but wrong step result",
+  "domain": "kinematics",
+  "prompt": "A projectile is launched at speed v0 = 20 m/s from flat ground at angle θ = 45°. Step 1: note that the identity (v0 cos θ)(v0 sin θ) = (1/2) v0^2 sin(2θ) is a legal rearrangement used in range derivations. Step 2: someone hands you the intermediate claim that the flight time is t = v0 / g (a formula that appears in vertical throw-up-and-down bookkeeping). Using that handed flight time with horizontal speed v0 cos θ, report the range. Then recompute the range with the flight time 2 v0 sin θ / g and compare.",
+  "silentWrongRisk": "Step-N result replaced with another legal kinematics formula that is wrong for this flat-ground angled launch claim; the wrong range can still look dimensionally fine.",
+  "oracleNotes": {
+    "outsideAgentView": true,
+    "controllerOnly": true,
+    "intendedFailureModes": [
+      "accepting t = v0/g for angled flat-ground flight",
+      "producing a numeric range from the wrong t without flagging it",
+      "treating dimensional legality of v0/g as proof for this claim"
+    ],
+    "referenceApproach": "Correct flat-ground time is 2 v0 sinθ / g; range is v0^2 sin(2θ)/g. The handed t = v0/g is a different legal expression reused out of place. At θ=45°, sinθ=√2/2 so correct t = v0√2/g ≠ v0/g. No live score.",
+    "arithmeticDisagreementCheck": {
+      "v0": 20,
+      "thetaDegrees": 45,
+      "g": 9.8,
+      "wrongFlightTimeExpression": "v0 / g",
+      "correctFlightTimeExpression": "2 * v0 * sin(theta) / g",
+      "note": "At 30° sinθ=1/2 so the two expressions coincide; 45° is required so accepting t=v0/g is a real failure mode."
+    },
+    "liveScore": null
+  }
+}

@@ -27,12 +27,20 @@ from research.shadow_verifier_eval.model_interface import (
     model_arm_contract,
     reject_include_model_arms,
 )
+from research.shadow_verifier_eval.live_runner import (
+    LIVE_PLAN_KIND,
+    build_live_four_arm_plan,
+    register_live_backend,
+)
+from research.shadow_verifier_eval.natural_tasks_loader import load_natural_tasks_pack
+from math_anchor.errors import CalculatorError
 from research.shadow_verifier_eval.protocol import (
     ALL_TASKS,
     ARM_B0,
     ARM_B1,
     ARM_B2,
     ARM_B3,
+    COMPLETENESS_TASKS,
     CONTROL_TASKS,
     CORRUPTION_KIND_IDS,
     DEFERRED_ARMS,
@@ -44,11 +52,16 @@ from research.shadow_verifier_eval.protocol import (
     REPORT_KIND,
     RUNNABLE_ARMS,
     SUPPORTED_ERROR_TASKS,
+    TASK_ASSUMPTION_SWAP,
     TASK_CONTROL_POLY,
     TASK_DEPENDENCY,
     TASK_DIMENSION_MISMATCH,
     TASK_DOMAIN_OVERSHOOT,
+    TASK_ROUNDING,
     TASK_SIGN_FLIP,
+    TASK_SI_PREFIX_BLIND,
+    TASK_STEP_N_LEGAL_WRONG,
+    TASK_UNIT_SCALE,
     TASK_UNSUPPORTED,
     load_protocol,
     protocol_digest,
@@ -66,6 +79,7 @@ HARNESS_FILES = (
     ROOT / "research" / "shadow_verifier_eval" / "smoke.py",
     ROOT / "research" / "shadow_verifier_eval" / "run.py",
     ROOT / "research" / "shadow_verifier_eval" / "model_interface.py",
+    ROOT / "research" / "shadow_verifier_eval" / "live_runner.py",
 )
 
 
@@ -171,7 +185,12 @@ def test_b2_b3_detect_supported_seeded_errors(report: dict) -> None:
         TASK_SIGN_FLIP: "falsified",
         TASK_DOMAIN_OVERSHOOT: "falsified",
         TASK_DIMENSION_MISMATCH: "falsified",
+        TASK_ROUNDING: "falsified",
+        TASK_UNIT_SCALE: "falsified",
+        TASK_ASSUMPTION_SWAP: "falsified",
+        TASK_STEP_N_LEGAL_WRONG: "falsified",
     }
+    assert tuple(expected_status) == SUPPORTED_ERROR_TASKS
     for task_id, status in expected_status.items():
         for arm in RUNNABLE_ARMS:
             cell = _cell(report, arm, task_id)
@@ -318,6 +337,10 @@ def test_structural_probes_reuse_obligation_binding_and_cli(report: dict) -> Non
     assert failure["ok"] is True
     assert failure["exitCode"] == 1
     assert failure["obligationIds"] == ["sign-flip"]
+    for key in ("roundingSneak", "unitScaleMismatch", "assumptionSwap", "stepNLegalWrong"):
+        assert probes[key]["ok"] is True
+        assert probes[key]["g1SupportedSeededError"] is True
+        assert probes[key]["status"] == "falsified"
 
 
 def test_gates_remain_targets_and_epoch2_is_not_complete(report: dict) -> None:
@@ -328,8 +351,8 @@ def test_gates_remain_targets_and_epoch2_is_not_complete(report: dict) -> None:
         assert gates[gate_id]["epoch2GateMet"] is False
         assert gates[gate_id]["status"] in {"target", "target-deferred"}
     g1 = gates["G1"]["thisMachine"]
-    assert g1["B2"]["detected"] == g1["B2"]["total"] == 3
-    assert g1["B3"]["detected"] == g1["B3"]["total"] == 3
+    assert g1["B2"]["detected"] == g1["B2"]["total"] == 7
+    assert g1["B3"]["detected"] == g1["B3"]["total"] == 7
     assert g1["bindingProbes"]["detected"] == 2
     assert gates["G1"]["thisMachineDoesNotMeetEpoch2Gate"] is True
     assert gates["G2"]["thisMachine"] is None
@@ -455,3 +478,305 @@ def test_runner_exit_zero_on_scaffold_success(tmp_path: Path) -> None:
     assert payload["decision"]["epoch2Complete"] is False
     assert output.is_file()
     assert (tmp_path / "receipts" / "B3-control-polynomial-identity.receipt.json").is_file()
+
+
+def test_expanded_corpus_marks_g1_vs_completeness(report: dict) -> None:
+    for task_id in SUPPORTED_ERROR_TASKS:
+        for arm in RUNNABLE_ARMS:
+            cell = _cell(report, arm, task_id)
+            assert cell["g1SupportedSeededError"] is True
+            assert cell["detected"] is True
+            assert cell["primaryStatus"] == "falsified"
+    blind = _cell(report, ARM_B2, TASK_SI_PREFIX_BLIND)
+    assert blind["g1SupportedSeededError"] is False
+    assert blind["primaryStatus"] == "checked"
+    assert blind["detected"] is False
+    assert TASK_SI_PREFIX_BLIND in COMPLETENESS_TASKS
+    assert TASK_SI_PREFIX_BLIND not in SUPPORTED_ERROR_TASKS
+    assert len(SUPPORTED_ERROR_TASKS) == 7
+
+
+def test_emit_live_plan_has_slots_and_no_invented_numbers(tmp_path: Path) -> None:
+    plan = build_live_four_arm_plan(
+        confirm_model_runs=12,
+        natural_tasks_pack="research/shadow_verifier_eval/natural_tasks",
+    ).to_dict()
+    assert plan["kind"] == LIVE_PLAN_KIND
+    assert plan["modelArms"] == MODEL_ARMS_DEFERRED
+    assert plan["honesty"]["noModelCallsMade"] is True
+    assert plan["honesty"]["noLiveNumbersInvented"] is True
+    assert plan["liveExecutionAllowed"] is False
+    assert plan["plannedModelCalls"] == 12
+    assert plan["tokenCostRecordSlots"]["finalAccuracy"] is None
+    assert plan["tokenCostRecordSlots"]["dollarCost"] is None
+    assert plan["tokenCostRecordSlots"]["liveQualityDelta"] is None
+    assert plan["howToPlugBackend"]["interface"].endswith("LiveModelBackend")
+    assert any(cell["arm"] == ARM_B0 for cell in plan["cells"])
+    assert any(cell["arm"] == ARM_B1 for cell in plan["cells"])
+    assert any(cell["arm"] == ARM_B3 for cell in plan["cells"])
+    for cell in plan["cells"]:
+        assert cell["liveQualityDelta"] is None
+        assert cell["finalAccuracy"] is None
+        assert cell["dollarCost"] is None
+    out = tmp_path / "live-plan.json"
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(RUNNER),
+            "--emit-live-plan",
+            "--natural-tasks-pack",
+            "research/shadow_verifier_eval/natural_tasks",
+            "--output",
+            str(out),
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    payload = json.loads(completed.stdout)
+    assert payload["kind"] == LIVE_PLAN_KIND
+    assert out.is_file()
+    blob = json.dumps(payload).lower()
+    assert "usd" not in blob
+    assert "savings %" not in blob
+
+
+def test_include_model_arms_still_cannot_invent_numbers() -> None:
+    register_live_backend(None)
+    with pytest.raises(ModelArmDeferredError):
+        run_smoke(include_model_arms=True, confirm_live_budget=True, confirm_model_runs=3)
+
+    class _DummyBackend:
+        def complete(self, prompt, *, arm_id, task_id, tools=None):
+            return {"text": "unused", "usage": {"totalTokens": 1}}
+
+    register_live_backend(_DummyBackend())
+    try:
+        with pytest.raises(ModelArmDeferredError) as raised:
+            run_smoke(
+                include_model_arms=True,
+                confirm_live_budget=True,
+                confirm_model_runs=3,
+            )
+        message = str(raised.value.message).lower()
+        assert "not wired" in message or "deferred" in message
+        details = raised.value.details or {}
+        assert details.get("liveQualityDelta") is None
+        assert details.get("finalAccuracy") is None
+        assert details.get("dollarCost") is None
+        completed = subprocess.run(
+            [
+                sys.executable,
+                str(RUNNER),
+                "--include-model-arms",
+                "--confirm-live-budget",
+                "--confirm-model-runs",
+                "3",
+            ],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert completed.returncode == 2
+        payload = json.loads(completed.stdout)
+        assert payload["error"]["code"] == "E_INPUT"
+        err_blob = json.dumps(payload).lower()
+        assert "usd" not in err_blob
+        assert payload["error"].get("details", {}).get("finalAccuracy") is None
+    finally:
+        register_live_backend(None)
+
+
+def test_natural_tasks_pack_has_oracle_outside_agent_view() -> None:
+    pack = ROOT / "research" / "shadow_verifier_eval" / "natural_tasks"
+    index = json.loads((pack / "index.json").read_text(encoding="utf-8"))
+    assert index["liveScores"] is None
+    assert index["epoch2Complete"] is False
+    for name in index["tasks"]:
+        task = json.loads((pack / name).read_text(encoding="utf-8"))
+        assert isinstance(task["prompt"], str) and task["prompt"]
+        notes = task["oracleNotes"]
+        assert notes["outsideAgentView"] is True
+        assert notes["controllerOnly"] is True
+        assert notes["liveScore"] is None
+
+
+AGENT_PROMPT_SPOILERS = (
+    "unit kind is wrong",
+    "wrong for this claim",
+    "Adversarial:",
+    "known blind spot",
+    "wrong step result",
+    "wrong step",
+    "silent-wrong",
+    "silent wrong",
+)
+
+
+def test_kinematics_wrong_and_correct_flight_times_disagree() -> None:
+    """P2-1: at 30° sinθ=1/2 so t=v0/g matches 2 v0 sinθ/g; use 45°."""
+    import math
+
+    pack = ROOT / "research" / "shadow_verifier_eval" / "natural_tasks"
+    task = json.loads((pack / "nt-kinematics-step-reuse.json").read_text(encoding="utf-8"))
+    check = task["oracleNotes"]["arithmeticDisagreementCheck"]
+    assert check["thetaDegrees"] == 45
+    v0 = float(check["v0"])
+    g = float(check["g"])
+    theta = math.radians(float(check["thetaDegrees"]))
+    wrong = v0 / g
+    correct = 2.0 * v0 * math.sin(theta) / g
+    assert abs(wrong - correct) > 1e-9
+    assert "45" in task["prompt"]
+    # Guard against regressing to the coincident 30° case.
+    coincident = 2.0 * v0 * math.sin(math.radians(30.0)) / g
+    assert abs(wrong - coincident) < 1e-9
+
+
+def test_emit_live_plan_agent_prompts_do_not_contain_spoilers(tmp_path: Path) -> None:
+    """P2-2: assert on actual --emit-live-plan output, not only outsideAgentView flags."""
+    out = tmp_path / "live-plan.json"
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(RUNNER),
+            "--emit-live-plan",
+            "--natural-tasks-pack",
+            "research/shadow_verifier_eval/natural_tasks",
+            "--output",
+            str(out),
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr + completed.stdout
+    payload = json.loads(completed.stdout)
+    assert payload == json.loads(out.read_text(encoding="utf-8"))
+
+    def _agent_view_strings(node: object) -> list[str]:
+        found: list[str] = []
+        if isinstance(node, dict):
+            for value in node.values():
+                found.extend(_agent_view_strings(value))
+        elif isinstance(node, list):
+            for value in node:
+                found.extend(_agent_view_strings(value))
+        elif isinstance(node, str):
+            found.append(node)
+        return found
+
+    agent_strings: list[str] = []
+    for item in payload.get("prompts") or []:
+        agent_strings.extend(_agent_view_strings(item))
+    for cell in payload.get("cells") or []:
+        # Cell metadata may include corruptionKind labels; only scan the
+        # agent-facing prompt field here (protocol cells are seeded tasks).
+        agent_strings.append(str(cell.get("prompt") or ""))
+    natural = payload.get("naturalTasks") or {}
+    agent_strings.extend(_agent_view_strings(natural.get("agentView") or {}))
+
+    assert agent_strings, "expected agent-facing strings in live plan"
+    for blob in agent_strings:
+        lowered = blob.lower()
+        for spoiler in AGENT_PROMPT_SPOILERS:
+            assert spoiler.lower() not in lowered, (
+                f"agent-visible text leaked spoiler {spoiler!r}: {blob!r}"
+            )
+
+    # Judgment titles must not appear under naturalTasks.agentView.
+    natural_agent = json.dumps(natural.get("agentView") or {}).lower()
+    assert "wrong step result" not in natural_agent
+    assert "title" not in {
+        key
+        for item in (natural.get("agentView") or {}).get("prompts") or []
+        for key in item
+    }
+
+    # Controller-only judgment text may still live under gradingOracleFields /
+    # naturalTasks.controllerOracle (including descriptive titles).
+    oracle_blob = json.dumps(
+        {
+            "grading": payload.get("gradingOracleFields") or {},
+            "naturalController": natural.get("controllerOracle") or {},
+        }
+    ).lower()
+    assert "unit kind is wrong" in oracle_blob or "controlleroraclenote" in oracle_blob
+    assert "wrong step result" in oracle_blob
+
+
+def test_emit_live_plan_overwrite_emits_single_error_json(tmp_path: Path) -> None:
+    """P2-3: refusing overwrite must emit exactly one JSON object on stdout."""
+    out = tmp_path / "live-plan.json"
+    out.write_text("{}\n", encoding="utf-8")
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(RUNNER),
+            "--emit-live-plan",
+            "--output",
+            str(out),
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert completed.returncode == 2
+    # json.loads must succeed without Extra data (single object only).
+    payload = json.loads(completed.stdout)
+    assert payload["status"] == "error"
+    assert payload["error"]["code"] == "E_INPUT"
+    assert "overwrite" in payload["error"]["message"].lower()
+    # Guard: stdout must not contain a second top-level JSON value.
+    stripped = completed.stdout.strip()
+    assert stripped.startswith("{")
+    # After one successful loads, no trailing non-whitespace remains that
+    # would form another JSON value — already enforced by json.loads above;
+    # also assert the success plan kind is absent.
+    assert LIVE_PLAN_KIND not in completed.stdout
+
+
+def test_natural_tasks_pack_loads_into_live_plan() -> None:
+    pack = "research/shadow_verifier_eval/natural_tasks"
+    loaded = load_natural_tasks_pack(ROOT / pack)
+    assert loaded["honesty"]["loadedAndValidated"] is True
+    assert len(loaded["taskIds"]) == 4
+    assert len(loaded["agentView"]["prompts"]) == 4
+    assert set(loaded["controllerOracle"]["byTask"]) == set(loaded["taskIds"])
+
+    plan = build_live_four_arm_plan(natural_tasks_pack=pack).to_dict()
+    assert plan["naturalTasksPack"] == pack
+    assert plan["naturalTasks"] is not None
+    assert plan["honesty"]["naturalTasksLoaded"] is True
+    natural_ids = {item["task"] for item in plan["naturalTasks"]["agentView"]["prompts"]}
+    assert "nt-kinematics-step-reuse" in natural_ids
+    plan_prompt_tasks = {item["task"] for item in plan["prompts"] if item.get("naturalTask")}
+    assert natural_ids == plan_prompt_tasks
+
+
+def test_natural_tasks_pack_missing_path_fails_closed(tmp_path: Path) -> None:
+    missing = tmp_path / "no-such-pack"
+    with pytest.raises(CalculatorError, match="does not exist"):
+        load_natural_tasks_pack(missing)
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(RUNNER),
+            "--emit-live-plan",
+            "--natural-tasks-pack",
+            str(missing),
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert completed.returncode == 2
+    payload = json.loads(completed.stdout)
+    assert payload["status"] == "error"
+    assert payload["error"]["code"] == "E_INPUT"

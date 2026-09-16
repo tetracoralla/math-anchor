@@ -2,14 +2,33 @@
 
 This note is a research report, not a product Capability, not an overall
 benefit percentage, and **not Epoch 2 completion**. Method packs are **not**
-promoted. Dated research status: experimental draft **2026-09-15**. Do not
-start H1.
+promoted. Dated research status: experimental draft **2026-09-16**. Do not
+start H1. Dated H1 freeze **2026-09-15** is unchanged.
 
 Green harness tests are not completion of this research claim. Live B0/B1
 model numbers are **not invented**. `model_arms=deferred`.
 
 Gates **G1–G6 are targets**. Epoch 2 is not done until live four-arm model
 evidence exists.
+
+## What this PR adds (Epoch 2 still incomplete)
+
+Advances live-arm **readiness** and an expanded silent-wrong corpus. Still
+**experimental**. **No promote.** Do not start H1.
+
+1. **Expanded deterministic corpus (B2/B3):** rounding sneak into an exact
+   chain; unit-kind mismatch that still looks numeric; assumption swap on a
+   look-alike identity; step-N result replaced with another legal but
+   wrong-for-this-claim value. Plus an SI-prefix scale **completeness**
+   blind-spot cell (provider returns `checked`; not G1).
+2. **Live-arm runner skeleton:** `LiveFourArmPlan`, `--emit-live-plan` (no
+   model calls), fail-closed `--include-model-arms` unless budget confirm +
+   registered `LiveModelBackend`. Paid loop is **not** wired; numbers are
+   not invented.
+3. **Natural-error-shaped task pack:** `research/shadow_verifier_eval/natural_tasks/`
+   human-authored multi-step prompts with controller-only oracle notes. No
+   live scores.
+
 
 ## Progressive assurance
 
@@ -32,8 +51,8 @@ without a second stack, while recording B0/B1 as deferred live-model arms?
 
 | Arm | What it is | This smoke |
 | --- | --- | --- |
-| **B0** | Model-only, no mathematical provider | **deferred** (`model_arms=deferred`) |
-| **B1** | Model + current MCP (`math.search` / `math.describe` / `math.run` / `math.batch`), voluntary tool use. No fifth tool. A correct answer without a target call is not adoption | **deferred** |
+| **B0** | Model-only, no mathematical provider | **deferred** (`model_arms=deferred`; plan via `--emit-live-plan`) |
+| **B1** | Model + current MCP (`math.search` / `math.describe` / `math.run` / `math.batch`), voluntary tool use. No fifth tool. A correct answer without a target call is not adoption | **deferred** (same plan emitter) |
 | **B2** | Explicit `math-anchor.obligation-set.v0.1` request, `responseMode=full` | **ran** (library) |
 | **B3** | Host/harness shadow checkpoint: full receipt on disk; library quiet success **projects** zero model-context bytes when checked; `failures_only` only when action is required; seeded same-claim repair-loop hook | **ran** (library + CLI probes) |
 
@@ -94,13 +113,24 @@ Unsupported arm/task/gate/honesty/model/budget/live-command overrides are reject
 .venv/bin/python -m pytest tests/python/test_shadow_verifier.py
 ```
 
-`--include-model-arms` is **rejected** in this scaffold. Later live command
-(not implemented here; `N` is a written planned-call count; do not start
-without a budget; do not invent numbers):
+Emit a live four-arm JSON plan (**no model calls**):
+
+```sh
+.venv/bin/python research/shadow_verifier_eval/run.py \
+  --emit-live-plan \
+  --natural-tasks-pack research/shadow_verifier_eval/natural_tasks \
+  --output build/shadow-verifier-live-plan.json
+```
+
+`--include-model-arms` stays **fail-closed** unless `--confirm-live-budget`
+(or `MATH_ANCHOR_SHADOW_LIVE=1`), `--confirm-model-runs N` with `N > 0`, and
+a registered `LiveModelBackend`. Even then this PR does not wire the paid
+loop; it still rejects without inventing numbers. Later live command shape:
 
 ```sh
 .venv/bin/python research/shadow_verifier_eval/run.py \
   --include-model-arms \
+  --confirm-live-budget \
   --confirm-model-runs N \
   --output build/shadow-verifier-live-report.json
 ```
@@ -138,8 +168,13 @@ Fixed before looking at arm outcomes:
 | sign-flip | `(x+y)^2` vs `x^2 - 2xy + y^2` | `falsified` | yes |
 | domain-overshoot-definedness | `(x^2-1)/(x-1)` vs `x+1`, strict real | `falsified` | yes |
 | dimension-mismatch | distance vs speed + time | `falsified` | yes |
+| rounding-in-exact-chain | `1/3` vs `0.333333` (exact chain context) | `falsified` | yes |
+| unit-scale-mismatch | pressure = force/area with area as meter | `falsified` | yes |
+| assumption-swapped | `sqrt(x)^2 = x` for all reals, strict | `falsified` | yes |
+| step-n-legal-wrong-value | `(x+y)^2` claimed as `x^2 - y^2` after legal DoS step | `falsified` | yes |
 | unsupported-kind | unregistered sheaf cohomology | `unsupported` | no (completeness) |
 | dependency-blocked | identity depending on unsupported | `unknown` | no (completeness) |
+| si-prefix-scale-blind-spot | work = force*distance with kilometer | `checked` | no (completeness / known blind spot) |
 
 Structural probes (not comparison cells):
 
@@ -149,6 +184,8 @@ Structural probes (not comparison cells):
   `certificate_rejected`.
 - Stale/swapped: producer `(x+y)^2` certificate bound to `(x-y)^2` identity
   → `certificate_rejected`.
+- Rounding sneak / unit-kind mismatch / assumption swap / step-N legal-wrong:
+  obligation runtime falsifies (same stack; not a parallel checker).
 - CLI `--quiet-success` on a valid identity: exit 0, empty stdout, receipt
   on disk.
 - CLI `--quiet-success` on sign-flip: exit 1, `failures_only`
@@ -158,6 +195,18 @@ Structural probes (not comparison cells):
 No dollar costs. No savings percentage.
 
 ## Results (this machine, deterministic B2/B3)
+
+Expanded-corpus tip (this PR): G1 supported seeded errors B2 **7/7**, B3
+**7/7**, binding probes 2/2, plus adversarial structural probes all
+falsified. SI-prefix blind-spot stayed `checked` as pre-registered
+(completeness). Decision remains `evidence_insufficient` /
+`deterministic_b2_b3_scaffold_ran` / `promote=false` /
+`epoch2Complete=false`. Quote `environment.gitHead` from the report on this
+tip. **Still not Epoch 2 G1.**
+
+Historical table below is harness commit `0426908` evidence for the original
+seven-task corpus (three supported seeded errors). Byte counts there are
+not re-claimed for the new cells.
 
 B0/B1 cells are `status=deferred`, `model_arms=deferred`, with
 `liveQualityDelta` / `finalAccuracy` / `acceptedSeededError` all `null`.
@@ -201,10 +250,13 @@ Structural:
 - CLI quiet success: 0 stdout bytes, receipt `checked=1`
 - CLI sign-flip: exit 1, failures_only `["sign-flip"]`
 
-This-machine G1 on the three **supported** seeded error tasks: B2 3/3, B3
-3/3, binding probes 2/2. **That does not meet Epoch 2 G1.** G1 requires live
-four-arm evidence. G2 and G6 were not measured. G3 false rejects on the two
-controls: 0. G4 ≤10% vs B0: not measured.
+Historical harness commit `0426908` measured G1 on the original three
+supported seeded-error tasks (B2 3/3, B3 3/3, binding probes 2/2). This PR
+expands the supported set to **seven** tasks; quote `environment.gitHead` and
+gate totals from a report generated on this tip. **That still does not meet
+Epoch 2 G1.** G1 requires live four-arm evidence. G2 and G6 were not
+measured. G3 false rejects on the two controls: 0. G4 ≤10% vs B0: not
+measured. SI-prefix blind-spot is completeness-only (expected `checked`).
 
 ## Decision (this smoke only)
 
@@ -253,6 +305,9 @@ Do not invent a savings percentage or a model quality delta.
 
 Keep experimental. **Do not start H1.** Do not promote packs.
 
-A later paid four-arm run is justified only with a written budget, core
-conformance still green, this B2/B3 scaffold still matching, and
-`--confirm-model-runs N`. Until that evidence exists, Epoch 2 remains open.
+A later paid four-arm run is justified only with a written budget
+(`--confirm-live-budget` or `MATH_ANCHOR_SHADOW_LIVE=1`), a registered
+`LiveModelBackend`, core conformance still green, this B2/B3 scaffold still
+matching, and `--confirm-model-runs N`. Use `--emit-live-plan` and
+`natural_tasks/` to prepare prompts/oracle notes without calls. Until live
+evidence exists, Epoch 2 remains open.

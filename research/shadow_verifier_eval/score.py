@@ -311,6 +311,14 @@ def decide(
         problems.append("CLI --quiet-success did not emit empty stdout")
     if probes.get("cliFailuresOnlyOnFail", {}).get("ok") is not True:
         problems.append("CLI failure path did not return failures_only attention")
+    if probes.get("roundingSneak", {}).get("ok") is not True:
+        problems.append("rounding-sneak adversarial probe did not falsify")
+    if probes.get("unitScaleMismatch", {}).get("ok") is not True:
+        problems.append("unit-scale-mismatch adversarial probe did not falsify")
+    if probes.get("assumptionSwap", {}).get("ok") is not True:
+        problems.append("assumption-swap adversarial probe did not falsify")
+    if probes.get("stepNLegalWrong", {}).get("ok") is not True:
+        problems.append("step-N legal-wrong adversarial probe did not falsify")
 
     targeted = bool(problems)
     return {

@@ -1,8 +1,9 @@
-"""B0/B1 live-model interfaces. Not executed in this smoke.
+"""B0/B1 live-model interfaces. Not executed without budget + backend.
 
 This module records the matched four-arm contract for a later paid run.
-It does not call a model, does not invent quality deltas, and rejects
-`--include-model-arms` until a real runner exists.
+It does not call a model, does not invent quality deltas, and keeps
+`--include-model-arms` fail-closed unless live_runner authorization passes
+*and* a backend loop is wired (still not in this PR).
 """
 
 from __future__ import annotations
@@ -11,6 +12,10 @@ from typing import Any
 
 from math_anchor.errors import CalculatorError
 
+from .live_runner import (
+    ModelArmNotReadyError,
+    reject_or_require_live_arms,
+)
 from .protocol import (
     ARM_B0,
     ARM_B1,
@@ -22,7 +27,7 @@ from .protocol import (
 
 
 class ModelArmDeferredError(CalculatorError):
-    """Live B0/B1 arms are not implemented in this scaffold."""
+    """Live B0/B1 arms are deferred / fail-closed in this scaffold."""
 
 
 def model_arm_contract(arm_id: str) -> dict[str, Any]:
@@ -99,21 +104,33 @@ def deferred_cell(arm_id: str, task: dict[str, Any], *, protocol: dict[str, Any]
         "interface": model_arm_contract(arm_id),
         "laterCommand": commands.get("plannedLiveFourArm"),
         "laterCommandNote": commands.get("plannedLiveFourArmNote"),
+        "emitLivePlanCommand": commands.get("emitLivePlan"),
         "liveQualityDelta": None,
         "acceptedSeededError": None,
         "finalAccuracy": None,
+        "dollarCost": None,
     }
 
 
-def reject_include_model_arms(*, protocol: dict[str, Any] | None = None) -> None:
-    commands = live_model_commands(protocol)
-    raise ModelArmDeferredError(
-        "E_INPUT",
-        commands.get("includeModelArmsRejectedBecause")
-        or "live B0/B1 runner is not implemented; model_arms=deferred",
-        {
-            "modelArms": MODEL_ARMS_DEFERRED,
-            "plannedCommand": commands.get("plannedLiveFourArm"),
-            "note": commands.get("plannedLiveFourArmNote"),
-        },
-    )
+def reject_include_model_arms(
+    *,
+    protocol: dict[str, Any] | None = None,
+    confirm_live_budget: bool = False,
+    confirm_model_runs: int | None = None,
+) -> None:
+    """Fail-closed gate for --include-model-arms.
+
+    Even with budget + backend, this PR does not wire the paid loop, so the
+    call still raises without inventing numbers.
+    """
+
+    try:
+        reject_or_require_live_arms(
+            include_model_arms=True,
+            confirm_live_budget=confirm_live_budget,
+            confirm_model_runs=confirm_model_runs,
+            protocol=protocol,
+        )
+    except ModelArmNotReadyError as error:
+        # Surface as ModelArmDeferredError for existing callers/tests.
+        raise ModelArmDeferredError(error.code, error.message, error.details) from error

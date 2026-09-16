@@ -1,0 +1,18 @@
+{
+  "id": "nt-circuit-assumption-swap",
+  "title": "RC discharge under swapped ideal-capacitor assumption",
+  "domain": "electrical-engineering",
+  "prompt": "An RC series circuit has R = 10 kΩ and C = 100 μF, charged to 12 V, then discharged through R alone. Using V(t) = V0 e^{-t/(RC)}, find V(1 s). Also state whether the same closed form still holds if the capacitor is ideal but the resistor has a parallel leakage path of 1 MΩ that was omitted from the schematic you were given.",
+  "silentWrongRisk": "Assumption swap: the exponential formula looks fine on the certificate of an ideal single-R discharge while a hidden leakage path changes the effective resistance.",
+  "oracleNotes": {
+    "outsideAgentView": true,
+    "controllerOnly": true,
+    "intendedFailureModes": [
+      "computing V(1) under the ideal formula and asserting it for the leaked circuit",
+      "ignoring that parallel leakage changes τ",
+      "treating the schematic omission as irrelevant because the formula 'checked'"
+    ],
+    "referenceApproach": "Ideal τ = RC = 1 s so V(1)=12/e V under the stated model. With 1 MΩ leakage in parallel with the discharge path modeling, the effective resistance differs; the ideal closed form is not automatically valid. No live score.",
+    "liveScore": null
+  }
+}

@@ -2,12 +2,13 @@
 
 Research-only. **Not** a public Capability, **not** a benefit percentage,
 **not** Epoch 2 completion, **not** a method-pack promotion. Dated research
-status: experimental draft 2026-09-15. Do not start H1.
+status: experimental draft 2026-09-16. Do not start H1. Dated H1 freeze
+2026-09-15 is unchanged.
 
 Pre-registered no-model scaffold of:
 
-- **B0:** model-only (no math provider) — interface recorded; `model_arms=deferred`
-- **B1:** model + current four-tool MCP, voluntary use — interface recorded; deferred
+- **B0:** model-only (no math provider) — interface + live plan emission; `model_arms=deferred`
+- **B1:** model + current four-tool MCP, voluntary use — interface + live plan; deferred
 - **B2:** explicit `math-anchor.obligation-set.v0.1` (full feedback)
 - **B3:** Host/harness shadow checkpoint (`failures_only`, quiet success as a
   library wrapper projection of zero model-context bytes when checked — product
@@ -19,6 +20,17 @@ B2/B3 reuse the existing obligation runtime. They are not a second stack.
 Gates G1–G6 are **targets**. Live four-arm evidence is required before Epoch 2
 can be called done.
 
+## This PR advances (still incomplete)
+
+1. Expanded deterministic adversarial corpus (rounding sneak, unit-kind
+   mismatch, assumption swap, step-N legal-wrong) plus an SI-prefix
+   completeness blind-spot cell.
+2. Live-arm runner skeleton (`live_runner.py`): `LiveFourArmPlan`,
+   `--emit-live-plan`, fail-closed `--include-model-arms` unless budget
+   confirm + registered `LiveModelBackend` (paid loop still not wired).
+3. Human-authored `natural_tasks/` pack for later live B0/B1 (oracle notes
+   outside agent view; no live scores).
+
 ## Command
 
 ```sh
@@ -28,17 +40,32 @@ can be called done.
 
 `--output` refuses to overwrite. `build/` is gitignored.
 
-`--include-model-arms` is **rejected** in this scaffold (`model_arms=deferred`).
-Later live command (not implemented here; do not invent numbers):
+Emit a live four-arm JSON plan (**no model calls**, no invented numbers):
+
+```sh
+.venv/bin/python research/shadow_verifier_eval/run.py \
+  --emit-live-plan \
+  --natural-tasks-pack research/shadow_verifier_eval/natural_tasks \
+  --output build/shadow-verifier-live-plan.json
+```
+
+`--include-model-arms` stays **fail-closed** unless:
+
+1. `--confirm-live-budget` or `MATH_ANCHOR_SHADOW_LIVE=1`
+2. `--confirm-model-runs N` with `N > 0`
+3. a pluggable `LiveModelBackend` is registered via
+   `register_live_backend(...)`
+
+Even then, this PR does **not** wire the paid execution loop; it still
+rejects without inventing numbers. Later live command shape:
 
 ```sh
 .venv/bin/python research/shadow_verifier_eval/run.py \
   --include-model-arms \
+  --confirm-live-budget \
   --confirm-model-runs N \
   --output build/shadow-verifier-live-report.json
 ```
-
-`N` is a written planned-call count. Do not start a paid run without a budget.
 
 Tests:
 

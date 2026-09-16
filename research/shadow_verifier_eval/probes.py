@@ -300,6 +300,167 @@ def cli_failures_only_on_fail_probe(tmp_dir: Path) -> dict[str, Any]:
     }
 
 
+
+def _seeded_obligation_probe(
+    *,
+    name: str,
+    corruption_kind: str,
+    request: dict[str, Any],
+    primary_id: str,
+    expected_status: str,
+    g1_supported: bool,
+) -> dict[str, Any]:
+    feedback, receipt = check_obligation_set(request)
+    entry = next(
+        (item for item in receipt["obligations"] if item.get("id") == primary_id),
+        None,
+    )
+    if entry is None:
+        return {
+            "ok": False,
+            "name": name,
+            "corruptionKind": corruption_kind,
+            "g1SupportedSeededError": g1_supported,
+            "reason": "primary_obligation_missing",
+        }
+    detail = entry.get("detail") if isinstance(entry.get("detail"), dict) else {}
+    matched = entry.get("status") == expected_status
+    return {
+        "ok": matched,
+        "name": name,
+        "corruptionKind": corruption_kind,
+        "g1SupportedSeededError": g1_supported,
+        "primaryObligationId": primary_id,
+        "status": entry.get("status"),
+        "expectedStatus": expected_status,
+        "reason": detail.get("reason"),
+        "feedbackStatus": feedback.get("status"),
+        "hook": "math_anchor.obligations.check_obligation_set",
+        "note": (
+            "Expanded adversarial corpus probe. Reuses the existing obligation "
+            "runtime; not a second stack."
+        ),
+    }
+
+
+def rounding_sneak_probe() -> dict[str, Any]:
+    return _seeded_obligation_probe(
+        name="rounding-sneak",
+        corruption_kind="rounding_sneak",
+        primary_id="rounded-third",
+        expected_status="falsified",
+        g1_supported=True,
+        request={
+            "schemaVersion": OBLIGATION_SET_SCHEMA_VERSION,
+            "obligations": [
+                {
+                    "id": "rounded-third",
+                    "kind": "expression_equivalence",
+                    "claim": {
+                        "left": "1/3",
+                        "right": "0.333333",
+                        "variables": [],
+                        "domain": "real",
+                        "definednessPolicy": "strict",
+                    },
+                }
+            ],
+            "responseMode": "failures_only",
+        },
+    )
+
+
+def unit_scale_mismatch_probe() -> dict[str, Any]:
+    return _seeded_obligation_probe(
+        name="unit-scale-mismatch",
+        corruption_kind="unit_scale_mismatch",
+        primary_id="pressure-area-meter",
+        expected_status="falsified",
+        g1_supported=True,
+        request={
+            "schemaVersion": OBLIGATION_SET_SCHEMA_VERSION,
+            "obligations": [
+                {
+                    "id": "pressure-area-meter",
+                    "kind": "dimension_consistency",
+                    "claim": {
+                        "left": "pressure",
+                        "right": "force / area",
+                        "symbols": {
+                            "pressure": "pascal",
+                            "force": "newton",
+                            "area": "meter",
+                        },
+                    },
+                }
+            ],
+            "responseMode": "failures_only",
+        },
+    )
+
+
+def assumption_swap_probe() -> dict[str, Any]:
+    return _seeded_obligation_probe(
+        name="assumption-swapped",
+        corruption_kind="assumption_swap",
+        primary_id="sqrt-square-all-reals",
+        expected_status="falsified",
+        g1_supported=True,
+        request={
+            "schemaVersion": OBLIGATION_SET_SCHEMA_VERSION,
+            "obligations": [
+                {
+                    "id": "sqrt-square-all-reals",
+                    "kind": "expression_equivalence",
+                    "claim": {
+                        "left": "sqrt(x)^2",
+                        "right": "x",
+                        "variables": ["x"],
+                        "domain": "real",
+                        "definednessPolicy": "strict",
+                    },
+                }
+            ],
+            "responseMode": "failures_only",
+        },
+    )
+
+
+def step_n_legal_wrong_probe() -> dict[str, Any]:
+    return _seeded_obligation_probe(
+        name="step-n-legal-wrong-value",
+        corruption_kind="step_n_legal_wrong_value",
+        primary_id="step-2-wrong-for-claim",
+        expected_status="falsified",
+        g1_supported=True,
+        request={
+            "schemaVersion": OBLIGATION_SET_SCHEMA_VERSION,
+            "obligations": [
+                {
+                    "id": "step-1-legal",
+                    "kind": "polynomial_identity",
+                    "claim": {
+                        "left": "(x + y)*(x - y)",
+                        "right": "x^2 - y^2",
+                        "variables": ["x", "y"],
+                    },
+                },
+                {
+                    "id": "step-2-wrong-for-claim",
+                    "kind": "polynomial_identity",
+                    "claim": {
+                        "left": "(x + y)^2",
+                        "right": "x^2 - y^2",
+                        "variables": ["x", "y"],
+                    },
+                    "dependsOn": ["step-1-legal"],
+                },
+            ],
+            "responseMode": "failures_only",
+        },
+    )
+
+
 def run_structural_probes(tmp_dir: Path) -> dict[str, Any]:
     tmp_dir.mkdir(parents=True, exist_ok=True)
     core = core_conformance_probe()
@@ -307,7 +468,22 @@ def run_structural_probes(tmp_dir: Path) -> dict[str, Any]:
     stale = stale_swapped_probe()
     quiet = cli_quiet_success_probe(tmp_dir)
     failure = cli_failures_only_on_fail_probe(tmp_dir)
-    ok = all(probe.get("ok") is True for probe in (core, wrong, stale, quiet, failure))
+    rounding = rounding_sneak_probe()
+    unit = unit_scale_mismatch_probe()
+    assumption = assumption_swap_probe()
+    step_n = step_n_legal_wrong_probe()
+    probes = (
+        core,
+        wrong,
+        stale,
+        quiet,
+        failure,
+        rounding,
+        unit,
+        assumption,
+        step_n,
+    )
+    ok = all(probe.get("ok") is True for probe in probes)
     return {
         "ok": ok,
         "coreConformance": core,
@@ -315,4 +491,8 @@ def run_structural_probes(tmp_dir: Path) -> dict[str, Any]:
         "staleSwappedResult": stale,
         "cliQuietSuccess": quiet,
         "cliFailuresOnlyOnFail": failure,
+        "roundingSneak": rounding,
+        "unitScaleMismatch": unit,
+        "assumptionSwap": assumption,
+        "stepNLegalWrong": step_n,
     }

@@ -30,22 +30,40 @@ TASK_CONTROL_DIM = "control-dimension-consistency"
 TASK_SIGN_FLIP = "sign-flip"
 TASK_DOMAIN_OVERSHOOT = "domain-overshoot-definedness"
 TASK_DIMENSION_MISMATCH = "dimension-mismatch"
+TASK_ROUNDING = "rounding-in-exact-chain"
+TASK_UNIT_SCALE = "unit-scale-mismatch"
+TASK_ASSUMPTION_SWAP = "assumption-swapped"
+TASK_STEP_N_LEGAL_WRONG = "step-n-legal-wrong-value"
 TASK_UNSUPPORTED = "unsupported-kind"
 TASK_DEPENDENCY = "dependency-blocked"
+TASK_SI_PREFIX_BLIND = "si-prefix-scale-blind-spot"
 
 CONTROL_TASKS = (TASK_CONTROL_POLY, TASK_CONTROL_DIM)
-SUPPORTED_ERROR_TASKS = (TASK_SIGN_FLIP, TASK_DOMAIN_OVERSHOOT, TASK_DIMENSION_MISMATCH)
+SUPPORTED_ERROR_TASKS = (
+    TASK_SIGN_FLIP,
+    TASK_DOMAIN_OVERSHOOT,
+    TASK_DIMENSION_MISMATCH,
+    TASK_ROUNDING,
+    TASK_UNIT_SCALE,
+    TASK_ASSUMPTION_SWAP,
+    TASK_STEP_N_LEGAL_WRONG,
+)
 SAME_CLAIM_REPAIR_TASKS = (TASK_SIGN_FLIP,)
 UNRELATED_RESUBMIT_TASKS = (TASK_DIMENSION_MISMATCH,)
-COMPLETENESS_TASKS = (TASK_UNSUPPORTED, TASK_DEPENDENCY)
+COMPLETENESS_TASKS = (TASK_UNSUPPORTED, TASK_DEPENDENCY, TASK_SI_PREFIX_BLIND)
 ALL_TASKS = (
     TASK_CONTROL_POLY,
     TASK_CONTROL_DIM,
     TASK_SIGN_FLIP,
     TASK_DOMAIN_OVERSHOOT,
     TASK_DIMENSION_MISMATCH,
+    TASK_ROUNDING,
+    TASK_UNIT_SCALE,
+    TASK_ASSUMPTION_SWAP,
+    TASK_STEP_N_LEGAL_WRONG,
     TASK_UNSUPPORTED,
     TASK_DEPENDENCY,
+    TASK_SI_PREFIX_BLIND,
 )
 
 GATE_IDS = ("G1", "G2", "G3", "G4", "G5", "G6")
@@ -59,6 +77,11 @@ CORRUPTION_KIND_IDS = (
     "dimension_mismatch",
     "unsupported_kind",
     "dependency_blocked",
+    "rounding_sneak",
+    "unit_scale_mismatch",
+    "assumption_swap",
+    "step_n_legal_wrong_value",
+    "si_prefix_scale_blind_spot",
 )
 
 MODEL_ARMS_DEFERRED = "deferred"

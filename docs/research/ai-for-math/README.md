@@ -17,7 +17,7 @@ Assurance → Receipt). Calculator/UI stay a compact human utility, not the
 research center, without a forever ban.
 
 - [research-epoch-1.md](research-epoch-1.md) — Epoch 1 archive (#15/#16 quoted; no invented numbers).
-- [shadow-verifier.md](shadow-verifier.md) — Epoch 2 scaffold; G1–G6 are **targets**; B0/B1 `model_arms=deferred`.
+- [shadow-verifier.md](shadow-verifier.md) — Epoch 2 scaffold (expanded corpus + live-arm plan emitter); G1–G6 are **targets**; B0/B1 `model_arms=deferred`; Epoch 2 incomplete; no promote.
 - [current-state.md](current-state.md) — capabilities with source / tests / run / used / benefit kept separate.
 - [workload-selection.md](workload-selection.md) — why polynomial finite sums, and what was deferred.
 - [task-list.md](task-list.md) — candidate tasks and negative cases; Epoch 2 P0.
@@ -95,4 +95,8 @@ report under gitignored `build/`):
 ```sh
 .venv/bin/python research/shadow_verifier_eval/run.py \
   --output build/shadow-verifier-report.json
+.venv/bin/python research/shadow_verifier_eval/run.py \
+  --emit-live-plan \
+  --natural-tasks-pack research/shadow_verifier_eval/natural_tasks \
+  --output build/shadow-verifier-live-plan.json
 ```
