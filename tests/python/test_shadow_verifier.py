@@ -32,6 +32,8 @@ from research.shadow_verifier_eval.live_runner import (
     build_live_four_arm_plan,
     register_live_backend,
 )
+from research.shadow_verifier_eval.natural_tasks_loader import load_natural_tasks_pack
+from math_anchor.errors import CalculatorError
 from research.shadow_verifier_eval.protocol import (
     ALL_TASKS,
     ARM_B0,
@@ -600,3 +602,148 @@ def test_natural_tasks_pack_has_oracle_outside_agent_view() -> None:
         assert notes["outsideAgentView"] is True
         assert notes["controllerOnly"] is True
         assert notes["liveScore"] is None
+
+
+AGENT_PROMPT_SPOILERS = (
+    "unit kind is wrong",
+    "wrong for this claim",
+    "Adversarial:",
+    "known blind spot",
+)
+
+
+def test_kinematics_wrong_and_correct_flight_times_disagree() -> None:
+    """P2-1: at 30° sinθ=1/2 so t=v0/g matches 2 v0 sinθ/g; use 45°."""
+    import math
+
+    pack = ROOT / "research" / "shadow_verifier_eval" / "natural_tasks"
+    task = json.loads((pack / "nt-kinematics-step-reuse.json").read_text(encoding="utf-8"))
+    check = task["oracleNotes"]["arithmeticDisagreementCheck"]
+    assert check["thetaDegrees"] == 45
+    v0 = float(check["v0"])
+    g = float(check["g"])
+    theta = math.radians(float(check["thetaDegrees"]))
+    wrong = v0 / g
+    correct = 2.0 * v0 * math.sin(theta) / g
+    assert abs(wrong - correct) > 1e-9
+    assert "45" in task["prompt"]
+    # Guard against regressing to the coincident 30° case.
+    coincident = 2.0 * v0 * math.sin(math.radians(30.0)) / g
+    assert abs(wrong - coincident) < 1e-9
+
+
+def test_emit_live_plan_agent_prompts_do_not_contain_spoilers(tmp_path: Path) -> None:
+    """P2-2: assert on actual --emit-live-plan output, not only outsideAgentView flags."""
+    out = tmp_path / "live-plan.json"
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(RUNNER),
+            "--emit-live-plan",
+            "--natural-tasks-pack",
+            "research/shadow_verifier_eval/natural_tasks",
+            "--output",
+            str(out),
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr + completed.stdout
+    payload = json.loads(completed.stdout)
+    assert payload == json.loads(out.read_text(encoding="utf-8"))
+
+    agent_prompts: list[str] = []
+    for item in payload.get("prompts") or []:
+        agent_prompts.append(str(item.get("prompt") or ""))
+    for cell in payload.get("cells") or []:
+        agent_prompts.append(str(cell.get("prompt") or ""))
+    natural = payload.get("naturalTasks") or {}
+    for item in (natural.get("agentView") or {}).get("prompts") or []:
+        agent_prompts.append(str(item.get("prompt") or ""))
+
+    assert agent_prompts, "expected agent-facing prompts in live plan"
+    for prompt in agent_prompts:
+        lowered = prompt.lower()
+        for spoiler in AGENT_PROMPT_SPOILERS:
+            assert spoiler.lower() not in lowered, (
+                f"agent prompt leaked spoiler {spoiler!r}: {prompt!r}"
+            )
+
+    # Controller-only judgment text may still live under gradingOracleFields.
+    oracle_blob = json.dumps(payload.get("gradingOracleFields") or {}).lower()
+    assert "unit kind is wrong" in oracle_blob or "controlleroraclenote" in oracle_blob
+
+
+def test_emit_live_plan_overwrite_emits_single_error_json(tmp_path: Path) -> None:
+    """P2-3: refusing overwrite must emit exactly one JSON object on stdout."""
+    out = tmp_path / "live-plan.json"
+    out.write_text("{}\n", encoding="utf-8")
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(RUNNER),
+            "--emit-live-plan",
+            "--output",
+            str(out),
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert completed.returncode == 2
+    # json.loads must succeed without Extra data (single object only).
+    payload = json.loads(completed.stdout)
+    assert payload["status"] == "error"
+    assert payload["error"]["code"] == "E_INPUT"
+    assert "overwrite" in payload["error"]["message"].lower()
+    # Guard: stdout must not contain a second top-level JSON value.
+    stripped = completed.stdout.strip()
+    assert stripped.startswith("{")
+    # After one successful loads, no trailing non-whitespace remains that
+    # would form another JSON value — already enforced by json.loads above;
+    # also assert the success plan kind is absent.
+    assert LIVE_PLAN_KIND not in completed.stdout
+
+
+def test_natural_tasks_pack_loads_into_live_plan() -> None:
+    pack = "research/shadow_verifier_eval/natural_tasks"
+    loaded = load_natural_tasks_pack(ROOT / pack)
+    assert loaded["honesty"]["loadedAndValidated"] is True
+    assert len(loaded["taskIds"]) == 4
+    assert len(loaded["agentView"]["prompts"]) == 4
+    assert set(loaded["controllerOracle"]["byTask"]) == set(loaded["taskIds"])
+
+    plan = build_live_four_arm_plan(natural_tasks_pack=pack).to_dict()
+    assert plan["naturalTasksPack"] == pack
+    assert plan["naturalTasks"] is not None
+    assert plan["honesty"]["naturalTasksLoaded"] is True
+    natural_ids = {item["task"] for item in plan["naturalTasks"]["agentView"]["prompts"]}
+    assert "nt-kinematics-step-reuse" in natural_ids
+    plan_prompt_tasks = {item["task"] for item in plan["prompts"] if item.get("naturalTask")}
+    assert natural_ids == plan_prompt_tasks
+
+
+def test_natural_tasks_pack_missing_path_fails_closed(tmp_path: Path) -> None:
+    missing = tmp_path / "no-such-pack"
+    with pytest.raises(CalculatorError, match="does not exist"):
+        load_natural_tasks_pack(missing)
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(RUNNER),
+            "--emit-live-plan",
+            "--natural-tasks-pack",
+            str(missing),
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert completed.returncode == 2
+    payload = json.loads(completed.stdout)
+    assert payload["status"] == "error"
+    assert payload["error"]["code"] == "E_INPUT"

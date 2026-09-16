@@ -530,7 +530,7 @@
       "g1SupportedSeededError": true,
       "g3Control": false,
       "primaryObligationId": "rounded-third",
-      "prompt": "Under exact real arithmetic, is 1/3 identical to the rounded decimal 0.333333? (Adversarial: rounding sneaks into an otherwise exact chain.)",
+      "prompt": "Under exact real arithmetic, is 1/3 identical to the rounded decimal 0.333333?",
       "obligationRequest": {
         "schemaVersion": "math-anchor.obligation-set.v0.1",
         "obligations": [
@@ -587,7 +587,12 @@
           "detected": true
         }
       },
-      "honestyNote": "G1-supported seeded error. Primary is the rounded claim; the exact 1/3+1/3+1/3=1 sibling is present to show the chain context."
+      "honestyNote": "G1-supported seeded error. Primary is the rounded claim; the exact 1/3+1/3+1/3=1 sibling is present to show the chain context. Adversarial framing (rounding sneaks into an otherwise exact chain) stays controller-only.",
+      "controllerOracleNote": {
+        "outsideAgentView": true,
+        "controllerOnly": true,
+        "corruptionJudgment": "Adversarial: rounding sneaks into an otherwise exact chain."
+      }
     },
     {
       "id": "unit-scale-mismatch",
@@ -596,7 +601,7 @@
       "g1SupportedSeededError": true,
       "g3Control": false,
       "primaryObligationId": "pressure-area-meter",
-      "prompt": "Is pressure dimensionally consistent with force / area when pressure is pascal, force newton, and area meter (not meter^2)? Looks numeric; unit kind is wrong.",
+      "prompt": "Is pressure dimensionally consistent with force / area when pressure is pascal, force newton, and area meter?",
       "obligationRequest": {
         "schemaVersion": "math-anchor.obligation-set.v0.1",
         "obligations": [
@@ -644,7 +649,12 @@
           "detected": true
         }
       },
-      "honestyNote": "G1-supported seeded error (wrong unit kind). SI prefix scale alone is a separate completeness blind-spot cell, not this task."
+      "honestyNote": "G1-supported seeded error (wrong unit kind: area given as meter instead of meter^2). Judgment stays controller-only; agent-facing prompt must not say the unit kind is wrong. SI prefix scale alone is a separate completeness blind-spot cell, not this task.",
+      "controllerOracleNote": {
+        "outsideAgentView": true,
+        "controllerOnly": true,
+        "corruptionJudgment": "Looks numeric; unit kind is wrong (area as meter, not meter^2)."
+      }
     },
     {
       "id": "assumption-swapped",
@@ -653,7 +663,7 @@
       "g1SupportedSeededError": true,
       "g3Control": false,
       "primaryObligationId": "sqrt-square-all-reals",
-      "prompt": "Under a strict real definedness policy, is sqrt(x)^2 identical to x for all real x? (Adversarial: certificate/identity looks fine if the non-negative assumption is silently swapped in.)",
+      "prompt": "Under a strict real definedness policy, is sqrt(x)^2 identical to x for all real x?",
       "obligationRequest": {
         "schemaVersion": "math-anchor.obligation-set.v0.1",
         "obligations": [
@@ -701,7 +711,12 @@
           "detected": true
         }
       },
-      "honestyNote": "G1-supported seeded error (domain assumption swapped)."
+      "honestyNote": "G1-supported seeded error (domain assumption swapped). Adversarial framing stays controller-only.",
+      "controllerOracleNote": {
+        "outsideAgentView": true,
+        "controllerOnly": true,
+        "corruptionJudgment": "Adversarial: certificate/identity looks fine if the non-negative assumption is silently swapped in."
+      }
     },
     {
       "id": "step-n-legal-wrong-value",
@@ -710,7 +725,7 @@
       "g1SupportedSeededError": true,
       "g3Control": false,
       "primaryObligationId": "step-2-wrong-for-claim",
-      "prompt": "After a correct difference-of-squares step (x+y)(x-y)=x^2-y^2, is (x+y)^2 identical to x^2 - y^2? (Adversarial: step-N result replaced with another legal identity that is wrong for this claim.)",
+      "prompt": "After establishing (x + y)*(x - y) = x^2 - y^2, is (x + y)^2 identical to x^2 - y^2?",
       "obligationRequest": {
         "schemaVersion": "math-anchor.obligation-set.v0.1",
         "obligations": [
@@ -772,7 +787,12 @@
           "detected": true
         }
       },
-      "honestyNote": "G1-supported seeded error. Step-1 is a legal identity; step-2 reuses a legal RHS that is wrong for (x+y)^2."
+      "honestyNote": "G1-supported seeded error. Step-1 is a legal identity; step-2 reuses a legal RHS that is wrong for (x+y)^2. Judgment stays controller-only; agent-facing prompt must not say the identity is wrong for this claim.",
+      "controllerOracleNote": {
+        "outsideAgentView": true,
+        "controllerOnly": true,
+        "corruptionJudgment": "Adversarial: step-N result replaced with another legal identity that is wrong for this claim."
+      }
     },
     {
       "id": "unsupported-kind",
@@ -895,7 +915,7 @@
       "g1SupportedSeededError": false,
       "g3Control": false,
       "primaryObligationId": "work-kilometer",
-      "prompt": "Is work dimensionally consistent with force * distance when work is joule, force newton, and distance kilometer? (Completeness: current provider checks base dimensions only; SI prefix scale is a known blind spot, not a G1 detection claim.)",
+      "prompt": "Is work dimensionally consistent with force * distance when work is joule, force newton, and distance kilometer?",
       "obligationRequest": {
         "schemaVersion": "math-anchor.obligation-set.v0.1",
         "obligations": [
@@ -943,7 +963,12 @@
           "detected": false
         }
       },
-      "honestyNote": "Completeness-only / coverage gap. Expected checked because dimension.check ignores SI prefixes. Not a G1 seeded error and not a G3 control."
+      "honestyNote": "Completeness-only / coverage gap. Expected checked because dimension.check ignores SI prefixes. Not a G1 seeded error and not a G3 control. Completeness framing stays controller-only.",
+      "controllerOracleNote": {
+        "outsideAgentView": true,
+        "controllerOnly": true,
+        "corruptionJudgment": "Completeness: current provider checks base dimensions only; SI prefix scale is a known blind spot, not a G1 detection claim."
+      }
     }
   ],
   "structuralProbes": {

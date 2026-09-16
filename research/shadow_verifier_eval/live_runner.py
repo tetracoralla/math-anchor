@@ -14,6 +14,7 @@ from typing import Any, Protocol
 
 from math_anchor.errors import CalculatorError
 
+from .natural_tasks_loader import load_natural_tasks_pack
 from .protocol import (
     ARM_B0,
     ARM_B1,
@@ -111,6 +112,7 @@ class LiveFourArmPlan:
     liveExecutionAllowed: bool = False
     plannedModelCalls: int | None = None
     naturalTasksPack: str | None = None
+    naturalTasks: dict[str, Any] | None = None
     honesty: dict[str, Any] = field(default_factory=dict)
     howToPlugBackend: dict[str, Any] = field(default_factory=dict)
 
@@ -119,13 +121,14 @@ class LiveFourArmPlan:
 
 
 def _oracle_fields_for_task(task: dict[str, Any]) -> dict[str, Any]:
-    return {
+    fields = {
         "taskId": task["id"],
         "corruptionKind": task.get("corruptionKind"),
         "g1SupportedSeededError": bool(task.get("g1SupportedSeededError")),
         "g3Control": bool(task.get("g3Control")),
         "expectedPrimaryStatus": task.get("expectedPrimaryStatus"),
         "role": task.get("role"),
+        "honestyNote": task.get("honestyNote"),
         "controllerOnly": True,
         "outsideAgentView": True,
         "note": (
@@ -133,6 +136,10 @@ def _oracle_fields_for_task(task: dict[str, Any]) -> dict[str, Any]:
             "fields into the evaluated Agent prompt."
         ),
     }
+    controller_note = task.get("controllerOracleNote")
+    if isinstance(controller_note, dict):
+        fields["controllerOracleNote"] = controller_note
+    return fields
 
 
 def build_live_four_arm_plan(
@@ -185,6 +192,20 @@ def build_live_four_arm_plan(
             }
         )
 
+    natural_loaded: dict[str, Any] | None = None
+    if natural_tasks_pack is not None:
+        natural_loaded = load_natural_tasks_pack(natural_tasks_pack)
+        for item in natural_loaded["agentView"]["prompts"]:
+            prompts.append(
+                {
+                    "task": item["task"],
+                    "prompt": item["prompt"],
+                    "arms": [ARM_B0, ARM_B1, ARM_B3],
+                    "naturalTask": True,
+                    "agentView": True,
+                }
+            )
+
     return LiveFourArmPlan(
         protocolDigest=protocol_digest(document),
         cells=cells,
@@ -195,6 +216,7 @@ def build_live_four_arm_plan(
         liveExecutionAllowed=False,
         plannedModelCalls=confirm_model_runs,
         naturalTasksPack=natural_tasks_pack,
+        naturalTasks=natural_loaded,
         honesty={
             "noModelCallsMade": True,
             "noLiveNumbersInvented": True,
@@ -203,6 +225,7 @@ def build_live_four_arm_plan(
             "planIsNotEvidence": True,
             "epoch2StillIncomplete": True,
             "modelArms": MODEL_ARMS_DEFERRED,
+            "naturalTasksLoaded": natural_loaded is not None,
         },
         howToPlugBackend={
             "interface": "research.shadow_verifier_eval.live_runner.LiveModelBackend",

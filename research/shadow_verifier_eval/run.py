@@ -77,46 +77,54 @@ def _parser() -> argparse.ArgumentParser:
         "--natural-tasks-pack",
         type=str,
         default=None,
-        help="Optional path recorded on an emitted live plan (natural_tasks pack).",
+        help=(
+            "Path to natural_tasks pack directory. When set with --emit-live-plan, "
+            "loads and validates index.json + tasks into the plan (agent-view "
+            "prompts vs controller-oracle split). Missing/invalid path fails closed."
+        ),
     )
     return parser
+
+
+def _emit_error(error: CalculatorError) -> int:
+    payload = {
+        "status": "error",
+        "error": error_payload(error.code, error.message, error.details),
+    }
+    sys.stdout.write(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
+    return 2
 
 
 def main(argv: list[str] | None = None) -> int:
     arguments = _parser().parse_args(argv)
     if arguments.emit_live_plan and arguments.include_model_arms:
-        payload = {
-            "status": "error",
-            "error": error_payload(
+        return _emit_error(
+            CalculatorError(
                 "E_INPUT",
                 "--emit-live-plan and --include-model-arms are mutually exclusive",
-            ),
-        }
-        sys.stdout.write(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
-        return 2
+            )
+        )
     if arguments.confirm_model_runs is not None and not (
         arguments.include_model_arms or arguments.emit_live_plan
     ):
-        payload = {
-            "status": "error",
-            "error": error_payload(
+        return _emit_error(
+            CalculatorError(
                 "E_INPUT",
                 "--confirm-model-runs is only meaningful with --include-model-arms "
                 "or --emit-live-plan",
-            ),
-        }
-        sys.stdout.write(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
-        return 2
+            )
+        )
     try:
         if arguments.emit_live_plan:
             plan = build_live_four_arm_plan(
                 confirm_model_runs=arguments.confirm_model_runs,
                 natural_tasks_pack=arguments.natural_tasks_pack,
             ).to_dict()
-            encoded = json.dumps(plan, ensure_ascii=False, indent=2)
-            sys.stdout.write(encoded + "\n")
+            # Validate/write output before printing success JSON so an overwrite
+            # refusal emits exactly one error object (no success+error Extra data).
             if arguments.output is not None:
                 write_report(arguments.output, plan)
+            sys.stdout.write(json.dumps(plan, ensure_ascii=False, indent=2) + "\n")
             return 0
 
         report = run_smoke(
@@ -125,17 +133,11 @@ def main(argv: list[str] | None = None) -> int:
             confirm_live_budget=arguments.confirm_live_budget,
             confirm_model_runs=arguments.confirm_model_runs,
         )
-        encoded = json.dumps(report, ensure_ascii=False, indent=2)
-        sys.stdout.write(encoded + "\n")
         if arguments.output is not None:
             write_report(arguments.output, report)
+        sys.stdout.write(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
     except CalculatorError as error:
-        payload = {
-            "status": "error",
-            "error": error_payload(error.code, error.message, error.details),
-        }
-        sys.stdout.write(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
-        return 2
+        return _emit_error(error)
     if report["decision"].get("promote"):
         return 2
     if report["decision"].get("targetedFix"):
