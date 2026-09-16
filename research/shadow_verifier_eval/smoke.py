@@ -38,10 +38,16 @@ def run_smoke(
     protocol: dict[str, Any] | None = None,
     receipt_dir: Path | None = None,
     include_model_arms: bool = False,
+    confirm_live_budget: bool = False,
+    confirm_model_runs: int | None = None,
 ) -> dict[str, Any]:
     document = validate_protocol(protocol) if protocol is not None else load_protocol()
     if include_model_arms:
-        reject_include_model_arms(protocol=document)
+        reject_include_model_arms(
+            protocol=document,
+            confirm_live_budget=confirm_live_budget,
+            confirm_model_runs=confirm_model_runs,
+        )
 
     registered_tasks = tasks(document)
     own_temp = False

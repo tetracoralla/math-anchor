@@ -1,0 +1,18 @@
+{
+  "id": "nt-beam-deflection-unit-mix",
+  "title": "Cantilever tip deflection with mixed length units",
+  "domain": "engineering-mechanics",
+  "prompt": "A steel cantilever beam of length L = 2.5 m has rectangular cross-section b = 40 mm, h = 80 mm, and Young's modulus E = 200 GPa. A tip load P = 500 N acts downward. Compute the tip deflection using δ = P L^3 / (3 E I) with I = b h^3 / 12. Give the numerical value in millimeters and briefly show the intermediate I and EI values you used.",
+  "silentWrongRisk": "Unit/scale mix: mm vs m vs GPa vs N can cancel into a plausible but wrong millimeter answer if one length is left in mm while another is converted.",
+  "oracleNotes": {
+    "outsideAgentView": true,
+    "controllerOnly": true,
+    "intendedFailureModes": [
+      "leaving b,h in mm while L in m without converting",
+      "treating GPa as Pa or MPa inconsistently",
+      "reporting meters as millimeters without the 1000x factor"
+    ],
+    "referenceApproach": "Convert b,h to meters (0.04, 0.08), E to Pa (2e11), compute I and δ in meters, then convert δ to mm. Rough magnitude is on the order of a few mm; do not invent a live-model score here.",
+    "liveScore": null
+  }
+}

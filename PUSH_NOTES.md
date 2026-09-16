@@ -1,10 +1,43 @@
 # Push / PR notes for A0–A4 / Epoch 1–2
 
-## Epoch 1 archive + Epoch 2 shadow verifier (Draft; do not merge)
+## Epoch 2 live-arm readiness + expanded corpus (Draft; do not merge)
+
+Branch: `chore/ai-for-math-epoch-2-live-arm-readiness` (cut from `main`
+`6256276`, PR #17 already merged).
+Separate **Draft** PR (URL recorded after `gh pr create --draft`).
+**Keep Draft. Do not merge. Do not promote method packs. Do not start H1.**
+Epoch 2 is **not complete**. B0/B1 remain `model_arms=deferred`. G1–G6 stay
+targets. Dated H1 freeze 2026-09-15 unchanged. No invented live-model
+quality deltas, dollars, or savings %.
+
+This PR:
+
+- Expanded B2/B3 adversarial corpus: rounding sneak, unit-kind mismatch,
+  assumption swap, step-N legal-wrong (G1-supported) + SI-prefix scale
+  blind-spot (completeness-only).
+- `live_runner.py` / `LiveFourArmPlan` + `--emit-live-plan` (no model calls).
+- `--include-model-arms` fail-closed unless budget confirm + registered
+  backend; paid loop still not wired.
+- `natural_tasks/` human-authored prompts with controller-only oracle notes.
+
+Local tip after commits: `git rev-parse HEAD` / PR `headRefOid`.
+
+```sh
+.venv/bin/python research/shadow_verifier_eval/run.py \
+  --output build/shadow-verifier-report.json
+.venv/bin/python research/shadow_verifier_eval/run.py \
+  --emit-live-plan \
+  --natural-tasks-pack research/shadow_verifier_eval/natural_tasks \
+  --output build/shadow-verifier-live-plan.json
+.venv/bin/python -m pytest tests/python/test_shadow_verifier.py
+```
+
+## Epoch 1 archive + Epoch 2 shadow verifier (merged via PR #17)
+
 
 Branch: `chore/ai-for-math-epoch-2-shadow-verifier` (cut from `main` `fdc5031`).
-Separate **Draft** PR #17: https://github.com/tetracoralla/math-anchor/pull/17
-**Keep Draft. Do not merge. Do not promote method packs. Do not start H1.**
+Merged PR #17: https://github.com/tetracoralla/math-anchor/pull/17
+Scaffold landed on `main`; Epoch 2 remains incomplete. Do not promote method packs. Do not start H1.
 Epoch 2 is **not complete**. B0/B1 are `model_arms=deferred`. G1–G6 stay
 targets. Promotion decision stays `evidence_insufficient`.
 

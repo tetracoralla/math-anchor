@@ -1,0 +1,18 @@
+{
+  "id": "nt-series-rounding-cascade",
+  "title": "Partial-sum estimate with premature decimal rounding",
+  "domain": "analysis",
+  "prompt": "Estimate S = sum_{k=1}^{6} 1/(k(k+1)) by writing each term as a decimal rounded to six places after the decimal point, summing those decimals, and comparing to the exact telescoping value 1 - 1/7. Report both the rounded sum and the exact value, and say whether they match at six decimals.",
+  "silentWrongRisk": "Rounding sneaks into an exact telescoping chain: six-place decimals of 1/(k(k+1)) can sum to something that looks equal to 6/7 at a glance.",
+  "oracleNotes": {
+    "outsideAgentView": true,
+    "controllerOnly": true,
+    "intendedFailureModes": [
+      "claiming the rounded sum equals 6/7 exactly",
+      "rounding each term then declaring identity with the closed form",
+      "dropping the comparison and accepting the rounded figure"
+    ],
+    "referenceApproach": "Exact sum is 6/7. Rounded six-place term sum is a nearby decimal and should not be reported as identical to 6/7 without an error bound. No live score.",
+    "liveScore": null
+  }
+}

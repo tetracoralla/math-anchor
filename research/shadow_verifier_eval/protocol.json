@@ -9,7 +9,7 @@
   "doNotStartH1": true,
   "doNotPromoteMethodPacks": true,
   "judgmentsAreSeparate": true,
-  "researchStatus": "experimental-draft-2026-09-15",
+  "researchStatus": "experimental-draft-2026-09-16",
   "model": {
     "requested": null,
     "observed": null,
@@ -32,7 +32,9 @@
     "expanding the operation catalog for its own sake",
     "fifth MCP tool",
     "dollar cost or savings percentage",
-    "claiming Epoch 2 complete from a no-model B2/B3 scaffold"
+    "claiming Epoch 2 complete from a no-model B2/B3 scaffold",
+    "executing paid live B0/B1 without budget confirm + registered backend",
+    "inventing live plan quality deltas from --emit-live-plan"
   ],
   "independence": {
     "polynomialIdentityChecker": "math-anchor-stdlib-polynomial-checker recomputes coefficients without importing the SymPy producer",
@@ -63,7 +65,12 @@
       "description": "Model plus current MCP compatibility surface (math.search / math.describe / math.run / math.batch), voluntary tool use. No fifth MCP tool. Interface and recorded protocol for a later live run. Not executed in this smoke.",
       "engine": "deferred-live-model-plus-mcp",
       "mathProvider": "mcp-voluntary",
-      "mcpTools": ["math.search", "math.describe", "math.run", "math.batch"],
+      "mcpTools": [
+        "math.search",
+        "math.describe",
+        "math.run",
+        "math.batch"
+      ],
       "fifthMcpTool": false,
       "runnableThisSmoke": false,
       "deferredBecause": "model_arms=deferred; no paid model calls",
@@ -101,17 +108,22 @@
     "domain_overshoot": "Removable discontinuity treated as an identity under strict definedness. Looks equivalent; provider should falsify.",
     "dimension_mismatch": "Dimensionally inconsistent formula. Supported seeded error; provider should falsify.",
     "unsupported_kind": "Unregistered obligation kind. Completeness case (explicit unsupported), not a G1 supported seeded error.",
-    "dependency_blocked": "Downstream obligation gated on an unchecked dependency. Completeness case, not a G1 supported seeded error."
+    "dependency_blocked": "Downstream obligation gated on an unchecked dependency. Completeness case, not a G1 supported seeded error.",
+    "rounding_sneak": "Exact rational identity replaced by a rounded decimal that still looks numeric (e.g. 1/3 ≈ 0.333333). Supported seeded error; expression equivalence should falsify under exact symbolic checking.",
+    "unit_scale_mismatch": "Dimension formula that still looks numeric but uses a wrong unit kind (e.g. pressure = force / area with area as meter instead of meter^2). Supported seeded error; dimension_consistency should falsify. Note: SI prefix scale alone (kilometer vs meter) is NOT caught by the current provider and is not seeded as a G1 cell.",
+    "assumption_swap": "Principal-square-root identity claimed for all reals without the needed domain assumption (sqrt(x)^2 = x under strict real). Looks like a routine identity; supported seeded error; expression equivalence should falsify.",
+    "step_n_legal_wrong_value": "Step-N result replaced with another legal polynomial identity that is wrong for this claim (e.g. claim (x+y)^2 expands to x^2 - y^2, which is legal for (x+y)(x-y) but not for this left-hand side). Supported seeded error; polynomial_identity should falsify.",
+    "si_prefix_scale_blind_spot": "Completeness / coverage-gap case: work = force * distance with distance in kilometer while work is joule. Base dimensions match so the current provider returns checked. Not a G1 supported seeded error; documents that SI prefix scale is outside this smoke's detection claim."
   },
   "gates": {
     "G1": {
       "id": "G1",
       "name": "detection",
       "target": "at least 80% detection of supported seeded errors",
-      "thisSmokeMeasures": "B2/B3 deterministic corpus plus structural binding probes",
+      "thisSmokeMeasures": "B2/B3 deterministic corpus (original three plus rounding / unit-kind / assumption-swap / step-N legal-wrong) plus structural binding probes",
       "liveModelRequired": true,
       "status": "target",
-      "note": "A this-machine B2/B3 detection rate is not Epoch 2 G1. G1 needs live four-arm evidence."
+      "note": "A this-machine B2/B3 detection rate is not Epoch 2 G1. G1 needs live four-arm evidence. SI prefix scale blind-spot is completeness-only and does not count toward G1."
     },
     "G2": {
       "id": "G2",
@@ -159,11 +171,12 @@
   },
   "liveModelCommands": {
     "deterministicThisMachine": ".venv/bin/python research/shadow_verifier_eval/run.py --output build/shadow-verifier-report.json",
+    "emitLivePlan": ".venv/bin/python research/shadow_verifier_eval/run.py --emit-live-plan --output build/shadow-verifier-live-plan.json",
     "tests": ".venv/bin/python -m pytest tests/python/test_shadow_verifier.py",
     "coreConformance": ".venv/bin/python script/check_obligations.py",
-    "plannedLiveFourArm": ".venv/bin/python research/shadow_verifier_eval/run.py --include-model-arms --confirm-model-runs N --output build/shadow-verifier-live-report.json",
-    "plannedLiveFourArmNote": "N is a written planned-call count. This scaffold rejects --include-model-arms because the live B0/B1 runner is not implemented and model_arms=deferred. Do not start a paid run without a budget. Do not invent live-model numbers.",
-    "includeModelArmsRejectedBecause": "live B0/B1 runner is not implemented in this PR; model_arms=deferred"
+    "plannedLiveFourArm": ".venv/bin/python research/shadow_verifier_eval/run.py --include-model-arms --confirm-model-runs N --confirm-live-budget --output build/shadow-verifier-live-report.json",
+    "plannedLiveFourArmNote": "N is a written planned-call count. --include-model-arms remains fail-closed unless (1) --confirm-live-budget or MATH_ANCHOR_SHADOW_LIVE=1, (2) --confirm-model-runs N with N>0, and (3) a pluggable LiveModelBackend is registered. With no backend, the runner still rejects and invents no live-model numbers. Use --emit-live-plan to write the B0/B1/B3-live JSON plan without calls.",
+    "includeModelArmsRejectedBecause": "live B0/B1 execution requires an explicit budget confirm (--confirm-live-budget or MATH_ANCHOR_SHADOW_LIVE=1), --confirm-model-runs N>0, and a registered LiveModelBackend; without those, model_arms=deferred and numbers are not invented"
   },
   "workload": {
     "question": "Can the existing obligation runtime detect seeded mathematical corruptions (B2) and project Host shadow-checkpoint semantics (B3: quiet success, failures_only, receipt outside model context, repair hook) without a second stack, while recording B0/B1 as deferred live-model arms?",
@@ -195,15 +208,24 @@
             "claim": {
               "left": "(x + y)^2",
               "right": "x^2 + 2*x*y + y^2",
-              "variables": ["x", "y"]
+              "variables": [
+                "x",
+                "y"
+              ]
             }
           }
         ]
       },
       "expectedPrimaryStatus": "checked",
       "expectedByArm": {
-        "B0": {"status": "deferred", "modelArms": "deferred"},
-        "B1": {"status": "deferred", "modelArms": "deferred"},
+        "B0": {
+          "status": "deferred",
+          "modelArms": "deferred"
+        },
+        "B1": {
+          "status": "deferred",
+          "modelArms": "deferred"
+        },
         "B2": {
           "primaryStatus": "checked",
           "feedbackStatus": "checked",
@@ -252,8 +274,14 @@
       },
       "expectedPrimaryStatus": "checked",
       "expectedByArm": {
-        "B0": {"status": "deferred", "modelArms": "deferred"},
-        "B1": {"status": "deferred", "modelArms": "deferred"},
+        "B0": {
+          "status": "deferred",
+          "modelArms": "deferred"
+        },
+        "B1": {
+          "status": "deferred",
+          "modelArms": "deferred"
+        },
         "B2": {
           "primaryStatus": "checked",
           "feedbackStatus": "checked",
@@ -291,7 +319,10 @@
             "claim": {
               "left": "(x + y)^2",
               "right": "x^2 - 2*x*y + y^2",
-              "variables": ["x", "y"]
+              "variables": [
+                "x",
+                "y"
+              ]
             }
           }
         ]
@@ -310,7 +341,10 @@
               "claim": {
                 "left": "(x + y)^2",
                 "right": "x^2 + 2*x*y + y^2",
-                "variables": ["x", "y"]
+                "variables": [
+                  "x",
+                  "y"
+                ]
               }
             }
           ]
@@ -319,8 +353,14 @@
       },
       "expectedPrimaryStatus": "falsified",
       "expectedByArm": {
-        "B0": {"status": "deferred", "modelArms": "deferred"},
-        "B1": {"status": "deferred", "modelArms": "deferred"},
+        "B0": {
+          "status": "deferred",
+          "modelArms": "deferred"
+        },
+        "B1": {
+          "status": "deferred",
+          "modelArms": "deferred"
+        },
         "B2": {
           "primaryStatus": "falsified",
           "feedbackStatus": "attention_required",
@@ -361,7 +401,9 @@
             "claim": {
               "left": "(x^2 - 1)/(x - 1)",
               "right": "x + 1",
-              "variables": ["x"],
+              "variables": [
+                "x"
+              ],
               "domain": "real",
               "definednessPolicy": "strict"
             }
@@ -370,8 +412,14 @@
       },
       "expectedPrimaryStatus": "falsified",
       "expectedByArm": {
-        "B0": {"status": "deferred", "modelArms": "deferred"},
-        "B1": {"status": "deferred", "modelArms": "deferred"},
+        "B0": {
+          "status": "deferred",
+          "modelArms": "deferred"
+        },
+        "B1": {
+          "status": "deferred",
+          "modelArms": "deferred"
+        },
         "B2": {
           "primaryStatus": "falsified",
           "feedbackStatus": "attention_required",
@@ -445,8 +493,14 @@
       },
       "expectedPrimaryStatus": "falsified",
       "expectedByArm": {
-        "B0": {"status": "deferred", "modelArms": "deferred"},
-        "B1": {"status": "deferred", "modelArms": "deferred"},
+        "B0": {
+          "status": "deferred",
+          "modelArms": "deferred"
+        },
+        "B1": {
+          "status": "deferred",
+          "modelArms": "deferred"
+        },
         "B2": {
           "primaryStatus": "falsified",
           "feedbackStatus": "attention_required",
@@ -470,6 +524,257 @@
       }
     },
     {
+      "id": "rounding-in-exact-chain",
+      "role": "supported-seeded-error",
+      "corruptionKind": "rounding_sneak",
+      "g1SupportedSeededError": true,
+      "g3Control": false,
+      "primaryObligationId": "rounded-third",
+      "prompt": "Under exact real arithmetic, is 1/3 identical to the rounded decimal 0.333333? (Adversarial: rounding sneaks into an otherwise exact chain.)",
+      "obligationRequest": {
+        "schemaVersion": "math-anchor.obligation-set.v0.1",
+        "obligations": [
+          {
+            "id": "exact-third-control-step",
+            "kind": "expression_equivalence",
+            "claim": {
+              "left": "1/3 + 1/3 + 1/3",
+              "right": "1",
+              "variables": [],
+              "domain": "real",
+              "definednessPolicy": "strict"
+            }
+          },
+          {
+            "id": "rounded-third",
+            "kind": "expression_equivalence",
+            "claim": {
+              "left": "1/3",
+              "right": "0.333333",
+              "variables": [],
+              "domain": "real",
+              "definednessPolicy": "strict"
+            }
+          }
+        ]
+      },
+      "expectedPrimaryStatus": "falsified",
+      "expectedByArm": {
+        "B0": {
+          "status": "deferred",
+          "modelArms": "deferred"
+        },
+        "B1": {
+          "status": "deferred",
+          "modelArms": "deferred"
+        },
+        "B2": {
+          "primaryStatus": "falsified",
+          "feedbackStatus": "attention_required",
+          "responseMode": "full",
+          "receiptOutsideModelContext": false,
+          "feedbackIncludesPrimary": true,
+          "detected": true
+        },
+        "B3": {
+          "primaryStatus": "falsified",
+          "feedbackStatus": "attention_required",
+          "responseMode": "failures_only",
+          "quietSuccess": false,
+          "modelContextBytesZero": false,
+          "receiptOutsideModelContext": true,
+          "feedbackIncludesPrimary": true,
+          "detected": true
+        }
+      },
+      "honestyNote": "G1-supported seeded error. Primary is the rounded claim; the exact 1/3+1/3+1/3=1 sibling is present to show the chain context."
+    },
+    {
+      "id": "unit-scale-mismatch",
+      "role": "supported-seeded-error",
+      "corruptionKind": "unit_scale_mismatch",
+      "g1SupportedSeededError": true,
+      "g3Control": false,
+      "primaryObligationId": "pressure-area-meter",
+      "prompt": "Is pressure dimensionally consistent with force / area when pressure is pascal, force newton, and area meter (not meter^2)? Looks numeric; unit kind is wrong.",
+      "obligationRequest": {
+        "schemaVersion": "math-anchor.obligation-set.v0.1",
+        "obligations": [
+          {
+            "id": "pressure-area-meter",
+            "kind": "dimension_consistency",
+            "claim": {
+              "left": "pressure",
+              "right": "force / area",
+              "symbols": {
+                "pressure": "pascal",
+                "force": "newton",
+                "area": "meter"
+              }
+            }
+          }
+        ]
+      },
+      "expectedPrimaryStatus": "falsified",
+      "expectedByArm": {
+        "B0": {
+          "status": "deferred",
+          "modelArms": "deferred"
+        },
+        "B1": {
+          "status": "deferred",
+          "modelArms": "deferred"
+        },
+        "B2": {
+          "primaryStatus": "falsified",
+          "feedbackStatus": "attention_required",
+          "responseMode": "full",
+          "receiptOutsideModelContext": false,
+          "feedbackIncludesPrimary": true,
+          "detected": true
+        },
+        "B3": {
+          "primaryStatus": "falsified",
+          "feedbackStatus": "attention_required",
+          "responseMode": "failures_only",
+          "quietSuccess": false,
+          "modelContextBytesZero": false,
+          "receiptOutsideModelContext": true,
+          "feedbackIncludesPrimary": true,
+          "detected": true
+        }
+      },
+      "honestyNote": "G1-supported seeded error (wrong unit kind). SI prefix scale alone is a separate completeness blind-spot cell, not this task."
+    },
+    {
+      "id": "assumption-swapped",
+      "role": "supported-seeded-error",
+      "corruptionKind": "assumption_swap",
+      "g1SupportedSeededError": true,
+      "g3Control": false,
+      "primaryObligationId": "sqrt-square-all-reals",
+      "prompt": "Under a strict real definedness policy, is sqrt(x)^2 identical to x for all real x? (Adversarial: certificate/identity looks fine if the non-negative assumption is silently swapped in.)",
+      "obligationRequest": {
+        "schemaVersion": "math-anchor.obligation-set.v0.1",
+        "obligations": [
+          {
+            "id": "sqrt-square-all-reals",
+            "kind": "expression_equivalence",
+            "claim": {
+              "left": "sqrt(x)^2",
+              "right": "x",
+              "variables": [
+                "x"
+              ],
+              "domain": "real",
+              "definednessPolicy": "strict"
+            }
+          }
+        ]
+      },
+      "expectedPrimaryStatus": "falsified",
+      "expectedByArm": {
+        "B0": {
+          "status": "deferred",
+          "modelArms": "deferred"
+        },
+        "B1": {
+          "status": "deferred",
+          "modelArms": "deferred"
+        },
+        "B2": {
+          "primaryStatus": "falsified",
+          "feedbackStatus": "attention_required",
+          "responseMode": "full",
+          "receiptOutsideModelContext": false,
+          "feedbackIncludesPrimary": true,
+          "detected": true
+        },
+        "B3": {
+          "primaryStatus": "falsified",
+          "feedbackStatus": "attention_required",
+          "responseMode": "failures_only",
+          "quietSuccess": false,
+          "modelContextBytesZero": false,
+          "receiptOutsideModelContext": true,
+          "feedbackIncludesPrimary": true,
+          "detected": true
+        }
+      },
+      "honestyNote": "G1-supported seeded error (domain assumption swapped)."
+    },
+    {
+      "id": "step-n-legal-wrong-value",
+      "role": "supported-seeded-error",
+      "corruptionKind": "step_n_legal_wrong_value",
+      "g1SupportedSeededError": true,
+      "g3Control": false,
+      "primaryObligationId": "step-2-wrong-for-claim",
+      "prompt": "After a correct difference-of-squares step (x+y)(x-y)=x^2-y^2, is (x+y)^2 identical to x^2 - y^2? (Adversarial: step-N result replaced with another legal identity that is wrong for this claim.)",
+      "obligationRequest": {
+        "schemaVersion": "math-anchor.obligation-set.v0.1",
+        "obligations": [
+          {
+            "id": "step-1-legal",
+            "kind": "polynomial_identity",
+            "claim": {
+              "left": "(x + y)*(x - y)",
+              "right": "x^2 - y^2",
+              "variables": [
+                "x",
+                "y"
+              ]
+            }
+          },
+          {
+            "id": "step-2-wrong-for-claim",
+            "kind": "polynomial_identity",
+            "claim": {
+              "left": "(x + y)^2",
+              "right": "x^2 - y^2",
+              "variables": [
+                "x",
+                "y"
+              ]
+            },
+            "dependsOn": [
+              "step-1-legal"
+            ]
+          }
+        ]
+      },
+      "expectedPrimaryStatus": "falsified",
+      "expectedByArm": {
+        "B0": {
+          "status": "deferred",
+          "modelArms": "deferred"
+        },
+        "B1": {
+          "status": "deferred",
+          "modelArms": "deferred"
+        },
+        "B2": {
+          "primaryStatus": "falsified",
+          "feedbackStatus": "attention_required",
+          "responseMode": "full",
+          "receiptOutsideModelContext": false,
+          "feedbackIncludesPrimary": true,
+          "detected": true
+        },
+        "B3": {
+          "primaryStatus": "falsified",
+          "feedbackStatus": "attention_required",
+          "responseMode": "failures_only",
+          "quietSuccess": false,
+          "modelContextBytesZero": false,
+          "receiptOutsideModelContext": true,
+          "feedbackIncludesPrimary": true,
+          "detected": true
+        }
+      },
+      "honestyNote": "G1-supported seeded error. Step-1 is a legal identity; step-2 reuses a legal RHS that is wrong for (x+y)^2."
+    },
+    {
       "id": "unsupported-kind",
       "role": "completeness",
       "corruptionKind": "unsupported_kind",
@@ -491,8 +796,14 @@
       },
       "expectedPrimaryStatus": "unsupported",
       "expectedByArm": {
-        "B0": {"status": "deferred", "modelArms": "deferred"},
-        "B1": {"status": "deferred", "modelArms": "deferred"},
+        "B0": {
+          "status": "deferred",
+          "modelArms": "deferred"
+        },
+        "B1": {
+          "status": "deferred",
+          "modelArms": "deferred"
+        },
         "B2": {
           "primaryStatus": "unsupported",
           "feedbackStatus": "attention_required",
@@ -537,16 +848,26 @@
             "claim": {
               "left": "x",
               "right": "x",
-              "variables": ["x"]
+              "variables": [
+                "x"
+              ]
             },
-            "dependsOn": ["sheaf-step"]
+            "dependsOn": [
+              "sheaf-step"
+            ]
           }
         ]
       },
       "expectedPrimaryStatus": "unknown",
       "expectedByArm": {
-        "B0": {"status": "deferred", "modelArms": "deferred"},
-        "B1": {"status": "deferred", "modelArms": "deferred"},
+        "B0": {
+          "status": "deferred",
+          "modelArms": "deferred"
+        },
+        "B1": {
+          "status": "deferred",
+          "modelArms": "deferred"
+        },
         "B2": {
           "primaryStatus": "unknown",
           "feedbackStatus": "attention_required",
@@ -566,6 +887,63 @@
           "detected": true
         }
       }
+    },
+    {
+      "id": "si-prefix-scale-blind-spot",
+      "role": "completeness",
+      "corruptionKind": "si_prefix_scale_blind_spot",
+      "g1SupportedSeededError": false,
+      "g3Control": false,
+      "primaryObligationId": "work-kilometer",
+      "prompt": "Is work dimensionally consistent with force * distance when work is joule, force newton, and distance kilometer? (Completeness: current provider checks base dimensions only; SI prefix scale is a known blind spot, not a G1 detection claim.)",
+      "obligationRequest": {
+        "schemaVersion": "math-anchor.obligation-set.v0.1",
+        "obligations": [
+          {
+            "id": "work-kilometer",
+            "kind": "dimension_consistency",
+            "claim": {
+              "left": "work",
+              "right": "force * distance",
+              "symbols": {
+                "work": "joule",
+                "force": "newton",
+                "distance": "kilometer"
+              }
+            }
+          }
+        ]
+      },
+      "expectedPrimaryStatus": "checked",
+      "expectedByArm": {
+        "B0": {
+          "status": "deferred",
+          "modelArms": "deferred"
+        },
+        "B1": {
+          "status": "deferred",
+          "modelArms": "deferred"
+        },
+        "B2": {
+          "primaryStatus": "checked",
+          "feedbackStatus": "checked",
+          "responseMode": "full",
+          "receiptOutsideModelContext": false,
+          "feedbackIncludesPrimary": true,
+          "detected": false
+        },
+        "B3": {
+          "primaryStatus": "checked",
+          "feedbackStatus": "checked",
+          "responseMode": "failures_only",
+          "quietSuccess": true,
+          "modelContextBytesZero": true,
+          "receiptOutsideModelContext": true,
+          "feedbackIncludesPrimary": false,
+          "detected": false
+        }
+      },
+      "honestyNote": "Completeness-only / coverage gap. Expected checked because dimension.check ignores SI prefixes. Not a G1 seeded error and not a G3 control."
     }
   ],
   "structuralProbes": {
@@ -574,10 +952,14 @@
     "staleSwappedCertificateMustReject": true,
     "cliQuietSuccessMustEmitZeroStdout": true,
     "cliFailureMustReturnFailuresOnly": true,
-    "notes": "Binding probes reuse math_anchor.obligations claim-binding (valid certificate for a different statement → unknown / certificate_rejected). CLI probes reuse check-obligations --quiet-success. Not a parallel checker."
+    "roundingSneakMustFalsify": true,
+    "unitScaleMismatchMustFalsify": true,
+    "assumptionSwapMustFalsify": true,
+    "stepNLegalWrongMustFalsify": true,
+    "notes": "Binding probes reuse math_anchor.obligations claim-binding (valid certificate for a different statement → unknown / certificate_rejected). Expanded adversarial probes reuse the same obligation runtime on rounding / unit-kind / assumption-swap / step-N cells. CLI probes reuse check-obligations --quiet-success. Not a parallel checker."
   },
   "scoring": {
-    "detection": "A supported seeded error is detected when the primary obligation status is not checked and matches the pre-registered expectedPrimaryStatus.",
+    "detection": "A supported seeded error is detected when the primary obligation status is not checked and matches the pre-registered expectedPrimaryStatus. G1 supported set includes sign-flip, domain-overshoot, dimension-mismatch, rounding-in-exact-chain, unit-scale-mismatch, assumption-swapped, and step-n-legal-wrong-value. Completeness and SI prefix blind-spot cells are excluded from G1.",
     "falseReject": "A G3 control is a false reject when the primary obligation status is not checked.",
     "quietSuccess": "B3 library quiet success zeros modelContextBytes by wrapper projection when every obligation is checked. The runtime failures_only envelope is still non-empty; product evidence is CLI --quiet-success empty stdout. The full receipt remains a local artifact.",
     "repair": "B3 repair probes are same-claim seeded corrections only (sign-flip restores +2xy on the same identity). An unrelated valid resubmit (dimension-mismatch to force = mass * acceleration) is recorded but is not a repair of the original claim. Live model repair is deferred. G5 remains unmet.",

@@ -1,0 +1,20 @@
+{
+  "kind": "math-anchor.research.ai-for-math-shadow-verifier-natural-tasks.v0",
+  "title": "Natural-error-shaped prompts for later live B0/B1",
+  "researchStatus": "experimental-draft-2026-09-16",
+  "liveScores": null,
+  "epoch2Complete": false,
+  "doNotStartH1": true,
+  "tasks": [
+    "nt-beam-deflection-unit-mix.json",
+    "nt-series-rounding-cascade.json",
+    "nt-circuit-assumption-swap.json",
+    "nt-kinematics-step-reuse.json"
+  ],
+  "honesty": {
+    "humanAuthored": true,
+    "noLiveScores": true,
+    "oracleOutsideAgentView": true,
+    "notABenefitPercentage": true
+  }
+}
