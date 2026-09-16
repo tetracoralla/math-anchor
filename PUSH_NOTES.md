@@ -252,3 +252,8 @@ EOF
 ```
 
 If `gh` is not logged in, create the PR from GitHub after the push.
+
+## Draft PR #18 title-leak P2 (2026-09-16)
+
+Tip after keeping natural-task titles controller-only: `5eedc4581691fa0b28bf6bfdf111a89fe9ec2bdd` (`5eedc45`).
+Agent view no longer includes judgment-encoding `title` fields.
