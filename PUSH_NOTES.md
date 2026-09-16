@@ -23,9 +23,11 @@ This PR:
 Local commits:
 
 - `2d50a3f` Advance Epoch 2 shadow verifier: expanded corpus + live-arm plan skeleton.
+- `518253f` Record Draft PR #18 URL and live-arm readiness tip SHA.
+- `1ff1605` Fix Draft PR #18 P2 review nits for live-arm readiness.
 
 Open tip after this notes commit is `git rev-parse HEAD` / PR `headRefOid`
-(not only `2d50a3f`).
+(not only `1ff1605`).
 
 ```sh
 .venv/bin/python research/shadow_verifier_eval/run.py \
