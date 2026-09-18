@@ -1,9 +1,8 @@
 """B0/B1 live-model interfaces. Not executed without budget + backend.
 
-This module records the matched four-arm contract for a later paid run.
-It does not call a model, does not invent quality deltas, and keeps
-`--include-model-arms` fail-closed unless live_runner authorization passes
-*and* a backend loop is wired (still not in this PR).
+Default smoke keeps B0/B1 deferred. Authorized `--include-model-arms`
+executes live cells via a registered LiveModelBackend. This module still
+invents no quality deltas, dollars, or savings percentages.
 """
 
 from __future__ import annotations
@@ -120,8 +119,8 @@ def reject_include_model_arms(
 ) -> None:
     """Fail-closed gate for --include-model-arms.
 
-    Even with budget + backend, this PR does not wire the paid loop, so the
-    call still raises without inventing numbers.
+    Raises unless budget confirm, N>0, and a LiveModelBackend are present.
+    When those hold, returns so the live loop can run. Does not invent numbers.
     """
 
     try:

@@ -6,7 +6,9 @@ promoted. Dated research status: experimental draft **2026-09-16**. Do not
 start H1. Dated H1 freeze **2026-09-15** is unchanged.
 
 Green harness tests are not completion of this research claim. Live B0/B1
-model numbers are **not invented**. `model_arms=deferred`.
+model numbers are **not invented**. Default smoke stays `model_arms=deferred`.
+Authorized live evidence, when present, is recorded in
+[shadow-verifier-live.md](shadow-verifier-live.md) with real counts only.
 
 Gates **G1–G6 are targets**. Epoch 2 is not done until live four-arm model
 evidence exists.
@@ -21,10 +23,11 @@ Advances live-arm **readiness** and an expanded silent-wrong corpus. Still
    look-alike identity; step-N result replaced with another legal but
    wrong-for-this-claim value. Plus an SI-prefix scale **completeness**
    blind-spot cell (provider returns `checked`; not G1).
-2. **Live-arm runner skeleton:** `LiveFourArmPlan`, `--emit-live-plan` (no
-   model calls), fail-closed `--include-model-arms` unless budget confirm +
-   registered `LiveModelBackend`. Paid loop is **not** wired; numbers are
-   not invented.
+2. **Live-arm runner:** `LiveFourArmPlan`, `--emit-live-plan` (no model
+   calls), fail-closed `--include-model-arms` unless budget confirm +
+   registered `LiveModelBackend` + `--confirm-model-runs N`. Authorized
+   runs execute live B0/B1 up to N `complete()` calls (xAI/Grok). Numbers
+   are not invented.
 3. **Natural-error-shaped task pack:** `research/shadow_verifier_eval/natural_tasks/`
    human-authored multi-step prompts with controller-only oracle notes. No
    live scores.
@@ -51,8 +54,8 @@ without a second stack, while recording B0/B1 as deferred live-model arms?
 
 | Arm | What it is | This smoke |
 | --- | --- | --- |
-| **B0** | Model-only, no mathematical provider | **deferred** (`model_arms=deferred`; plan via `--emit-live-plan`) |
-| **B1** | Model + current MCP (`math.search` / `math.describe` / `math.run` / `math.batch`), voluntary tool use. No fifth tool. A correct answer without a target call is not adoption | **deferred** (same plan emitter) |
+| **B0** | Model-only, no mathematical provider | Default smoke **deferred**. Authorized live: [shadow-verifier-live.md](shadow-verifier-live.md) |
+| **B1** | Model + current MCP (`math.search` / `math.describe` / `math.run` / `math.batch`), voluntary tool use. No fifth tool. A correct answer without a target call is not adoption | Default smoke **deferred**. Authorized live uses in-process four-tool catalog dispatch (not Host JSON-RPC MCP): [shadow-verifier-live.md](shadow-verifier-live.md) |
 | **B2** | Explicit `math-anchor.obligation-set.v0.1` request, `responseMode=full` | **ran** (library) |
 | **B3** | Host/harness shadow checkpoint: full receipt on disk; library quiet success **projects** zero model-context bytes when checked; `failures_only` only when action is required; seeded same-claim repair-loop hook | **ran** (library + CLI probes) |
 
@@ -77,12 +80,12 @@ second mathematical stack.
 
 | Gate | Name | Target | This smoke |
 | --- | --- | --- | --- |
-| **G1** | detection | ≥80% of **supported** seeded errors | B2/B3 corpus measured; **not** Epoch 2 G1 (no live models) |
-| **G2** | accepted-error drop | material reduction vs matched B0 | **deferred** (needs live B0) |
-| **G3** | false reject | valid controls stay checked | B2/B3 controls measured; **not** live-model G3 |
-| **G4** | context | ≤10% main-context growth; **0** returned content on successful checkpoints | B3 library 0 bytes is a **wrapper projection**; product evidence is CLI `--quiet-success` empty stdout; **≤10% vs B0 deferred** |
+| **G1** | detection | ≥80% of **supported** seeded errors | B2/B3 7/7 on this corpus; live B0/B1 ran — see [shadow-verifier-live.md](shadow-verifier-live.md). **G1 unmet** there because two B1 G1 cells were unparseable after the call cap |
+| **G2** | accepted-error drop | material reduction vs matched B0 | live B0 accepted **0** seeded errors on this model/corpus (vacuous). **G2 unmet** |
+| **G3** | false reject | valid controls stay checked | B2/B3 0 false rejects; live B0/B1 0/2 on controls in the live report |
+| **G4** | context | ≤10% main-context growth; **0** returned content on successful checkpoints | B3 library 0 bytes is a **wrapper projection**; product evidence is CLI `--quiet-success` empty stdout; live B1 vs B0 token growth was **not** ≤10% |
 | **G5** | repair | after `failures_only`, repair can reach checked / quiet success | same-claim seeded hook (sign-flip) measured; dimension-mismatch resubmit is a **different valid claim**; **not** live-model repair; **G5 unmet** |
-| **G6** | strong + weak models | same protocol on a stronger and a weaker model | **deferred** |
+| **G6** | strong + weak models | same protocol on a stronger and a weaker model | **unmet** (one live model: xAI `grok-4.6`) |
 
 Silence on success is **zero returned content**, not proof the Agent used
 the receipt. B3 library `modelContextBytes=0` on checked cells is a
@@ -124,8 +127,8 @@ Emit a live four-arm JSON plan (**no model calls**):
 
 `--include-model-arms` stays **fail-closed** unless `--confirm-live-budget`
 (or `MATH_ANCHOR_SHADOW_LIVE=1`), `--confirm-model-runs N` with `N > 0`, and
-a registered `LiveModelBackend`. Even then this PR does not wire the paid
-loop; it still rejects without inventing numbers. Later live command shape:
+a registered `LiveModelBackend`. The CLI auto-registers an xAI/Grok backend
+when credentials are available. Authorized live command:
 
 ```sh
 .venv/bin/python research/shadow_verifier_eval/run.py \
@@ -208,8 +211,11 @@ Historical table below is harness commit `0426908` evidence for the original
 seven-task corpus (three supported seeded errors). Byte counts there are
 not re-claimed for the new cells.
 
-B0/B1 cells are `status=deferred`, `model_arms=deferred`, with
+Default-smoke B0/B1 cells stay `status=deferred`, `model_arms=deferred`, with
 `liveQualityDelta` / `finalAccuracy` / `acceptedSeededError` all `null`.
+Authorized live B0/B1 counts are only in
+[shadow-verifier-live.md](shadow-verifier-live.md) (real numbers; no
+invented quality delta).
 
 | Arm | Task | Primary | Detected | Model-context bytes | Quiet success |
 | --- | --- | --- | --- | --- | --- |
@@ -268,7 +274,7 @@ Experiment verdict: **`deterministic_b2_b3_scaffold_ran`**.
 | Promote | **No.** `publicPromotion` stays false. |
 | H1 / method accumulation | **No.** Dated freeze 2026-09-15 pending new workload evidence; not a standing ban. |
 | Targeted fix | **No** correctness bug on the pre-registered cells. |
-| Epoch 2 complete | **No.** Live B0/B1/G2/G6 missing. |
+| Epoch 2 complete | **No.** Live B0/B1 ran under a call cap; G1/G2/G4/G5/G6 still unmet. See [shadow-verifier-live.md](shadow-verifier-live.md). |
 | Evidence insufficient | **Yes** for promotion and for Epoch 2 completion. |
 
 Do not invent a savings percentage or a model quality delta.
@@ -293,21 +299,20 @@ Do not invent a savings percentage or a model quality delta.
 
 ## Gaps (not covered)
 
-- No live B0/B1 run, no reasoning-effort comparison, no token accounting.
-- No accepted-error drop vs a matched no-provider model (G2).
-- No ≤10% context comparison vs B0 (G4 remainder).
+- Completeness and `natural_tasks/` cells were not in the N=48 live run.
+- G2 accepted-error drop is vacuous on this `grok-4.6` / corpus pair (B0 accepted 0).
+- G4 ≤10% vs B0 not met (B1 tool-schema traces).
 - No live repair loop (G5 remainder).
 - No strong+weak model pair (G6).
 - No LP certificates (Epoch 3).
-- No Host product integration beyond the existing CLI shadow path.
+- No Host product integration beyond the existing CLI shadow path. B1 was in-process catalog dispatch, not Host MCP JSON-RPC.
 
 ## Next
 
 Keep experimental. **Do not start H1.** Do not promote packs.
 
-A later paid four-arm run is justified only with a written budget
-(`--confirm-live-budget` or `MATH_ANCHOR_SHADOW_LIVE=1`), a registered
-`LiveModelBackend`, core conformance still green, this B2/B3 scaffold still
-matching, and `--confirm-model-runs N`. Use `--emit-live-plan` and
-`natural_tasks/` to prepare prompts/oracle notes without calls. Until live
-evidence exists, Epoch 2 remains open.
+A first authorized live B0/B1 run is recorded in
+[shadow-verifier-live.md](shadow-verifier-live.md). Epoch 2 remains open.
+Further live work (larger N, completeness + natural tasks, live repair, a
+weaker second model) still needs a written budget and must not invent
+numbers. Do not start H1. Do not promote packs.

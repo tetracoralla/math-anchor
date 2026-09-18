@@ -7,6 +7,14 @@ and Apple notarization record exist.
 
 ## Unreleased
 
+- Wired the Epoch 2 shadow-verifier **live B0/B1 loop** behind
+  `--include-model-arms --confirm-live-budget --confirm-model-runs N` and a
+  registered `LiveModelBackend` (CLI auto-registers xAI/Grok from env or
+  grok CLI OIDC). B1 tools are in-process four-tool catalog dispatch, not a
+  Host MCP session and not a mid-pipeline obligation oracle. Fail-closed
+  without budget. No invented accuracy, dollars, or savings %. Not Epoch 2
+  completion, not a pack promotion, do not start H1. See
+  `docs/research/ai-for-math/shadow-verifier-live.md`.
 - Archived **Research Epoch 1** (A0 → trust-failclosed, including PRs #15
   and #16): method reuse as the primary R&D bet is rejected on the studied
   family; independent verification / fail-closed survives as a hypothesis.

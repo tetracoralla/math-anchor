@@ -7,8 +7,8 @@ status: experimental draft 2026-09-16. Do not start H1. Dated H1 freeze
 
 Pre-registered no-model scaffold of:
 
-- **B0:** model-only (no math provider) — interface + live plan emission; `model_arms=deferred`
-- **B1:** model + current four-tool MCP, voluntary use — interface + live plan; deferred
+- **B0:** model-only (no math provider) — live when `--include-model-arms` is authorized; otherwise `model_arms=deferred`
+- **B1:** model + current four-tool MCP, voluntary use — live in-process catalog dispatch when authorized; otherwise deferred
 - **B2:** explicit `math-anchor.obligation-set.v0.1` (full feedback)
 - **B3:** Host/harness shadow checkpoint (`failures_only`, quiet success as a
   library wrapper projection of zero model-context bytes when checked — product
@@ -25,11 +25,13 @@ can be called done.
 1. Expanded deterministic adversarial corpus (rounding sneak, unit-kind
    mismatch, assumption swap, step-N legal-wrong) plus an SI-prefix
    completeness blind-spot cell.
-2. Live-arm runner skeleton (`live_runner.py`): `LiveFourArmPlan`,
+2. Live-arm runner (`live_runner.py` / `live_loop.py`): `LiveFourArmPlan`,
    `--emit-live-plan`, fail-closed `--include-model-arms` unless budget
-   confirm + registered `LiveModelBackend` (paid loop still not wired).
-3. Human-authored `natural_tasks/` pack for later live B0/B1 (oracle notes
-   outside agent view; no live scores).
+   confirm + registered `LiveModelBackend`. Authorized runs execute B0/B1
+   up to `--confirm-model-runs N` (xAI/Grok backend; B1 is in-process
+   four-tool catalog dispatch, not Host JSON-RPC MCP).
+3. Human-authored `natural_tasks/` pack (oracle notes outside agent view;
+   not part of the bounded protocol live run).
 
 ## Command
 
@@ -56,8 +58,10 @@ Emit a live four-arm JSON plan (**no model calls**, no invented numbers):
 3. a pluggable `LiveModelBackend` is registered via
    `register_live_backend(...)`
 
-Even then, this PR does **not** wire the paid execution loop; it still
-rejects without inventing numbers. Later live command shape:
+When those hold, the CLI auto-registers an xAI/Grok `LiveModelBackend` from
+`XAI_API_KEY` / `MATH_ANCHOR_XAI_API_KEY` or grok CLI OIDC auth and executes
+live B0/B1 cells up to N `complete()` calls. It still invents no quality
+deltas, dollars, or savings percentages.
 
 ```sh
 .venv/bin/python research/shadow_verifier_eval/run.py \
@@ -66,6 +70,9 @@ rejects without inventing numbers. Later live command shape:
   --confirm-model-runs N \
   --output build/shadow-verifier-live-report.json
 ```
+
+Set `MATH_ANCHOR_SHADOW_DISABLE_AUTO_BACKEND=1` to keep fail-closed without
+a test-registered backend.
 
 Tests:
 
