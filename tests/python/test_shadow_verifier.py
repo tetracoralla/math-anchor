@@ -11,6 +11,7 @@ from __future__ import annotations
 from copy import deepcopy
 import ast
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -27,11 +28,19 @@ from research.shadow_verifier_eval.model_interface import (
     model_arm_contract,
     reject_include_model_arms,
 )
+from research.shadow_verifier_eval.live_grade import parse_verdict
 from research.shadow_verifier_eval.live_runner import (
     LIVE_PLAN_KIND,
+    backend_is_registered,
     build_live_four_arm_plan,
     register_live_backend,
 )
+from research.shadow_verifier_eval.mcp_inprocess import (
+    chat_tool_definitions,
+    is_target_tool,
+    normalize_tool_name,
+)
+from research.shadow_verifier_eval.xai_backend import sanitize_usage, try_make_xai_backend
 from research.shadow_verifier_eval.natural_tasks_loader import load_natural_tasks_pack
 from math_anchor.errors import CalculatorError
 from research.shadow_verifier_eval.protocol import (
@@ -80,7 +89,16 @@ HARNESS_FILES = (
     ROOT / "research" / "shadow_verifier_eval" / "run.py",
     ROOT / "research" / "shadow_verifier_eval" / "model_interface.py",
     ROOT / "research" / "shadow_verifier_eval" / "live_runner.py",
+    ROOT / "research" / "shadow_verifier_eval" / "live_loop.py",
+    ROOT / "research" / "shadow_verifier_eval" / "live_grade.py",
+    ROOT / "research" / "shadow_verifier_eval" / "xai_backend.py",
+    ROOT / "research" / "shadow_verifier_eval" / "mcp_inprocess.py",
 )
+
+DISABLE_AUTO_BACKEND_ENV = {
+    "MATH_ANCHOR_SHADOW_DISABLE_AUTO_BACKEND": "1",
+    "MATH_ANCHOR_SHADOW_DISABLE_GROK_CLI_AUTH": "1",
+}
 
 
 @pytest.fixture(scope="module")
@@ -398,6 +416,7 @@ def test_include_model_arms_is_rejected() -> None:
         capture_output=True,
         text=True,
         check=False,
+        env={**os.environ, **DISABLE_AUTO_BACKEND_ENV},
     )
     assert completed.returncode == 2
     payload = json.loads(completed.stdout)
@@ -549,23 +568,44 @@ def test_include_model_arms_still_cannot_invent_numbers() -> None:
         run_smoke(include_model_arms=True, confirm_live_budget=True, confirm_model_runs=3)
 
     class _DummyBackend:
-        def complete(self, prompt, *, arm_id, task_id, tools=None):
-            return {"text": "unused", "usage": {"totalTokens": 1}}
+        def complete(self, prompt, *, arm_id, task_id, tools=None, **_kwargs):
+            return {
+                "text": "The claim does not hold.\nVERDICT: NO",
+                "usage": {"promptTokens": 4, "completionTokens": 3, "totalTokens": 7},
+                "toolCalls": [],
+                "liveQualityDelta": None,
+                "finalAccuracy": None,
+                "dollarCost": None,
+            }
 
     register_live_backend(_DummyBackend())
     try:
-        with pytest.raises(ModelArmDeferredError) as raised:
-            run_smoke(
-                include_model_arms=True,
-                confirm_live_budget=True,
-                confirm_model_runs=3,
-            )
-        message = str(raised.value.message).lower()
-        assert "not wired" in message or "deferred" in message
-        details = raised.value.details or {}
-        assert details.get("liveQualityDelta") is None
-        assert details.get("finalAccuracy") is None
-        assert details.get("dollarCost") is None
+        live_report = run_smoke(
+            include_model_arms=True,
+            confirm_live_budget=True,
+            confirm_model_runs=2,
+        )
+        assert live_report["decision"]["promote"] is False
+        assert live_report["decision"]["epoch2Complete"] is False
+        assert live_report["decision"]["doNotStartH1"] is True
+        assert live_report["decision"]["experimentVerdict"] == "live_b0_b1_ran"
+        assert live_report["refusedClaims"]["liveModelQualityDelta"]["emitted"] is False
+        assert live_report["refusedClaims"]["savingsPercent"]["emitted"] is False
+        assert live_report["refusedClaims"]["dollarCosts"]["emitted"] is False
+        live_cells = [
+            cell
+            for cell in live_report["cells"]
+            if cell.get("liveRan") is True or cell.get("modelArms") == "ran"
+        ]
+        assert len(live_cells) == 2
+        for cell in live_cells:
+            assert cell["liveQualityDelta"] is None
+            assert cell["finalAccuracy"] is None
+            assert cell["dollarCost"] is None
+            assert cell["verdict"] == "no"
+        blob = json.dumps(live_report).lower()
+        assert "usd" not in blob
+        assert "savings %" not in blob
         completed = subprocess.run(
             [
                 sys.executable,
@@ -579,6 +619,7 @@ def test_include_model_arms_still_cannot_invent_numbers() -> None:
             capture_output=True,
             text=True,
             check=False,
+            env={**os.environ, **DISABLE_AUTO_BACKEND_ENV},
         )
         assert completed.returncode == 2
         payload = json.loads(completed.stdout)
@@ -780,3 +821,97 @@ def test_natural_tasks_pack_missing_path_fails_closed(tmp_path: Path) -> None:
     payload = json.loads(completed.stdout)
     assert payload["status"] == "error"
     assert payload["error"]["code"] == "E_INPUT"
+
+
+def test_live_backend_fail_closed_without_budget_even_when_registered() -> None:
+    class _DummyBackend:
+        def complete(self, prompt, *, arm_id, task_id, tools=None, **_kwargs):
+            raise AssertionError("backend.complete must not run without budget confirm")
+
+    register_live_backend(_DummyBackend())
+    try:
+        with pytest.raises(ModelArmDeferredError, match="budget confirm|fail-closed|deferred"):
+            run_smoke(include_model_arms=True, confirm_model_runs=2)
+        with pytest.raises(ModelArmDeferredError, match="confirm-model-runs"):
+            run_smoke(include_model_arms=True, confirm_live_budget=True, confirm_model_runs=0)
+        assert backend_is_registered() is True
+    finally:
+        register_live_backend(None)
+    assert backend_is_registered() is False
+
+
+def test_live_backend_registration_does_not_invent_scores() -> None:
+    class _DummyBackend:
+        def complete(self, prompt, *, arm_id, task_id, tools=None, **_kwargs):
+            return {
+                "text": "VERDICT: UNSURE",
+                "usage": {"promptTokens": 2, "completionTokens": 2, "totalTokens": 4},
+                "toolCalls": [],
+            }
+
+    register_live_backend(_DummyBackend())
+    try:
+        report = run_smoke(
+            include_model_arms=True,
+            confirm_live_budget=True,
+            confirm_model_runs=1,
+        )
+        live_cells = [cell for cell in report["cells"] if cell.get("modelArms") == "ran"]
+        deferred = [
+            cell
+            for cell in report["cells"]
+            if cell.get("arm") in DEFERRED_ARMS and cell.get("modelArms") == MODEL_ARMS_DEFERRED
+        ]
+        assert len(live_cells) == 1
+        assert len(deferred) == len(ALL_TASKS) * 2 - 1
+        cell = live_cells[0]
+        assert cell["arm"] == ARM_B0
+        assert cell["task"] == TASK_CONTROL_POLY
+        assert cell["verdict"] == "unsure"
+        assert cell["liveQualityDelta"] is None
+        assert cell["finalAccuracy"] is None
+        assert cell["dollarCost"] is None
+        assert cell["scoring"]["liveQualityDeltaInvented"] is False
+        assert report["decision"]["promote"] is False
+        assert report["decision"]["epoch2Complete"] is False
+        assert report["gates"]["G6"]["epoch2GateMet"] is False
+        blob = json.dumps(report)
+        assert "$" not in blob
+        assert "savings %" not in blob.lower()
+    finally:
+        register_live_backend(None)
+
+
+def test_parse_verdict_and_usage_sanitizer() -> None:
+    assert parse_verdict("reasoning\nVERDICT: YES\n") == "yes"
+    assert parse_verdict("VERDICT: NO") == "no"
+    assert parse_verdict("VERDICT: UNSURE") == "unsure"
+    assert parse_verdict("") == "unparseable"
+    assert parse_verdict("maybe") == "unparseable"
+    usage = sanitize_usage(
+        {
+            "prompt_tokens": 10,
+            "completion_tokens": 5,
+            "total_tokens": 15,
+            "cost_in_" + "ticks": 99,
+        }
+    )
+    assert usage["promptTokens"] == 10
+    assert usage["completionTokens"] == 5
+    assert usage["totalTokens"] == 15
+    assert "ticks" not in json.dumps(usage)
+
+
+def test_inprocess_mcp_tools_are_the_four_catalog_tools() -> None:
+    defs = chat_tool_definitions()
+    names = [item["function"]["name"] for item in defs]
+    assert names == list(MCP_TOOLS)
+    assert normalize_tool_name("math_run") == "math.run"
+    assert is_target_tool("math.run") is True
+    assert is_target_tool("math.search") is False
+
+
+def test_auto_backend_disabled_by_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("MATH_ANCHOR_SHADOW_DISABLE_AUTO_BACKEND", "1")
+    monkeypatch.setenv("XAI_API_KEY", "should-not-be-used")
+    assert try_make_xai_backend() is None

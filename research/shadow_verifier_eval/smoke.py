@@ -15,9 +15,13 @@ from math_anchor import __version__ as MATH_ANCHOR_VERSION
 from math_anchor.errors import CalculatorError
 
 from .arms import is_arm_exception, run_arm
+from .live_loop import LiveCallBudget, backend_disclosure, run_live_cell
+from .live_runner import registered_live_backend
 from .model_interface import reject_include_model_arms
 from .probes import run_structural_probes
 from .protocol import (
+    ARM_B0,
+    ARM_B1,
     DEFERRED_ARMS,
     MODEL_ARMS_DEFERRED,
     PRIMARY_ARMS,
@@ -57,16 +61,42 @@ def run_smoke(
     else:
         receipt_dir.mkdir(parents=True, exist_ok=True)
 
+    live_budget: LiveCallBudget | None = None
+    live_backend = None
+    if include_model_arms:
+        live_backend = registered_live_backend()
+        live_budget = LiveCallBudget(int(confirm_model_runs or 0))
+
     cells: list[dict[str, Any]] = []
+    live_by_key: dict[tuple[str, str], dict[str, Any]] = {}
+    if include_model_arms and live_backend is not None and live_budget is not None:
+        # Matched pairs: each task's B0 then B1 so G2 is not "all B0 then starve B1".
+        for task in registered_tasks:
+            for arm_id in (ARM_B0, ARM_B1):
+                live_by_key[(arm_id, task["id"])] = _run_live_or_error(
+                    arm_id,
+                    task,
+                    backend=live_backend,
+                    budget=live_budget,
+                    protocol=document,
+                )
     for arm_id in PRIMARY_ARMS:
         for task in registered_tasks:
-            cells.append(
-                _run_cell(arm_id, task, protocol=document, receipt_dir=receipt_dir)
-            )
+            if arm_id in DEFERRED_ARMS and (arm_id, task["id"]) in live_by_key:
+                cells.append(live_by_key[(arm_id, task["id"])])
+            else:
+                cells.append(
+                    _run_cell(arm_id, task, protocol=document, receipt_dir=receipt_dir)
+                )
 
     probes = run_structural_probes(receipt_dir / "cli-probes")
     gates = score_gates(cells, probes=probes, protocol=document)
     decision = decide(cells, probes=probes, gates=gates)
+    live_ran = any(cell.get("liveRan") is True or cell.get("modelArms") == "ran" for cell in cells)
+    live_http = 0
+    for cell in cells:
+        if isinstance(cell.get("httpCalls"), int):
+            live_http += cell["httpCalls"]
 
     planned = [(arm_id, task["id"]) for arm_id in PRIMARY_ARMS for task in registered_tasks]
     actual = [(cell.get("arm"), cell.get("task")) for cell in cells]
@@ -103,11 +133,30 @@ def run_smoke(
         "progressiveAssurance": document["progressiveAssurance"],
         "executionPlan": {
             "arms": list(PRIMARY_ARMS),
-            "runnableThisSmoke": ["B2", "B3"],
-            "deferredThisSmoke": list(DEFERRED_ARMS),
+            "runnableThisSmoke": (
+                ["B0", "B1", "B2", "B3"] if live_ran else ["B2", "B3"]
+            ),
+            "deferredThisSmoke": [] if live_ran else list(DEFERRED_ARMS),
             "tasks": [task["id"] for task in registered_tasks],
-            "modelArms": MODEL_ARMS_DEFERRED,
+            "modelArms": "ran" if live_ran else MODEL_ARMS_DEFERRED,
+            "liveCallBudget": None if live_budget is None else live_budget.snapshot(),
         },
+        "liveModel": (
+            None
+            if not include_model_arms
+            else {
+                **(backend_disclosure(live_backend) if live_backend is not None else {}),
+                "callsMade": live_http,
+                "confirmModelRuns": confirm_model_runs,
+                "b1ToolSurface": (
+                    "in-process four-tool catalog dispatch (math.search / "
+                    "math.describe / math.run / math.batch); not Host JSON-RPC MCP; "
+                    "not obligation-set; no fifth tool"
+                ),
+                "maxToolTurnsPerB1Cell": 4,
+                "naturalTasksNotInThisLiveRun": True,
+            }
+        ),
         "liveModelCommands": document["liveModelCommands"],
         "cells": cells,
         "table": table,
@@ -131,7 +180,12 @@ def run_smoke(
             },
             "liveModelQualityDelta": {
                 "emitted": False,
-                "reason": "model_arms=deferred; live B0/B1 numbers are not invented",
+                "reason": (
+                    "no invented quality delta; live arms record per-cell verdicts "
+                    "and counts only"
+                    if live_ran
+                    else "model_arms=deferred; live B0/B1 numbers are not invented"
+                ),
             },
             "epoch2Complete": {
                 "emitted": False,
@@ -157,7 +211,7 @@ def run_smoke(
             "smokeIsNotOverallBenefitPercent": True,
             "greenHarnessTestsAreNotCompletion": True,
             "packNotPromoted": True,
-            "modelArmsDeferred": True,
+            "modelArmsDeferred": not live_ran,
             "noLiveModelNumbersInvented": True,
             "epoch2NotCompleteUntilLiveFourArmEvidence": True,
         },
@@ -171,6 +225,46 @@ def write_report(path: Path, report: dict[str, Any]) -> None:
         raise CalculatorError("E_INPUT", "result output already exists; refusing to overwrite it")
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def _run_live_or_error(
+    arm_id: str,
+    task: dict[str, Any],
+    *,
+    backend: Any,
+    budget: LiveCallBudget,
+    protocol: dict[str, Any],
+) -> dict[str, Any]:
+    try:
+        result = run_live_cell(
+            arm_id,
+            task,
+            backend=backend,
+            budget=budget,
+            protocol=protocol,
+        )
+    except Exception as caught:
+        if not is_arm_exception(caught):
+            raise
+        result = {
+            "arm": arm_id,
+            "task": task["id"],
+            "status": "error",
+            "liveRan": True,
+            "modelArms": "ran",
+            "errorCode": getattr(caught, "code", None),
+            "message": getattr(caught, "message", str(caught)),
+            "detected": False,
+            "coversOriginalTaskClaim": False,
+            "formalKernelChecked": False,
+            "liveQualityDelta": None,
+            "finalAccuracy": None,
+            "dollarCost": None,
+        }
+    scoring = score_cell(arm_id, task, result)
+    cell = dict(result)
+    cell["scoring"] = scoring
+    return cell
 
 
 def _run_cell(
@@ -212,6 +306,10 @@ def _table_row(cell: dict[str, Any]) -> dict[str, Any]:
         "quietSuccess": cell.get("quietSuccess"),
         "modelContextBytes": cell.get("modelContextBytes"),
         "modelArms": cell.get("modelArms"),
+        "verdict": cell.get("verdict"),
+        "acceptedSeededError": scoring.get("acceptedSeededError"),
+        "httpCalls": cell.get("httpCalls"),
+        "targetCalls": cell.get("targetCalls"),
         "matched": scoring.get("matchedPreRegisteredExpectation"),
     }
 

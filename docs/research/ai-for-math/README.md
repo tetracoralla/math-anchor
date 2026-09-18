@@ -17,7 +17,8 @@ Assurance → Receipt). Calculator/UI stay a compact human utility, not the
 research center, without a forever ban.
 
 - [research-epoch-1.md](research-epoch-1.md) — Epoch 1 archive (#15/#16 quoted; no invented numbers).
-- [shadow-verifier.md](shadow-verifier.md) — Epoch 2 scaffold (expanded corpus + live-arm plan emitter); G1–G6 are **targets**; B0/B1 `model_arms=deferred`; Epoch 2 incomplete; no promote.
+- [shadow-verifier.md](shadow-verifier.md) — Epoch 2 scaffold (expanded corpus + live-arm runner); G1–G6 are **targets**; default B0/B1 `model_arms=deferred`; Epoch 2 incomplete; no promote.
+- [shadow-verifier-live.md](shadow-verifier-live.md) — authorized live B0/B1 this-machine evidence (real numbers only; not a promotion).
 - [current-state.md](current-state.md) — capabilities with source / tests / run / used / benefit kept separate.
 - [workload-selection.md](workload-selection.md) — why polynomial finite sums, and what was deferred.
 - [task-list.md](task-list.md) — candidate tasks and negative cases; Epoch 2 P0.

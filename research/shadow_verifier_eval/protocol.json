@@ -175,7 +175,7 @@
     "tests": ".venv/bin/python -m pytest tests/python/test_shadow_verifier.py",
     "coreConformance": ".venv/bin/python script/check_obligations.py",
     "plannedLiveFourArm": ".venv/bin/python research/shadow_verifier_eval/run.py --include-model-arms --confirm-model-runs N --confirm-live-budget --output build/shadow-verifier-live-report.json",
-    "plannedLiveFourArmNote": "N is a written planned-call count. --include-model-arms remains fail-closed unless (1) --confirm-live-budget or MATH_ANCHOR_SHADOW_LIVE=1, (2) --confirm-model-runs N with N>0, and (3) a pluggable LiveModelBackend is registered. With no backend, the runner still rejects and invents no live-model numbers. Use --emit-live-plan to write the B0/B1/B3-live JSON plan without calls.",
+    "plannedLiveFourArmNote": "N is a written paid-call cap (each backend.complete() counts as one). --include-model-arms remains fail-closed unless (1) --confirm-live-budget or MATH_ANCHOR_SHADOW_LIVE=1, (2) --confirm-model-runs N with N>0, and (3) a pluggable LiveModelBackend is registered. The CLI auto-registers an xAI/Grok backend from XAI_API_KEY / MATH_ANCHOR_XAI_API_KEY or grok CLI OIDC when those hold. Authorized runs execute live B0/B1 cells up to N and still invent no quality deltas, dollars, or savings percentages. B1 tools are in-process four-tool catalog dispatch, not Host JSON-RPC MCP and not the obligation-set envelope. Use --emit-live-plan to write the JSON plan without calls.",
     "includeModelArmsRejectedBecause": "live B0/B1 execution requires an explicit budget confirm (--confirm-live-budget or MATH_ANCHOR_SHADOW_LIVE=1), --confirm-model-runs N>0, and a registered LiveModelBackend; without those, model_arms=deferred and numbers are not invented"
   },
   "workload": {

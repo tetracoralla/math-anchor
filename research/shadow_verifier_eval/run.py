@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""One-command shadow-verifier scaffold. B2/B3 deterministic. B0/B1 deferred.
+"""One-command shadow-verifier scaffold. B2/B3 deterministic. B0/B1 live when authorized.
 
 Supports --emit-live-plan (no model calls). --include-model-arms stays
-fail-closed without budget confirm + registered backend.
+fail-closed without budget confirm + registered backend. When authorized,
+the CLI auto-registers an xAI/Grok backend if credentials are available
+and executes live B0/B1 up to --confirm-model-runs N.
 Not a benefit percentage, not a pack promotion, not Epoch 2 completion.
 """
 
@@ -10,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -19,16 +22,21 @@ if str(ROOT) not in sys.path:
 
 from math_anchor.errors import CalculatorError, error_payload
 
-from research.shadow_verifier_eval.live_runner import build_live_four_arm_plan
+from research.shadow_verifier_eval.live_runner import (
+    backend_is_registered,
+    build_live_four_arm_plan,
+    register_live_backend,
+)
 from research.shadow_verifier_eval.smoke import run_smoke, write_report
+from research.shadow_verifier_eval.xai_backend import try_make_xai_backend
 
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
             "Run the pre-registered shadow-verifier scaffold (B2/B3 deterministic "
-            "obligation runtime; B0/B1 model_arms=deferred). Writes a "
-            "machine-readable report or a live-arm JSON plan. Not a benefit "
+            "obligation runtime; B0/B1 live when --include-model-arms is authorized). "
+            "Writes a machine-readable report or a live-arm JSON plan. Not a benefit "
             "percentage, not a pack promotion, and not Epoch 2 completion."
         )
     )
@@ -56,14 +64,16 @@ def _parser() -> argparse.ArgumentParser:
         help=(
             "Fail-closed unless --confirm-live-budget (or MATH_ANCHOR_SHADOW_LIVE=1), "
             "--confirm-model-runs N>0, and a LiveModelBackend is registered. "
-            "This PR still does not wire the paid loop; numbers are not invented."
+            "When those hold, execute live B0/B1 cells up to N complete() calls. "
+            "Numbers are not invented. CLI auto-registers xAI/Grok when credentials "
+            "exist unless MATH_ANCHOR_SHADOW_DISABLE_AUTO_BACKEND=1."
         ),
     )
     parser.add_argument(
         "--confirm-model-runs",
         type=int,
         default=None,
-        help="Written planned-call count N for a later live four-arm run.",
+        help="Written paid-call cap N. Each backend.complete() consumes one.",
     )
     parser.add_argument(
         "--confirm-live-budget",
@@ -114,6 +124,16 @@ def main(argv: list[str] | None = None) -> int:
                 "or --emit-live-plan",
             )
         )
+    if (
+        arguments.include_model_arms
+        and not backend_is_registered()
+        and os.environ.get("MATH_ANCHOR_SHADOW_DISABLE_AUTO_BACKEND", "").strip()
+        not in {"1", "true", "TRUE", "yes", "YES"}
+    ):
+        auto = try_make_xai_backend()
+        if auto is not None:
+            register_live_backend(auto)
+
     try:
         if arguments.emit_live_plan:
             plan = build_live_four_arm_plan(

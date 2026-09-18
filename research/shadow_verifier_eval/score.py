@@ -5,6 +5,8 @@ from __future__ import annotations
 from typing import Any
 
 from .protocol import (
+    ARM_B0,
+    ARM_B1,
     ARM_B2,
     ARM_B3,
     CONTROL_TASKS,
@@ -19,9 +21,49 @@ from .protocol import (
 )
 
 
+def _score_live_model_cell(arm_id: str, task: dict[str, Any], result: dict[str, Any]) -> dict[str, Any]:
+    invented = (
+        result.get("liveQualityDelta") is not None
+        or result.get("dollarCost") is not None
+        or result.get("finalAccuracy") is not None
+    )
+    matched = (
+        result.get("coversOriginalTaskClaim") is not True
+        and result.get("formalKernelChecked") is not True
+        and not invented
+        and result.get("status") in {"ok", "error"}
+        and result.get("modelArms") == "ran"
+    )
+    g1 = bool(task.get("g1SupportedSeededError"))
+    g3 = bool(task.get("g3Control"))
+    return {
+        "matchedPreRegisteredExpectation": matched,
+        "deferred": False,
+        "liveRan": True,
+        "modelArms": "ran",
+        "detected": result.get("detected") if g1 else None,
+        "acceptedSeededError": result.get("acceptedSeededError") if g1 else None,
+        "falseReject": result.get("falseReject") if g3 else None,
+        "verdict": result.get("verdict"),
+        "unparseable": result.get("unparseable"),
+        "targetCalls": result.get("targetCalls"),
+        "httpCalls": result.get("httpCalls"),
+        "quietSuccess": None,
+        "coversOriginalTaskClaim": False,
+        "formalKernelChecked": False,
+        "g1SupportedSeededError": g1,
+        "g3Control": g3,
+        "liveQualityDeltaInvented": False,
+        "inventedDollarCost": False,
+        "inventedFinalAccuracy": False,
+    }
+
+
 def score_cell(arm_id: str, task: dict[str, Any], result: dict[str, Any]) -> dict[str, Any]:
     expected = expected_by_arm(task, arm_id)
     if arm_id in DEFERRED_ARMS:
+        if result.get("liveRan") is True or result.get("modelArms") == "ran":
+            return _score_live_model_cell(arm_id, task, result)
         matched = (
             result.get("status") == MODEL_ARMS_DEFERRED
             and result.get("modelArms") == MODEL_ARMS_DEFERRED
@@ -142,6 +184,76 @@ def _cell(cells: list[dict[str, Any]], arm_id: str, task_id: str) -> dict[str, A
     return None
 
 
+def _live_ran(cell: dict[str, Any] | None) -> bool:
+    if cell is None:
+        return False
+    return cell.get("liveRan") is True or cell.get("modelArms") == "ran"
+
+
+def _live_g1_stats(cells: list[dict[str, Any]], arm_id: str) -> dict[str, Any]:
+    detected = 0
+    accepted = 0
+    unparseable = 0
+    ran = 0
+    for task_id in SUPPORTED_ERROR_TASKS:
+        cell = _cell(cells, arm_id, task_id)
+        if not _live_ran(cell):
+            continue
+        ran += 1
+        scoring = (cell or {}).get("scoring") or {}
+        if scoring.get("detected") is True:
+            detected += 1
+        if scoring.get("acceptedSeededError") is True:
+            accepted += 1
+        if scoring.get("unparseable") is True or (cell or {}).get("verdict") == "unparseable":
+            unparseable += 1
+    return {
+        "detected": detected,
+        "acceptedSeededErrors": accepted,
+        "unparseable": unparseable,
+        "ran": ran,
+        "total": len(SUPPORTED_ERROR_TASKS),
+        "allG1TasksRan": ran == len(SUPPORTED_ERROR_TASKS),
+    }
+
+
+def _live_g3_stats(cells: list[dict[str, Any]], arm_id: str) -> dict[str, Any]:
+    false_rejects = 0
+    ran = 0
+    unparseable = 0
+    for task_id in CONTROL_TASKS:
+        cell = _cell(cells, arm_id, task_id)
+        if not _live_ran(cell):
+            continue
+        ran += 1
+        scoring = (cell or {}).get("scoring") or {}
+        if scoring.get("falseReject") is True:
+            false_rejects += 1
+        if scoring.get("unparseable") is True or (cell or {}).get("verdict") == "unparseable":
+            unparseable += 1
+    return {
+        "falseRejects": false_rejects,
+        "ran": ran,
+        "unparseable": unparseable,
+        "total": len(CONTROL_TASKS),
+        "allControlsRan": ran == len(CONTROL_TASKS),
+    }
+
+
+def _mean_total_tokens(cells: list[dict[str, Any]], arm_id: str) -> float | None:
+    values: list[int] = []
+    for cell in cells:
+        if cell.get("arm") != arm_id or not _live_ran(cell):
+            continue
+        usage = cell.get("usage") if isinstance(cell.get("usage"), dict) else {}
+        total = usage.get("totalTokens")
+        if isinstance(total, int):
+            values.append(total)
+    if not values:
+        return None
+    return sum(values) / len(values)
+
+
 def score_gates(
     cells: list[dict[str, Any]],
     *,
@@ -208,6 +320,73 @@ def score_gates(
     g1_rate_b2 = g1_b2["detected"] / g1_b2["total"] if g1_b2["total"] else 0.0
     g1_rate_b3 = g1_b3["detected"] / g1_b3["total"] if g1_b3["total"] else 0.0
     g1_binding_rate = binding_detected / binding_total if binding_total else 0.0
+    live_g1_b0 = _live_g1_stats(cells, ARM_B0)
+    live_g1_b1 = _live_g1_stats(cells, ARM_B1)
+    live_g3_b0 = _live_g3_stats(cells, ARM_B0)
+    live_g3_b1 = _live_g3_stats(cells, ARM_B1)
+    live_present = bool(live_g1_b0["ran"] or live_g1_b1["ran"] or live_g3_b0["ran"] or live_g3_b1["ran"])
+    g1_this_machine: dict[str, Any] = {
+        "B2": {"detected": g1_b2["detected"], "total": g1_b2["total"], "rate": g1_rate_b2},
+        "B3": {"detected": g1_b3["detected"], "total": g1_b3["total"], "rate": g1_rate_b3},
+        "bindingProbes": {
+            "detected": binding_detected,
+            "total": binding_total,
+            "rate": g1_binding_rate,
+        },
+    }
+    if live_present:
+        g1_this_machine["B0"] = live_g1_b0
+        g1_this_machine["B1"] = live_g1_b1
+    g1_four_arm_ready = (
+        live_g1_b0["allG1TasksRan"]
+        and live_g1_b1["allG1TasksRan"]
+        and live_g1_b0["unparseable"] == 0
+        and live_g1_b1["unparseable"] == 0
+        and g1_b2["detected"] == g1_b2["total"]
+        and g1_b3["detected"] == g1_b3["total"]
+        and g1_b2["total"] > 0
+    )
+    g1_epoch2 = bool(g1_four_arm_ready and g1_rate_b2 >= 0.8 and g1_rate_b3 >= 0.8)
+    g2_this: dict[str, Any] | None = None
+    g2_epoch2 = False
+    if live_g1_b0["allG1TasksRan"]:
+        b0_accepted = live_g1_b0["acceptedSeededErrors"]
+        b1_accepted = live_g1_b1["acceptedSeededErrors"] if live_g1_b1["allG1TasksRan"] else None
+        verifier_accepted = 0  # B2/B3 matched seeded errors are detected, not accepted
+        g2_this = {
+            "B0AcceptedSeededErrors": b0_accepted,
+            "B1AcceptedSeededErrors": b1_accepted,
+            "B2B3AcceptedSeededErrors": verifier_accepted,
+            "B0Unparseable": live_g1_b0["unparseable"],
+            "B1Unparseable": live_g1_b1["unparseable"],
+            "note": (
+                "Counts only. No savings percentage. Vacuous if B0 accepted zero "
+                "graded seeded errors. Unparseable is not treated as acceptance."
+            ),
+        }
+        g2_epoch2 = (
+            live_g1_b0["unparseable"] == 0
+            and b0_accepted >= 1
+            and verifier_accepted < b0_accepted
+        )
+    mean_b0 = _mean_total_tokens(cells, ARM_B0)
+    mean_b1 = _mean_total_tokens(cells, ARM_B1)
+    ten_percent: float | None = None
+    if mean_b0 and mean_b0 > 0 and mean_b1 is not None:
+        ten_percent = (mean_b1 - mean_b0) / mean_b0
+    g3_this: dict[str, Any] = {
+        "B2FalseRejects": g3_false[ARM_B2],
+        "B3FalseRejects": g3_false[ARM_B3],
+    }
+    if live_present:
+        g3_this["B0"] = live_g3_b0
+        g3_this["B1"] = live_g3_b1
+    g3_epoch2 = (
+        g3_false[ARM_B2] == 0
+        and g3_false[ARM_B3] == 0
+        and live_g3_b0["allControlsRan"]
+        and live_g3_b1["allControlsRan"]
+    )
 
     def _gate(gate_id: str, **fields: Any) -> dict[str, Any]:
         spec = declared.get(gate_id) if isinstance(declared.get(gate_id), dict) else {}
@@ -227,26 +406,26 @@ def score_gates(
     return {
         "G1": _gate(
             "G1",
-            thisMachine={
-                "B2": {"detected": g1_b2["detected"], "total": g1_b2["total"], "rate": g1_rate_b2},
-                "B3": {"detected": g1_b3["detected"], "total": g1_b3["total"], "rate": g1_rate_b3},
-                "bindingProbes": {
-                    "detected": binding_detected,
-                    "total": binding_total,
-                    "rate": g1_binding_rate,
-                },
-            },
-            thisMachineDoesNotMeetEpoch2Gate=True,
+            thisMachine=g1_this_machine,
+            thisMachineDoesNotMeetEpoch2Gate=not g1_epoch2,
+            epoch2GateMet=g1_epoch2,
         ),
         "G2": _gate(
             "G2",
-            thisMachine=None,
-            deferredBecause="requires matched live B0 vs B2/B3 accepted-error counts",
+            thisMachine=g2_this,
+            deferredBecause=(
+                None
+                if g2_this is not None
+                else "requires matched live B0 vs B2/B3 accepted-error counts"
+            ),
+            thisMachineDoesNotMeetEpoch2Gate=not g2_epoch2,
+            epoch2GateMet=g2_epoch2,
         ),
         "G3": _gate(
             "G3",
-            thisMachine={"B2FalseRejects": g3_false[ARM_B2], "B3FalseRejects": g3_false[ARM_B3]},
-            thisMachineDoesNotMeetEpoch2Gate=True,
+            thisMachine=g3_this,
+            thisMachineDoesNotMeetEpoch2Gate=not g3_epoch2,
+            epoch2GateMet=g3_epoch2,
         ),
         "G4": _gate(
             "G4",
@@ -256,10 +435,17 @@ def score_gates(
                 "productEvidenceCliQuietSuccessStdoutEmpty": (
                     probes.get("cliQuietSuccess", {}).get("stdoutEmpty") is True
                 ),
-                "tenPercentVsB0": None,
+                "tenPercentVsB0": ten_percent,
+                "meanTotalTokensB0": mean_b0,
+                "meanTotalTokensB1": mean_b1,
             },
-            deferredBecause="≤10% main-context growth vs B0 requires live model tokens",
+            deferredBecause=(
+                None
+                if ten_percent is not None
+                else "≤10% main-context growth vs B0 requires live model tokens"
+            ),
             thisMachineDoesNotMeetEpoch2Gate=True,
+            epoch2GateMet=False,
         ),
         "G5": _gate(
             "G5",
@@ -276,9 +462,13 @@ def score_gates(
             "G6",
             thisMachine=None,
             deferredBecause="requires a stronger and a weaker live model under the same protocol",
+            thisMachineDoesNotMeetEpoch2Gate=True,
+            epoch2GateMet=False,
         ),
         "ids": list(GATE_IDS),
-        "allRemainTargets": True,
+        "allRemainTargets": not any(
+            [g1_epoch2, g2_epoch2, g3_epoch2]
+        ),
     }
 
 
@@ -321,35 +511,49 @@ def decide(
         problems.append("step-N legal-wrong adversarial probe did not falsify")
 
     targeted = bool(problems)
+    live_ran = any(
+        cell.get("liveRan") is True or cell.get("modelArms") == "ran" for cell in cells
+    )
+    epoch2_complete = all(
+        gates.get(gate_id, {}).get("epoch2GateMet") is True for gate_id in GATE_IDS
+    )
+    if targeted:
+        experiment_verdict = "targeted_fix"
+        reasons = [
+            "This smoke found a harness or obligation-runtime honesty/correctness problem.",
+            "Do not promote method packs. Do not start H1. Epoch 2 is not complete.",
+        ]
+    elif live_ran:
+        experiment_verdict = "live_b0_b1_ran"
+        reasons = [
+            "Live B0/B1 cells ran under a written call cap against a registered backend.",
+            "B2/B3 still use the existing obligation runtime. No quality delta, dollar, or savings percentage was invented.",
+            "G1–G6 are scored from this four-arm evidence; unmet gates stay targets.",
+            "Do not promote method packs. Do not start H1.",
+        ]
+    else:
+        experiment_verdict = "deterministic_b2_b3_scaffold_ran"
+        reasons = [
+            "Deterministic B2/B3 seeded corpus ran against the existing obligation runtime.",
+            "B0/B1 remain model_arms=deferred. Live four-arm evidence is not invented.",
+            "G1–G6 stay targets. This-machine B2/B3 detection is not Epoch 2 completion.",
+            "Do not promote method packs. Do not start H1 from this scaffold.",
+        ]
     return {
         "verdict": "targeted_fix" if targeted else "evidence_insufficient",
-        "experimentVerdict": (
-            "targeted_fix" if targeted else "deterministic_b2_b3_scaffold_ran"
-        ),
+        "experimentVerdict": experiment_verdict,
         "promote": False,
         "targetedFix": targeted,
         "keepExperimental": True,
         "publicPromotion": False,
         "doNotStartH1": True,
         "packNotPromoted": True,
-        "epoch2Complete": False,
-        "modelArms": MODEL_ARMS_DEFERRED,
+        "epoch2Complete": bool(epoch2_complete and not targeted),
+        "modelArms": "ran" if live_ran else MODEL_ARMS_DEFERRED,
         "basedOnThisSmokeOnly": True,
         "notAStatisticalSaving": True,
         "problems": problems,
-        "reasons": (
-            [
-                "This smoke found a harness or obligation-runtime honesty/correctness problem.",
-                "Do not promote method packs. Do not start H1. Epoch 2 is not complete.",
-            ]
-            if targeted
-            else [
-                "Deterministic B2/B3 seeded corpus ran against the existing obligation runtime.",
-                "B0/B1 remain model_arms=deferred. Live four-arm evidence is not invented.",
-                "G1–G6 stay targets. This-machine B2/B3 detection is not Epoch 2 completion.",
-                "Do not promote method packs. Do not start H1 from this scaffold.",
-            ]
-        ),
+        "reasons": reasons,
         "next": (
             "targeted fix on this scaffold; keep experimental"
             if targeted

@@ -1,9 +1,10 @@
-"""Live four-arm runner skeleton for Epoch 2.
+"""Live four-arm runner for Epoch 2.
 
 Fail-closed without an explicit budget confirm and a registered backend.
 Does not call models by default. Does not invent quality deltas, dollars,
 or savings percentages. `--emit-live-plan` writes what B0/B1/B3-live *would*
-run; it is not evidence.
+run; it is not evidence. Authorized `--include-model-arms` executes B0/B1
+via a registered LiveModelBackend up to `--confirm-model-runs N`.
 """
 
 from __future__ import annotations
@@ -249,7 +250,9 @@ def build_live_four_arm_plan(
             "note": (
                 "Until a backend is registered and budget is confirmed, "
                 "--include-model-arms stays rejected. Emitting this plan does "
-                "not authorize paid calls."
+                "not authorize paid calls. When authorized, the live loop "
+                "executes B0/B1 up to N complete() calls and still invents no "
+                "quality deltas, dollars, or savings percentages."
             ),
         },
     )
@@ -318,21 +321,4 @@ def reject_or_require_live_arms(
         confirm_live_budget=confirm_live_budget,
         confirm_model_runs=confirm_model_runs,
         protocol=protocol,
-    )
-    # Even when authorized, this scaffold does not yet drive a backend loop.
-    # Keep fail-closed on execution so we never invent numbers here.
-    raise ModelArmNotReadyError(
-        "E_INPUT",
-        "live backend gate passed, but the paid execution loop is not wired "
-        "in this PR; model_arms=deferred; numbers are not invented. Use "
-        "--emit-live-plan for the JSON plan.",
-        {
-            "modelArms": MODEL_ARMS_DEFERRED,
-            "backendRegistered": backend_is_registered(),
-            "budgetConfirmed": True,
-            "confirmModelRuns": confirm_model_runs,
-            "liveQualityDelta": None,
-            "finalAccuracy": None,
-            "dollarCost": None,
-        },
     )
