@@ -4,6 +4,7 @@
 
 Branch: `chore/ai-for-math-epoch-2-live-four-arms` (cut from `main`
 `8b4ec93`, PR #18 already merged).
+Separate **Draft** PR #19: https://github.com/tetracoralla/math-anchor/pull/19
 **Keep Draft. Do not merge. Do not promote method packs. Do not start H1.**
 Epoch 2 is **not complete**. G1–G6 are not all met. Dated H1 freeze
 2026-09-15 unchanged. No invented live-model quality deltas, dollars, or
@@ -22,6 +23,13 @@ This PR:
   `docs/research/ai-for-math/shadow-verifier-live-report.json`.
 - `epoch2Complete=false`, `promote=false`. G3 met on this report; G1 unmet
   (two B1 G1 cells unparseable after the cap); G2 vacuous; G4/G5/G6 unmet.
+
+Local commits:
+
+- `f76f247` Advance Epoch 2 shadow verifier: live four-arm B0/B1.
+
+Open tip after this notes commit is `git rev-parse HEAD` / PR `headRefOid`
+(not only `f76f247`).
 
 ```sh
 .venv/bin/python -m pytest tests/python/test_shadow_verifier.py
